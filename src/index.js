@@ -9400,7 +9400,12 @@ function normalizePetEquipmentState(equipment) {
     if (!raw || typeof raw !== 'object' || !raw.id) continue;
     const itemTpl = ITEM_TEMPLATES[raw.id];
     if (!itemTpl || !itemTpl.slot) continue;
-    if (String(itemTpl.slot) !== String(slotKey)) continue;
+    const tplSlot = String(itemTpl.slot);
+    const slotOk =
+      tplSlot === String(slotKey) ||
+      (tplSlot === 'ring' && (slotKey === 'ring_left' || slotKey === 'ring_right')) ||
+      (tplSlot === 'bracelet' && (slotKey === 'bracelet_left' || slotKey === 'bracelet_right'));
+    if (!slotOk) continue;
     next[slotKey] = {
       id: String(raw.id),
       qty: 1,
