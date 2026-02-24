@@ -6291,6 +6291,30 @@ function getAutoFullBossFilterSet(player) {
   return new Set(normalized);
 }
 
+function getAutoFullSelectedCultivationBossNames(player) {
+  const filter = getAutoFullBossFilterSet(player);
+  if (filter == null || filter.size === 0) return null;
+  const names = new Set();
+  for (const tpl of Object.values(MOB_TEMPLATES)) {
+    if (!tpl || !isCultivationBoss(tpl)) continue;
+    const name = normalizeBossName(tpl.name || '');
+    if (!name) continue;
+    if (filter.has(name)) names.add(name);
+  }
+  return names;
+}
+
+function isAutoFullOnlySelectedCultivationBosses(player) {
+  const filter = getAutoFullBossFilterSet(player);
+  if (filter == null || filter.size === 0) return false;
+  const selectedCultivationNames = getAutoFullSelectedCultivationBossNames(player);
+  if (!selectedCultivationNames || selectedCultivationNames.size === 0) return false;
+  for (const name of filter) {
+    if (!selectedCultivationNames.has(name)) return false;
+  }
+  return true;
+}
+
 function isAutoFullBossAllowed(player, mobTemplate) {
   const filter = getAutoFullBossFilterSet(player);
   if (filter == null) return true;
@@ -6650,6 +6674,10 @@ function tryAutoFullBossMove(player) {
     }
   }
   const now = Date.now();
+  if (isAutoFullOnlySelectedCultivationBosses(player)) {
+    const resumeAt = Number(player.flags?.autoFullCultivationBossResumeAt || 0);
+    if (resumeAt > now) return null;
+  }
   const pausedUntil = Number(player.flags.autoFullPausedUntil || 0);
   if (pausedUntil > now) return null;
   const currentRoomRealmId = getRoomRealmId(player.position.zone, player.position.room, player.realmId || 1);
@@ -6661,6 +6689,9 @@ function tryAutoFullBossMove(player) {
   if (!canMoveForBoss) return null;
   const bossTarget = findAliveBossTarget(player);
   if (bossTarget && movePlayerToRoom(player, bossTarget.zoneId, bossTarget.roomId)) {
+    if (MOB_TEMPLATES[bossTarget.templateId] && isCultivationBoss(MOB_TEMPLATES[bossTarget.templateId])) {
+      player.flags.autoFullCultivationBossResumeAt = null;
+    }
     if (bossTarget.templateId === 'cross_world_boss') {
       player.flags.autoFullCrossBossSeenId = bossTarget.mobId || null;
       player.flags.autoFullCrossBossAwaitRespawn = false;
@@ -6670,6 +6701,44 @@ function tryAutoFullBossMove(player) {
     return 'moved';
   }
   return null;
+}
+
+function updateAutoFullCultivationBossRespawnWatch(player, roomRealmId, now = Date.now()) {
+  if (!player?.flags) return;
+  if (!isAutoFullOnlySelectedCultivationBosses(player)) {
+    player.flags.autoFullCultivationBossResumeAt = null;
+    return;
+  }
+  const zoneId = player.position?.zone;
+  const roomId = player.position?.room;
+  if (!zoneId || !roomId) return;
+  const room = WORLD[zoneId]?.rooms?.[roomId];
+  const roomMinLevel = Number(room?.minCultivationLevel);
+  if (!Number.isFinite(roomMinLevel)) return;
+
+  const selectedCultivationNames = getAutoFullSelectedCultivationBossNames(player);
+  if (!selectedCultivationNames || selectedCultivationNames.size === 0) return;
+  const roomMobs = getRoomMobs(zoneId, roomId, roomRealmId);
+  if (!Array.isArray(roomMobs) || roomMobs.length === 0) return;
+
+  let nearestRespawnAt = 0;
+  for (const mob of roomMobs) {
+    const tpl = MOB_TEMPLATES[mob?.templateId];
+    if (!tpl || !isCultivationBoss(tpl)) continue;
+    const name = normalizeBossName(tpl.name || '');
+    if (!selectedCultivationNames.has(name)) continue;
+    if (Number(mob.hp || 0) > 0) {
+      player.flags.autoFullCultivationBossResumeAt = null;
+      return;
+    }
+    const respawnAt = Number(mob.respawnAt || 0);
+    if (respawnAt > now && (!nearestRespawnAt || respawnAt < nearestRespawnAt)) {
+      nearestRespawnAt = respawnAt;
+    }
+  }
+  if (nearestRespawnAt > now) {
+    player.flags.autoFullCultivationBossResumeAt = nearestRespawnAt;
+  }
 }
 
 function tryAutoFullAction(player, roomMobs) {
@@ -6724,6 +6793,9 @@ function tryAutoFullAction(player, roomMobs) {
   const bossMob = findBossInRoom(roomMobs, player);
   if (bossMob) {
     const tpl = MOB_TEMPLATES[bossMob.templateId];
+    if (tpl && isCultivationBoss(tpl)) {
+      player.flags.autoFullCultivationBossResumeAt = null;
+    }
     if (tpl?.id === 'cross_world_boss') {
       player.flags.autoFullCrossBossSeenId = bossMob.id;
       player.flags.autoFullCrossBossAwaitRespawn = false;
@@ -6749,6 +6821,8 @@ function tryAutoFullAction(player, roomMobs) {
     }
     return null;
   }
+  const currentRoomRealmIdForWatch = getRoomRealmId(player.position.zone, player.position.room, player.realmId || 1);
+  updateAutoFullCultivationBossRespawnWatch(player, currentRoomRealmIdForWatch, now);
   const best = getAutoFullBestRoom(player);
   if (best && canMove) {
     if (player.position.zone === CROSS_REALM_ZONE_ID && player.position.room === 'arena') {
