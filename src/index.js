@@ -3765,6 +3765,11 @@ function getPlayerPersonalBossRoomId(player, roomId) {
   return ownerKey ? `${base}__u_${ownerKey}` : base;
 }
 
+function isPersonalBossInstanceRoom(zoneId, roomId) {
+  if (zoneId !== PERSONAL_BOSS_ZONE_ID) return false;
+  return /^(vip_lair|svip_lair|perma_lair)(?:__u_.+)?$/.test(String(roomId || ''));
+}
+
 function ensureZhuxianTowerPosition(player, now = Date.now()) {
   if (!player || player.position?.zone !== ZHUXIAN_TOWER_ZONE_ID) return false;
   const personalRoomId = getPlayerZhuxianTowerRoomId(player, player.position.room);
@@ -13392,8 +13397,12 @@ async function start() {
   setupDailyLucky();
 
   setRespawnStore({
-    set: (realmId, zoneId, roomId, slotIndex, templateId, respawnAt) =>
-      upsertMobRespawn(realmId, zoneId, roomId, slotIndex, templateId, respawnAt),
+    set: (realmId, zoneId, roomId, slotIndex, templateId, respawnAt) => {
+      if (isPersonalBossInstanceRoom(zoneId, roomId)) {
+        return clearMobRespawn(realmId, zoneId, roomId, slotIndex);
+      }
+      return upsertMobRespawn(realmId, zoneId, roomId, slotIndex, templateId, respawnAt);
+    },
     clear: (realmId, zoneId, roomId, slotIndex) =>
       clearMobRespawn(realmId, zoneId, roomId, slotIndex)
   });
@@ -13425,6 +13434,12 @@ async function start() {
   }
   const activeRespawns = [];
   for (const row of respawnRows) {
+    if (isPersonalBossInstanceRoom(row.zone_id, row.room_id)) {
+      const realmValue = row.realm_id ?? row.realmId;
+      const realmId = (realmValue === undefined || realmValue === null) ? 1 : Number(realmValue);
+      await clearMobRespawn(Number.isNaN(realmId) ? 1 : realmId, row.zone_id, row.room_id, row.slot_index);
+      continue;
+    }
     if (row.respawn_at && Number(row.respawn_at) > now) {
       activeRespawns.push(row);
     } else if (row.current_hp && row.current_hp > 0) {
@@ -13445,6 +13460,7 @@ async function start() {
       for (const realmId of realmIds) {
         const aliveMobs = getAllAliveMobs(realmId);
         for (const mob of aliveMobs) {
+          if (isPersonalBossInstanceRoom(mob.zoneId, mob.roomId)) continue;
           await saveMobState(
             realmId,
             mob.zoneId,
