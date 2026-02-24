@@ -4235,22 +4235,41 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       const currentInfo = getCultivationInfo(current);
       const maxLevel = CULTIVATION_RANKS.length - 1;
       const costLevels = 200;
+      const nextLevel = current + 1;
+      const requiresRebirthStone = nextLevel >= 12; // 声闻、缘觉、菩萨、佛
       if (current >= maxLevel) {
         send(`修真已达最高：${currentInfo.name} (+${currentInfo.bonus})。`);
         return;
+      }
+      if (requiresRebirthStone) {
+        const needItemId = 'cultivation_rebirth_stone';
+        const owned = Number((player.inventory || []).find((i) => i && i.id === needItemId)?.qty || 0);
+        if (owned < 1) {
+          const nextInfoPreview = getCultivationInfo(nextLevel);
+          send(`突破至 ${nextInfoPreview.name} 需要 修真转生石 x1（跨服BOSS掉落）。`);
+          return;
+        }
       }
       if (player.level <= costLevels) {
         send(`等级不足。提升修真需要扣除 ${costLevels} 级，当前等级 ${player.level}。`);
         return;
       }
+      if (requiresRebirthStone) {
+        const removed = removeItem(player, 'cultivation_rebirth_stone', 1);
+        if (!removed) {
+          send('缺少修真转生石 x1。');
+          return;
+        }
+      }
       player.level -= costLevels;
       if (player.level < 1) player.level = 1;
       player.exp = Math.min(player.exp, expForLevel(player.level, player.flags?.cultivationLevel) - 1);
-      player.flags.cultivationLevel = current + 1;
+      player.flags.cultivationLevel = nextLevel;
       const nextInfo = getCultivationInfo(player.flags.cultivationLevel);
       computeDerived(player);
       player.forceStateRefresh = true;
-      send(`修真提升至 ${nextInfo.name} (+${nextInfo.bonus})，消耗等级 ${costLevels}，当前等级 ${player.level}。`);
+      const stoneText = requiresRebirthStone ? '、修真转生石 x1' : '';
+      send(`修真提升至 ${nextInfo.name} (+${nextInfo.bonus})，消耗等级 ${costLevels}${stoneText}，当前等级 ${player.level}。`);
       return;
     }
     case 'party': {
