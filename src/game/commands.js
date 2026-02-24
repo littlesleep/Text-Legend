@@ -192,6 +192,87 @@ function normalizePetState(player) {
   return state;
 }
 
+const PET_EQUIP_SLOT_KEYS = ['weapon', 'chest', 'head', 'waist', 'feet', 'neck', 'ring_left', 'ring_right', 'bracelet_left', 'bracelet_right'];
+
+function normalizePetEquipSlotName(slotRaw) {
+  const slot = String(slotRaw || '').trim().toLowerCase();
+  if (slot === 'ring') return 'ring_left';
+  if (slot === 'bracelet') return 'bracelet_left';
+  return slot;
+}
+
+function normalizePetEquipment(pet) {
+  if (!pet || typeof pet !== 'object') return {};
+  const src = pet.equipment && typeof pet.equipment === 'object' ? pet.equipment : {};
+  if (src.ring && !src.ring_left && !src.ring_right) src.ring_left = src.ring;
+  if (src.bracelet && !src.bracelet_left && !src.bracelet_right) src.bracelet_left = src.bracelet;
+  const next = {};
+  PET_EQUIP_SLOT_KEYS.forEach((slot) => {
+    const entry = src[slot];
+    next[slot] = entry && entry.id ? {
+      id: entry.id,
+      effects: entry.effects || null,
+      durability: entry.durability ?? null,
+      max_durability: entry.max_durability ?? null,
+      refine_level: entry.refine_level ?? 0,
+      base_roll_pct: entry.base_roll_pct ?? null
+    } : null;
+  });
+  pet.equipment = next;
+  return next;
+}
+
+function resolvePetEquippedItem(player, raw) {
+  const text = String(raw || '').trim();
+  if (!text.startsWith('petequip:')) return null;
+  const body = text.slice('petequip:'.length);
+  const splitAt = body.indexOf(':');
+  if (splitAt <= 0) return { error: '宠物装备格式错误，应为 petequip:<宠物ID>:<槽位>' };
+  const petId = body.slice(0, splitAt).trim();
+  const slotName = normalizePetEquipSlotName(body.slice(splitAt + 1));
+  if (!petId) return { error: '缺少宠物ID。' };
+  if (!PET_EQUIP_SLOT_KEYS.includes(slotName)) return { error: '宠物装备槽位无效。' };
+  const state = normalizePetState(player);
+  const pet = (state?.pets || []).find((p) => p && p.id === petId);
+  if (!pet) return { error: '宠物不存在。' };
+  const equip = normalizePetEquipment(pet);
+  const slot = equip[slotName];
+  if (!slot || !slot.id) return { error: '该宠物槽位没有装备。' };
+  const item = ITEM_TEMPLATES[slot.id];
+  if (!item) return { error: '宠物装备无效。' };
+  return {
+    pet,
+    petId,
+    petSlotName: slotName,
+    slot,
+    item,
+    source: 'pet'
+  };
+}
+
+function consumeResolvedEquip(player, resolved) {
+  if (!resolved?.slot) return false;
+  if (resolved.source === 'pet') {
+    if (!resolved.pet || !resolved.petSlotName) return false;
+    const equip = normalizePetEquipment(resolved.pet);
+    if (!equip[resolved.petSlotName] || !equip[resolved.petSlotName].id) return false;
+    equip[resolved.petSlotName] = null;
+    resolved.slot = null;
+    return true;
+  }
+  if (resolved.slot.qty && resolved.slot.qty > 1) {
+    resolved.slot.qty -= 1;
+    return true;
+  }
+  const idx = player.inventory.indexOf(resolved.slot);
+  if (idx > -1) {
+    player.inventory.splice(idx, 1);
+    player.inventory = player.inventory.filter((slot) => !slot.qty || slot.qty > 0);
+    return true;
+  }
+  return false;
+}
+
 function getAutoFullTrialDayKey(now = Date.now()) {
   const date = new Date(now);
   const yyyy = date.getFullYear();
@@ -3384,6 +3465,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       if (!mainRaw || !secondaryRaw) return;
       let mainResolved = null;
       let mainEquippedSlot = null;
+      let mainPetEquip = null;
       if (mainRaw.startsWith('equip:')) {
         const slotName = mainRaw.slice('equip:'.length).trim();
         const equipped = player.equipment?.[slotName];
@@ -3392,12 +3474,28 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!item) return send('主件装备无效。');
         mainResolved = { slot: equipped, item };
         mainEquippedSlot = slotName;
+      } else if (mainRaw.startsWith('petequip:')) {
+        const petResolved = resolvePetEquippedItem(player, mainRaw);
+        if (!petResolved || petResolved.error) return send(petResolved?.error || '宠物装备无效。');
+        mainResolved = petResolved;
+        mainPetEquip = petResolved;
       } else {
         mainResolved = resolveInventoryItem(player, mainRaw);
         if (!mainResolved.slot || !mainResolved.item) return send('背包里没有主件装备。');
       }
-      const secondaryResolved = resolveInventoryItem(player, secondaryRaw);
-      if (!secondaryResolved.slot || !secondaryResolved.item) return send('背包里没有副件装备。');
+      let secondaryResolved = null;
+      if (secondaryRaw.startsWith('petequip:')) {
+        const petResolved = resolvePetEquippedItem(player, secondaryRaw);
+        if (!petResolved || petResolved.error) return send(petResolved?.error || '宠物副件装备无效。');
+        secondaryResolved = petResolved;
+      } else {
+        secondaryResolved = resolveInventoryItem(player, secondaryRaw);
+        if (!secondaryResolved.slot || !secondaryResolved.item) return send('背包里没有副件装备。');
+      }
+      if (mainResolved.source === 'pet' && secondaryResolved.source === 'pet'
+        && mainResolved.petId === secondaryResolved.petId && mainResolved.petSlotName === secondaryResolved.petSlotName) {
+        return send('主件和副件不能是同一件宠物装备。');
+      }
       const item = mainResolved.item;
       if (!item.slot || !['weapon', 'armor', 'accessory'].includes(item.type)) {
         return send('只能合成装备。');
@@ -3414,8 +3512,8 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       if (rarityRankForForge(secondaryRarity) !== rarityRankForForge(rarity)) {
         return send('副件稀有度必须与主件一致。');
       }
-      if (mainEquippedSlot) {
-        secondaryResolved.slot.qty -= 1;
+      if (mainEquippedSlot || mainPetEquip) {
+        if (!consumeResolvedEquip(player, secondaryResolved)) return send('副件消耗失败。');
       } else if (mainResolved.slot === secondaryResolved.slot) {
         if ((mainResolved.slot.qty || 0) < 2) {
           return send('需要两件相同装备才能合成。');
@@ -3443,7 +3541,18 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           effects,
           durability: mainResolved.slot.durability ?? null,
           max_durability: mainResolved.slot.max_durability ?? null,
-          refine_level: finalRefineLevel
+          refine_level: finalRefineLevel,
+          base_roll_pct: mainResolved.slot.base_roll_pct ?? null
+        };
+      } else if (mainPetEquip) {
+        const equip = normalizePetEquipment(mainPetEquip.pet);
+        equip[mainPetEquip.petSlotName] = {
+          id: item.id,
+          effects,
+          durability: mainResolved.slot.durability ?? null,
+          max_durability: mainResolved.slot.max_durability ?? null,
+          refine_level: finalRefineLevel,
+          base_roll_pct: mainResolved.slot.base_roll_pct ?? null
         };
       } else {
         addItem(
@@ -3453,7 +3562,8 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           effects,
           mainResolved.slot.durability ?? null,
           mainResolved.slot.max_durability ?? null,
-          finalRefineLevel
+          finalRefineLevel,
+          mainResolved.slot.base_roll_pct ?? null
         );
       }
       computeDerived(player);
@@ -3564,11 +3674,22 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           targetLevel = Math.floor(maybeTarget);
           itemRaw = parts[0];
         }
+      } else if (rawArgs.startsWith('petequip:')) {
+        const parts = rawArgs.split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+          const maybeTarget = Number(parts[parts.length - 1]);
+          if (!Number.isFinite(maybeTarget) || maybeTarget <= 0) {
+            return send('目标锻造等级必须是大于0的整数。');
+          }
+          targetLevel = Math.floor(maybeTarget);
+          itemRaw = parts[0];
+        }
       }
 
       // 解析主件装备
       let mainResolved = null;
       let mainEquippedSlot = null;
+      let mainPetEquip = null;
       if (itemRaw.startsWith('equip:')) {
         const slotName = itemRaw.slice('equip:'.length).trim();
         const equipped = player.equipment?.[slotName];
@@ -3577,6 +3698,11 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!item) return send('装备无效。');
         mainResolved = { slot: equipped, item };
         mainEquippedSlot = slotName;
+      } else if (itemRaw.startsWith('petequip:')) {
+        const petResolved = resolvePetEquippedItem(player, itemRaw);
+        if (!petResolved || petResolved.error) return send(petResolved?.error || '宠物装备无效。');
+        mainResolved = petResolved;
+        mainPetEquip = petResolved;
       } else {
         mainResolved = resolveInventoryItem(player, itemRaw);
         if (!mainResolved.slot || !mainResolved.item) return send('背包里没有该装备。');
@@ -3588,7 +3714,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       }
 
       if (targetLevel != null) {
-        if (!mainEquippedSlot) return send('设置自动停止等级仅支持已装备装备。');
+        if (!mainEquippedSlot && !mainPetEquip) return send('设置自动停止等级仅支持已装备/宠物已穿戴装备。');
         let current = mainResolved.slot.refine_level || 0;
         if (current >= targetLevel) {
           return send(`${item.name} 已达到锻造+${current}。`);
@@ -3652,7 +3778,11 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           const newRefineLevel = success
             ? nextRefineLevel
             : (isProtected ? currentRefineLevel : Math.max(0, currentRefineLevel - 1));
-          player.equipment[mainEquippedSlot].refine_level = newRefineLevel;
+          if (mainEquippedSlot) {
+            player.equipment[mainEquippedSlot].refine_level = newRefineLevel;
+          } else if (mainPetEquip) {
+            normalizePetEquipment(mainPetEquip.pet)[mainPetEquip.petSlotName].refine_level = newRefineLevel;
+          }
           const carnivalMsgs = recordRefineActivity(player, { success, newLevel: newRefineLevel });
           carnivalMsgs.forEach((msg) => send(msg));
           current = newRefineLevel;
@@ -3735,6 +3865,8 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       // 应用锻造等级
       if (mainEquippedSlot) {
         player.equipment[mainEquippedSlot].refine_level = newRefineLevel;
+      } else if (mainPetEquip) {
+        normalizePetEquipment(mainPetEquip.pet)[mainPetEquip.petSlotName].refine_level = newRefineLevel;
       } else {
         mainResolved.slot.refine_level = newRefineLevel;
       }
@@ -3780,6 +3912,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       // 解析主件装备（必须是已穿戴的装备）
       let mainResolved = null;
       let mainEquippedSlot = null;
+      let mainPetEquip = null;
       if (mainRaw.startsWith('equip:')) {
         const slotName = mainRaw.slice('equip:'.length).trim();
         const equipped = player.equipment?.[slotName];
@@ -3788,8 +3921,13 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!item) return send('装备无效。');
         mainResolved = { slot: equipped, item };
         mainEquippedSlot = slotName;
+      } else if (mainRaw.startsWith('petequip:')) {
+        const petResolved = resolvePetEquippedItem(player, mainRaw);
+        if (!petResolved || petResolved.error) return send(petResolved?.error || '宠物主件装备无效。');
+        mainResolved = petResolved;
+        mainPetEquip = petResolved;
       } else {
-        return send('只能给已穿戴的主件装备重置特效。');
+        return send('主件必须是已穿戴装备或宠物已穿戴装备。');
       }
 
       const mainItem = mainResolved.item;
@@ -3800,8 +3938,19 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       }
 
       // 解析副件装备
-      const secondaryResolved = resolveInventoryItem(player, secondaryRaw);
-      if (!secondaryResolved.slot || !secondaryResolved.item) return send('背包里没有该副件装备。');
+      let secondaryResolved = null;
+      if (secondaryRaw.startsWith('petequip:')) {
+        const petResolved = resolvePetEquippedItem(player, secondaryRaw);
+        if (!petResolved || petResolved.error) return send(petResolved?.error || '宠物副件装备无效。');
+        secondaryResolved = petResolved;
+      } else {
+        secondaryResolved = resolveInventoryItem(player, secondaryRaw);
+        if (!secondaryResolved.slot || !secondaryResolved.item) return send('背包里没有该副件装备。');
+      }
+      if (mainResolved.source === 'pet' && secondaryResolved.source === 'pet'
+        && mainResolved.petId === secondaryResolved.petId && mainResolved.petSlotName === secondaryResolved.petSlotName) {
+        return send('主件和副件不能是同一件宠物装备。');
+      }
       const secondaryRarity = secondaryResolved.item.rarity || rarityByPrice(secondaryResolved.item);
       if (['supreme', 'ultimate'].includes(secondaryRarity)) {
         return send('副件不能使用至尊或终极装备。');
@@ -3813,16 +3962,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       }
 
       // 消耗副件装备
-      const secondarySlot = secondaryResolved.slot;
-      if (secondarySlot.qty && secondarySlot.qty > 1) {
-        secondarySlot.qty -= 1;
-      } else {
-        const index = player.inventory.indexOf(secondarySlot);
-        if (index > -1) {
-          player.inventory.splice(index, 1);
-        }
+      if (!consumeResolvedEquip(player, secondaryResolved)) {
+        return send('副件消耗失败。');
       }
-      player.inventory = player.inventory.filter((slot) => !slot.qty || slot.qty > 0);
 
       // 执行特效重置：从配置读取成功率和多特效概率
       const success = Math.random() * 100 < getEffectResetSuccessRate();
@@ -3899,6 +4041,12 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         // 确保保留锻造等级
         if (player.equipment[mainEquippedSlot].refine_level == null) {
           player.equipment[mainEquippedSlot].refine_level = 0;
+        }
+      } else if (mainPetEquip) {
+        const petEquip = normalizePetEquipment(mainPetEquip.pet);
+        petEquip[mainPetEquip.petSlotName].effects = newEffects;
+        if (petEquip[mainPetEquip.petSlotName].refine_level == null) {
+          petEquip[mainPetEquip.petSlotName].refine_level = 0;
         }
       } else {
         mainResolved.slot.effects = newEffects;

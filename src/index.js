@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import path from 'node:path';
@@ -7758,6 +7758,8 @@ let PET_SKILL_LIBRARY = [
   { id: 'pet_sunder_adv', name: '高级撕裂', grade: 'advanced' },
   { id: 'pet_arcane_echo', name: '奥术回响', grade: 'normal' },
   { id: 'pet_arcane_echo_adv', name: '高级奥术回响', grade: 'advanced' },
+  { id: 'pet_aoe', name: '横扫', grade: 'normal' },
+  { id: 'pet_aoe_adv', name: '高级横扫', grade: 'advanced' },
   { id: 'pet_divine_guard', name: '神佑', grade: 'special' },
   { id: 'pet_kill_soul', name: '噬魂', grade: 'special' },
   { id: 'pet_war_horn', name: '战号', grade: 'special' },
@@ -7770,53 +7772,124 @@ let PET_SKILL_LIBRARY = [
 ];
 
 let PET_SKILL_EFFECTS = {
-  pet_bash: '被动：宠物物理伤害+4.5%',
-  pet_bash_adv: '被动：宠物物理伤害+6.75%',
-  pet_crit: '被动：宠物暴击率+4.5%',
-  pet_crit_adv: '被动：宠物暴击率+6.75%',
-  pet_guard: '被动：主人受到伤害-4.5%',
-  pet_guard_adv: '被动：主人受到伤害-6.75%',
-  pet_dodge: '被动：主人闪避率+3%',
-  pet_dodge_adv: '被动：主人闪避率+4.5%',
-  pet_lifesteal: '被动：宠物攻击吸血4.5%',
-  pet_lifesteal_adv: '被动：宠物攻击吸血6.75%',
-  pet_counter: '被动：宠物受击时6%反击',
-  pet_counter_adv: '被动：宠物受击时9%反击',
-  pet_combo: '被动：宠物攻击6%连击',
-  pet_combo_adv: '被动：宠物攻击9%连击',
-  pet_tough_skin: '被动：主人额外减伤7.5%',
-  pet_tough_skin_adv: '被动：主人额外减伤11.25%',
-  pet_focus: '被动：宠物命中率+3.75%',
-  pet_focus_adv: '被动：宠物命中率+5.625%',
-  pet_spirit: '被动：宠物法术伤害+4.5%',
-  pet_spirit_adv: '被动：宠物法术伤害+6.75%',
-  pet_fury: '被动：主人最终伤害+6%',
-  pet_fury_adv: '被动：主人最终伤害+9%',
-  pet_break: '被动：主人无视目标防御4.5%',
-  pet_break_adv: '被动：主人无视目标防御6.75%',
-  pet_magic_break: '被动：攻击时9%附加破魔(4.5秒)',
-  pet_magic_break_adv: '被动：攻击时13.5%附加破魔(4.5秒)',
-  pet_bloodline: '被动：主人治疗效果+9%',
-  pet_bloodline_adv: '被动：主人治疗效果+13.5%',
-  pet_resolve: '被动：主人控制抗性提升',
-  pet_resolve_adv: '被动：主人控制抗性提升',
-  pet_quick_step: '被动：主人速度提升',
-  pet_quick_step_adv: '被动：主人速度提升',
-  pet_sunder: '被动：主人造成流血概率提升',
-  pet_sunder_adv: '被动：主人造成流血概率提升',
-  pet_arcane_echo: '被动：法术命中时4.5%追加一段伤害',
-  pet_arcane_echo_adv: '被动：法术命中时6.75%追加一段伤害',
-  pet_divine_guard: '被动：受击4%触发神佑减伤14%',
-  pet_kill_soul: '被动：击杀目标时恢复4.5%生命/法力',
-  pet_war_horn: '被动：攻击附带禁疗概率提升',
-  pet_soul_chain: '被动：宠物与主人分担6%伤害',
-  pet_soul_chain_adv: '被动：宠物与主人分担9%伤害',
-  pet_overload: '被动：技能伤害小幅增幅',
-  pet_overload_adv: '被动：技能伤害增幅',
-  pet_rebirth: '被动：濒死时12%几率涅槃复活',
-  pet_rebirth_adv: '被动：濒死时18%几率涅槃复活'
+  pet_bash: '被动：物理协战伤害提升（约+4%~4.5%）',
+  pet_bash_adv: '被动：物理协战伤害提升（约+6%~6.75%）',
+  pet_crit: '被动：协战暴击率提升（PVE约+4.5%，PVP约+4%）',
+  pet_crit_adv: '被动：协战暴击率提升（PVE约+6.75%，PVP约+6%）',
+  pet_guard: '被动：血宠协战强化（血宠基础伤害约+4%~5%，护主更稳）',
+  pet_guard_adv: '被动：血宠协战强化（血宠护主回血/压制进一步增强）',
+  pet_dodge: '被动：协战后概率护主减伤（PVE约12%，PVP约8%；持续约1.0~1.2秒）',
+  pet_dodge_adv: '被动：协战后概率护主减伤（PVE约18%，PVP约14%；减伤更高）',
+  pet_lifesteal: '被动：协战伤害吸血给主人（PVE约3%，PVP约2%）',
+  pet_lifesteal_adv: '被动：协战伤害吸血给主人（PVE约5%，PVP约3.5%）',
+  pet_counter: '被动：协战后概率追加反扑（PVE约12%，PVP约8%，伤害约35%/28%）',
+  pet_counter_adv: '被动：协战后概率追加反扑（PVE约20%，PVP约14%，伤害更高）',
+  pet_combo: '被动：协战连击概率提升（PVE约+6%，PVP约+5%）',
+  pet_combo_adv: '被动：协战连击概率提升（PVE约+9%，PVP约+8%）',
+  pet_tough_skin: '被动：血宠协战强化（血宠基础伤害约+3%~4%）',
+  pet_tough_skin_adv: '被动：血宠协战强化（血宠基础伤害约+5%~6%）',
+  pet_focus: '被动：协战稳定伤害提升（约+1.5%~2%）并提高破防/破魔/暴击触发',
+  pet_focus_adv: '被动：协战稳定伤害提升（约+3%~3.5%）并显著提高破防/破魔/暴击触发',
+  pet_spirit: '被动：法术协战伤害提升（约+4%~4.5%）',
+  pet_spirit_adv: '被动：法术协战伤害提升（约+6%~6.75%）',
+  pet_fury: '被动：协战最终伤害提升（PVE约+4.5%，PVP约+4%）',
+  pet_fury_adv: '被动：协战最终伤害提升（PVE约+6.75%，PVP约+6%）',
+  pet_break: '被动：协战更易附加破防（额外概率约+8%~12%，减防约8%~12%）',
+  pet_break_adv: '被动：协战更易附加破防（额外概率约+14%~20%，减防约14%~18%）',
+  pet_magic_break: '被动：协战更易附加破魔（额外概率约+8%~12%，减魔御约8%~12%）',
+  pet_magic_break_adv: '被动：协战更易附加破魔（额外概率约+14%~20%，减魔御约14%~18%）',
+  pet_bloodline: '被动：提升护主/吸血回复（护主回复额外约+0.6%~0.8%最大生命）',
+  pet_bloodline_adv: '被动：提升护主/吸血回复（护主回复额外约+1.2%~1.5%最大生命）',
+  pet_resolve: '被动：协战时概率净化主人控制/减益（约21%，清1个负面）',
+  pet_resolve_adv: '被动：协战时概率净化主人控制/减益（约31.5%，清1个负面）',
+  pet_quick_step: '被动：协战更易疾袭/连击（疾袭约8%~12%，追加伤害约35%~45%）',
+  pet_quick_step_adv: '被动：协战更易疾袭/连击（疾袭约14%~18%，并提升追加伤害）',
+  pet_sunder: '被动：协战概率施加撕裂压制（约12%~16%，降防/降魔御至约90%）',
+  pet_sunder_adv: '被动：协战概率施加撕裂压制（约18%~24%，降防/降魔御至约85%~88%）',
+  pet_arcane_echo: '被动：协战概率追加回响伤害（约8%~12%，追加约16%~22%）',
+  pet_arcane_echo_adv: '被动：协战概率追加回响伤害（约14%~20%，追加约24%~32%）',
+  pet_aoe: '被动：协战概率触发横扫（PVE约18%，额外1目标，伤害约30%）',
+  pet_aoe_adv: '被动：协战概率触发横扫（PVE约30%，额外2目标，伤害约45%）',
+  pet_divine_guard: '被动：协战后概率给予主人神佑减伤（PVE约12%/减伤15%，PVP约8%/减伤12%）',
+  pet_kill_soul: '被动：宠物协战击杀时恢复主人生命/法力（各约最大值4.5%）',
+  pet_war_horn: '被动：协战概率施加禁疗（额外概率约8%~20%，持续5秒，治疗约10%）',
+  pet_soul_chain: '被动：协战概率魂链压制（PVE约12%，PVP约8%）；目标降伤约10%~12%，并给主人短减伤',
+  pet_soul_chain_adv: '被动：协战概率魂链压制（PVE约20%，PVP约14%）；目标降伤约16%~20%，护主更强',
+  pet_overload: '被动：协战伤害提升（PVE约+3%，PVP约+2.5%）',
+  pet_overload_adv: '被动：协战伤害提升（PVE约+5%，PVP约+4%）',
+  pet_rebirth: '被动：主人血量低于35%时，协战概率紧急回血（约12%，回复约30%，有冷却）',
+  pet_rebirth_adv: '被动：主人血量低于35%时，协战概率紧急回血（约18%，回复约45%，有冷却）'
 };
 
+const PET_SKILL_TYPE_HINTS = {
+  pet_bash: '物理宠优先',
+  pet_bash_adv: '物理宠优先',
+  pet_crit: '物理宠/法术宠优先',
+  pet_crit_adv: '物理宠/法术宠优先',
+  pet_guard: '血宠优先',
+  pet_guard_adv: '血宠优先',
+  pet_dodge: '血宠优先',
+  pet_dodge_adv: '血宠优先',
+  pet_lifesteal: '通用',
+  pet_lifesteal_adv: '通用',
+  pet_counter: '物理宠/血宠优先',
+  pet_counter_adv: '物理宠/血宠优先',
+  pet_combo: '物理宠优先',
+  pet_combo_adv: '物理宠优先',
+  pet_tough_skin: '血宠优先',
+  pet_tough_skin_adv: '血宠优先',
+  pet_focus: '物理宠/法术宠优先',
+  pet_focus_adv: '物理宠/法术宠优先',
+  pet_spirit: '法术宠优先',
+  pet_spirit_adv: '法术宠优先',
+  pet_fury: '通用',
+  pet_fury_adv: '通用',
+  pet_break: '物理宠/血宠优先',
+  pet_break_adv: '物理宠/血宠优先',
+  pet_magic_break: '法术宠优先',
+  pet_magic_break_adv: '法术宠优先',
+  pet_bloodline: '血宠优先',
+  pet_bloodline_adv: '血宠优先',
+  pet_resolve: '通用',
+  pet_resolve_adv: '通用',
+  pet_quick_step: '物理宠/法术宠优先',
+  pet_quick_step_adv: '物理宠/法术宠优先',
+  pet_sunder: '物理宠/血宠优先',
+  pet_sunder_adv: '物理宠/血宠优先',
+  pet_arcane_echo: '法术宠优先',
+  pet_arcane_echo_adv: '法术宠优先',
+  pet_aoe: '法术宠优先（物理宠也可用）',
+  pet_aoe_adv: '法术宠优先（物理宠也可用）',
+  pet_divine_guard: '血宠优先',
+  pet_kill_soul: '通用',
+  pet_war_horn: '通用',
+  pet_soul_chain: '血宠优先',
+  pet_soul_chain_adv: '血宠优先',
+  pet_overload: '通用',
+  pet_overload_adv: '通用',
+  pet_rebirth: '血宠优先',
+  pet_rebirth_adv: '血宠优先'
+};
+
+function decoratePetSkillEffectsWithTypeHints(effects) {
+  const next = {};
+  Object.entries(effects || {}).forEach(([skillId, text]) => {
+    const raw = String(text || '').trim();
+    const hint = PET_SKILL_TYPE_HINTS[skillId];
+    if (!hint) {
+      next[skillId] = raw;
+      return;
+    }
+    if (raw.includes('适配:')) {
+      next[skillId] = raw;
+      return;
+    }
+    next[skillId] = raw ? `${raw} | 适配: ${hint}` : `适配: ${hint}`;
+  });
+  return next;
+}
+
+PET_SKILL_EFFECTS = decoratePetSkillEffectsWithTypeHints(PET_SKILL_EFFECTS);
 let PET_COMBAT_BALANCE = {
   focusHitBonus: 0.0375,
   focusAdvHitBonus: 0.05625,
@@ -8290,7 +8363,7 @@ function applyPetSettings(raw, options = {}) {
   PET_RARITY_GROWTH_RANGE = { ...normalized.rarityGrowthRange };
   PET_RARITY_APTITUDE_RANGE = { ...normalized.rarityAptitudeRange };
   PET_SKILL_LIBRARY = normalized.skillLibrary.map((entry) => ({ ...entry }));
-  PET_SKILL_EFFECTS = { ...normalized.skillEffects };
+  PET_SKILL_EFFECTS = decoratePetSkillEffectsWithTypeHints({ ...normalized.skillEffects });
   PET_COMBAT_BALANCE = { ...normalized.combatBalance };
   PET_AVAILABLE_GRADES_BY_RARITY = { ...normalized.availableGradesByRarity };
   PET_OPEN_SKILL_MIN_BY_RARITY = { ...normalized.openSkillMinByRarity };
@@ -8389,11 +8462,98 @@ function getActivePet(player) {
   return state.pets.find((pet) => pet.id === state.activePetId) || null;
 }
 
+const PET_SKILL_AFFECTS_OWNER = false;
+
 function hasActivePetSkill(player, skillId) {
+  if (!PET_SKILL_AFFECTS_OWNER) return false;
   if (!player || !skillId) return false;
   const pet = getActivePet(player);
   if (!pet || !Array.isArray(pet.skills)) return false;
   return pet.skills.includes(skillId);
+}
+
+function hasPetSkillOnPet(pet, skillId) {
+  if (!pet || !skillId || !Array.isArray(pet.skills)) return false;
+  return pet.skills.includes(skillId);
+}
+
+function getPetSkillTierOnPet(pet, baseSkillId) {
+  if (!pet || !baseSkillId) return 0;
+  if (hasPetSkillOnPet(pet, `${baseSkillId}_adv`)) return 2;
+  if (hasPetSkillOnPet(pet, baseSkillId)) return 1;
+  return 0;
+}
+
+function ensureTargetDebuffs(target) {
+  if (!target) return null;
+  if (!target.status) target.status = {};
+  if (!target.status.debuffs) target.status.debuffs = {};
+  return target.status.debuffs;
+}
+
+function ensureTargetBuffs(target) {
+  if (!target) return null;
+  if (!target.status) target.status = {};
+  if (!target.status.buffs) target.status.buffs = {};
+  return target.status.buffs;
+}
+
+function maybePetAssistCleanseOwner(owner, pet) {
+  if (!owner || !pet) return false;
+  const tier = getPetSkillTierOnPet(pet, 'pet_resolve');
+  if (!tier) return false;
+  const chance = tier >= 2 ? (PET_COMBAT_BALANCE.resolveAdvChance || 0.3) : (PET_COMBAT_BALANCE.resolveChance || 0.2);
+  if (Math.random() > chance) return false;
+  let changed = false;
+  if (owner.status?.stunTurns && owner.status.stunTurns > 0) {
+    owner.status.stunTurns = 0;
+    changed = true;
+  }
+  const debuffs = owner.status?.debuffs;
+  if (debuffs) {
+    const removable = ['weak', 'poisonEffect', 'armorBreak', 'petMagicBreak', 'healBlock'];
+    for (const key of removable) {
+      if (debuffs[key]) {
+        delete debuffs[key];
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (changed && typeof owner.send === 'function') owner.send(`${String(pet.name || 'Pet')} resolve cleanse`);
+  return changed;
+}
+
+function maybePetAssistEmergencyRebirth(owner, pet) {
+  if (!owner || !pet || !Number.isFinite(owner.max_hp) || owner.max_hp <= 0) return false;
+  const tier = getPetSkillTierOnPet(pet, 'pet_rebirth');
+  if (!tier) return false;
+  const hpRatio = (owner.hp || 0) / Math.max(1, owner.max_hp || 1);
+  if (hpRatio > 0.35) return false;
+  if (!owner.flags) owner.flags = {};
+  const cdKey = 'petAssistRebirthCdAt';
+  const now = Date.now();
+  const cd = Number(owner.flags[cdKey] || 0);
+  if (cd > now) return false;
+  const chance = tier >= 2 ? (PET_COMBAT_BALANCE.rebirthAdvChance || 0.18) : (PET_COMBAT_BALANCE.rebirthChance || 0.12);
+  if (Math.random() > chance) return false;
+  const recoverRatio = tier >= 2 ? (PET_COMBAT_BALANCE.rebirthAdvRecoverRatio || 0.45) : (PET_COMBAT_BALANCE.rebirthRecoverRatio || 0.3);
+  const heal = Math.max(1, Math.floor(owner.max_hp * recoverRatio));
+  owner.hp = clamp(owner.hp + heal, 1, owner.max_hp);
+  owner.flags[cdKey] = now + Math.max(30000, Math.floor((PET_COMBAT_BALANCE.rebirthCooldownMs || 120000) * 0.5));
+  if (typeof owner.send === 'function') owner.send(`${String(pet.name || 'Pet')} rebirth heal ${heal}`);
+  return true;
+}
+
+function applyPetAssistKillSoul(owner, pet) {
+  if (!owner || !pet || !hasPetSkillOnPet(pet, 'pet_kill_soul')) return false;
+  const ratio = Number(PET_COMBAT_BALANCE.killSoulRecoverRatio || 0.045);
+  const hpGain = Math.max(1, Math.floor((owner.max_hp || 1) * ratio));
+  const mpGain = Math.max(1, Math.floor((owner.max_mp || 1) * ratio));
+  owner.hp = clamp((owner.hp || 1) + hpGain, 1, owner.max_hp || 1);
+  owner.mp = clamp((owner.mp || 0) + mpGain, 0, owner.max_mp || 0);
+  if (typeof owner.send === 'function') owner.send(`${String(pet.name || 'Pet')} kill soul ${hpGain}/${mpGain}`);
+  return true;
 }
 
 function hasAnyPetSkill(player, baseSkillId) {
@@ -8536,6 +8696,656 @@ function tryResolvePetStun(player) {
   return true;
 }
 
+function inferPetBattleTypeByAptitude(aptitude) {
+  const hp = Number(aptitude?.hp || 0);
+  const atk = Number(aptitude?.atk || 0);
+  const mag = Number(aptitude?.mag || 0);
+  const def = Number(aptitude?.def || 0);
+  if (hp >= Math.max(atk, mag) * 1.1 || (hp + def * 4) > (atk + mag) * 8) return 'tank';
+  return mag > atk ? 'magic' : 'physical';
+}
+
+function normalizePetBattleType(pet, aptitude) {
+  const raw = String(pet?.battleType || pet?.petType || pet?.combatType || '').trim().toLowerCase();
+  if (raw === 'physical' || raw === 'phys' || raw === 'atk') return 'physical';
+  if (raw === 'magic' || raw === 'mag' || raw === 'spell') return 'magic';
+  if (raw === 'tank' || raw === 'blood' || raw === 'hp') return 'tank';
+  return inferPetBattleTypeByAptitude(aptitude);
+}
+
+function rollAptitudeByBias(range, bias = 'mid') {
+  const min = Math.floor(Number(range?.[0] || 0));
+  const max = Math.floor(Number(range?.[1] || min));
+  if (max <= min) return min;
+  const r = Math.random();
+  let t = r;
+  if (bias === 'high') t = Math.pow(r, 0.55);
+  else if (bias === 'low') t = 1 - Math.pow(1 - r, 0.55);
+  else if (bias === 'mid_high') t = Math.pow(r, 0.75);
+  else if (bias === 'mid_low') t = 1 - Math.pow(1 - r, 0.75);
+  return Math.max(min, Math.min(max, Math.floor(min + (max - min) * t)));
+}
+
+function rollPetAptitudeByBattleType(aptRange, battleType) {
+  const type = String(battleType || 'physical');
+  const biasMap = type === 'magic'
+    ? { hp: 'mid_low', atk: 'low', def: 'mid_low', mag: 'high', agility: 'mid_high' }
+    : type === 'tank'
+      ? { hp: 'high', atk: 'low', def: 'high', mag: 'low', agility: 'mid_low' }
+      : { hp: 'mid', atk: 'high', def: 'mid', mag: 'low', agility: 'mid_high' };
+  return {
+    hp: rollAptitudeByBias(aptRange.hp, biasMap.hp),
+    atk: rollAptitudeByBias(aptRange.atk, biasMap.atk),
+    def: rollAptitudeByBias(aptRange.def, biasMap.def),
+    mag: rollAptitudeByBias(aptRange.mag, biasMap.mag),
+    agility: rollAptitudeByBias(aptRange.agility, biasMap.agility)
+  };
+}
+
+function biasSynthesizedPetAptitudeByBattleType(pet, aptRange, battleType) {
+  if (!pet?.aptitude || !aptRange) return;
+  const type = String(battleType || normalizePetBattleType(pet, pet.aptitude));
+  const boost = (key, pct) => {
+    const cur = Math.floor(Number(pet.aptitude[key] || 0));
+    const min = Math.floor(Number(aptRange[key]?.[0] || 0));
+    const max = Math.floor(Number(aptRange[key]?.[1] || min));
+    const next = Math.floor(cur * (1 + pct));
+    pet.aptitude[key] = Math.max(min, Math.min(max, next));
+  };
+  const trim = (key, pct) => {
+    const cur = Math.floor(Number(pet.aptitude[key] || 0));
+    const min = Math.floor(Number(aptRange[key]?.[0] || 0));
+    const max = Math.floor(Number(aptRange[key]?.[1] || min));
+    const next = Math.floor(cur * (1 - pct));
+    pet.aptitude[key] = Math.max(min, Math.min(max, next));
+  };
+  if (type === 'magic') {
+    boost('mag', 0.08);
+    boost('agility', 0.04);
+    trim('atk', 0.03);
+  } else if (type === 'tank') {
+    boost('hp', 0.1);
+    boost('def', 0.08);
+    trim('atk', 0.04);
+    trim('mag', 0.04);
+  } else {
+    boost('atk', 0.08);
+    boost('agility', 0.04);
+    trim('mag', 0.03);
+  }
+}
+
+function calcPetAssistDamage(player, mob) {
+  const pet = getActivePet(player);
+  if (!pet || !mob || Number(mob.hp || 0) <= 0) return null;
+  const aptitude = pet.aptitude || {};
+  const growth = Math.max(0.8, Number(pet.growth || 1));
+  const level = Math.max(1, Math.floor(Number(pet.level || 1)));
+  const battleType = normalizePetBattleType(pet, aptitude);
+  const mobDef = Math.max(0, Number(mob.def || 0));
+  const mobMdef = Math.max(0, Number(mob.mdef || 0));
+
+  let base = 0;
+  const typeMods = {
+    baseMul: 1,
+    critChanceBonus: 0,
+    critDamageMul: 1.5,
+    comboChanceBonus: 0,
+    comboRatioBonus: 0,
+    splashChance: 0,
+    splashRatio: 0,
+    aoeChance: 0,
+    aoeTargets: 0,
+    aoeRatio: 0,
+    breakMdefChance: 0,
+    breakDefChance: 0,
+    ownerHealRatio: 0,
+    lifestealRatio: 0,
+    arcaneEchoChance: 0,
+    arcaneEchoRatio: 0,
+    warHornChance: 0,
+    sunderChance: 0,
+    sunderDefMultiplier: 0.9,
+    sunderMdefMultiplier: 0.9,
+    divineGuardChance: 0,
+    divineGuardDamageMul: 0.92,
+    dodgeGuardChance: 0,
+    dodgeGuardDamageMul: 0.95,
+    quickStrikeChance: 0,
+    quickStrikeRatio: 0.45,
+    counterLashChance: 0,
+    counterLashRatio: 0.35,
+    soulChainChance: 0,
+    soulChainWeakReduction: 0,
+    soulChainGuardRatio: 0,
+    breakDefMultiplier: 0.85,
+    breakMdefMultiplier: 0.85
+  };
+  if (battleType === 'magic') {
+    base = (Number(aptitude.mag || 0) * 1.7 + level * 5) * growth - mobMdef * 0.45;
+    typeMods.baseMul = 1.12;
+    typeMods.splashChance = 0.35;
+    typeMods.splashRatio = 0.4;
+    typeMods.breakMdefChance = 0.2;
+    if (hasPetSkillOnPet(pet, 'pet_spirit')) base *= 1.045;
+    if (hasPetSkillOnPet(pet, 'pet_spirit_adv')) base *= 1.0675;
+  } else if (battleType === 'tank') {
+    base = ((Number(aptitude.hp || 0) * 0.16) + (Number(aptitude.def || 0) * 1.2) + level * 4) * growth - mobDef * 0.35;
+    typeMods.baseMul = 0.78;
+    typeMods.breakDefChance = 0.25;
+    typeMods.ownerHealRatio = 0.02;
+    if (hasPetSkillOnPet(pet, 'pet_guard')) base *= 1.05;
+    if (hasPetSkillOnPet(pet, 'pet_tough_skin')) base *= 1.04;
+    if (hasPetSkillOnPet(pet, 'pet_tough_skin_adv')) base *= 1.06;
+  } else {
+    base = (Number(aptitude.atk || 0) * 1.7 + level * 5) * growth - mobDef * 0.45;
+    typeMods.baseMul = 1.18;
+    typeMods.critChanceBonus = 0.05;
+    typeMods.critDamageMul = 1.65;
+    typeMods.comboChanceBonus = 0.04;
+    typeMods.comboRatioBonus = 0.2;
+    if (hasPetSkillOnPet(pet, 'pet_bash')) base *= 1.045;
+    if (hasPetSkillOnPet(pet, 'pet_bash_adv')) base *= 1.0675;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_fury')) base *= 1.045;
+  if (hasPetSkillOnPet(pet, 'pet_fury_adv')) base *= 1.0675;
+  if (hasPetSkillOnPet(pet, 'pet_overload')) base *= 1.03;
+  if (hasPetSkillOnPet(pet, 'pet_overload_adv')) base *= 1.05;
+  if (hasPetSkillOnPet(pet, 'pet_focus')) {
+    base *= 1.02;
+    typeMods.critChanceBonus += 0.02;
+    typeMods.breakDefChance += 0.04;
+    typeMods.breakMdefChance += 0.04;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_focus_adv')) {
+    base *= 1.035;
+    typeMods.critChanceBonus += 0.03;
+    typeMods.breakDefChance += 0.06;
+    typeMods.breakMdefChance += 0.06;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_quick_step')) {
+    typeMods.comboChanceBonus += 0.03;
+    typeMods.quickStrikeChance += 0.12;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_quick_step_adv')) {
+    typeMods.comboChanceBonus += 0.05;
+    typeMods.quickStrikeChance += 0.18;
+    typeMods.quickStrikeRatio += 0.08;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_dodge')) {
+    typeMods.dodgeGuardChance += 0.12;
+    typeMods.dodgeGuardDamageMul = Math.min(typeMods.dodgeGuardDamageMul, 0.94);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_dodge_adv')) {
+    typeMods.dodgeGuardChance += 0.18;
+    typeMods.dodgeGuardDamageMul = Math.min(typeMods.dodgeGuardDamageMul, 0.9);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_lifesteal')) typeMods.lifestealRatio += 0.03;
+  if (hasPetSkillOnPet(pet, 'pet_lifesteal_adv')) typeMods.lifestealRatio += 0.05;
+  if (hasPetSkillOnPet(pet, 'pet_counter')) typeMods.counterLashChance += 0.12;
+  if (hasPetSkillOnPet(pet, 'pet_counter_adv')) { typeMods.counterLashChance += 0.2; typeMods.counterLashRatio += 0.12; }
+  if (hasPetSkillOnPet(pet, 'pet_break')) {
+    typeMods.breakDefChance += 0.12;
+    typeMods.breakDefMultiplier = Math.min(typeMods.breakDefMultiplier, 0.88);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_break_adv')) {
+    typeMods.breakDefChance += 0.2;
+    typeMods.breakDefMultiplier = Math.min(typeMods.breakDefMultiplier, 0.82);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_magic_break')) {
+    typeMods.breakMdefChance += 0.12;
+    typeMods.breakMdefMultiplier = Math.min(typeMods.breakMdefMultiplier, 0.88);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_magic_break_adv')) {
+    typeMods.breakMdefChance += 0.2;
+    typeMods.breakMdefMultiplier = Math.min(typeMods.breakMdefMultiplier, 0.82);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_bloodline')) typeMods.ownerHealRatio += 0.008;
+  if (hasPetSkillOnPet(pet, 'pet_bloodline_adv')) typeMods.ownerHealRatio += 0.015;
+  if (hasPetSkillOnPet(pet, 'pet_sunder')) typeMods.sunderChance += 0.16;
+  if (hasPetSkillOnPet(pet, 'pet_sunder_adv')) {
+    typeMods.sunderChance += 0.24;
+    typeMods.sunderDefMultiplier = 0.85;
+    typeMods.sunderMdefMultiplier = 0.85;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_arcane_echo')) { typeMods.arcaneEchoChance += 0.12; typeMods.arcaneEchoRatio = Math.max(typeMods.arcaneEchoRatio, 0.22); }
+  if (hasPetSkillOnPet(pet, 'pet_arcane_echo_adv')) { typeMods.arcaneEchoChance += 0.2; typeMods.arcaneEchoRatio = Math.max(typeMods.arcaneEchoRatio, 0.32); }
+  if (hasPetSkillOnPet(pet, 'pet_aoe')) {
+    typeMods.aoeChance += 0.18;
+    typeMods.aoeTargets = Math.max(typeMods.aoeTargets, 1);
+    typeMods.aoeRatio = Math.max(typeMods.aoeRatio, 0.3);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_aoe_adv')) {
+    typeMods.aoeChance += 0.3;
+    typeMods.aoeTargets = Math.max(typeMods.aoeTargets, 2);
+    typeMods.aoeRatio = Math.max(typeMods.aoeRatio, 0.45);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_divine_guard')) {
+    typeMods.divineGuardChance = 0.12;
+    typeMods.divineGuardDamageMul = 0.85;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_soul_chain')) {
+    typeMods.soulChainChance += 0.12;
+    typeMods.soulChainWeakReduction = Math.max(typeMods.soulChainWeakReduction, 0.12);
+    typeMods.soulChainGuardRatio = Math.max(typeMods.soulChainGuardRatio, 0.015);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_soul_chain_adv')) {
+    typeMods.soulChainChance += 0.2;
+    typeMods.soulChainWeakReduction = Math.max(typeMods.soulChainWeakReduction, 0.2);
+    typeMods.soulChainGuardRatio = Math.max(typeMods.soulChainGuardRatio, 0.03);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_war_horn')) typeMods.warHornChance += 0.12;
+  if (hasPetSkillOnPet(pet, 'pet_war_horn_adv')) typeMods.warHornChance += 0.2;
+
+  base *= typeMods.baseMul;
+  let damage = Math.max(1, Math.floor(base));
+  let crit = false;
+  const critChance = (hasPetSkillOnPet(pet, 'pet_crit_adv') ? 0.0675 : hasPetSkillOnPet(pet, 'pet_crit') ? 0.045 : 0) + typeMods.critChanceBonus;
+  if (critChance > 0 && Math.random() <= critChance) {
+    damage = Math.max(1, Math.floor(damage * typeMods.critDamageMul));
+    crit = true;
+  }
+
+  return { pet, battleType, damage, crit, typeMods };
+}
+
+function applyPetAssistAttackToMob(player, mob, roomRealmId, allMobs = null) {
+  const assist = calcPetAssistDamage(player, mob);
+  if (!assist) return null;
+  const result = applyDamageToMob(mob, assist.damage, player.name, roomRealmId);
+  const dealt = Math.max(0, Number(result?.damageTaken || 0));
+  if (dealt <= 0) return null;
+  const petName = String(assist.pet?.name || 'Pet');
+  player.send(`${petName} assist ${dealt}${assist.crit ? ' crit' : ''}`);
+  maybePetAssistCleanseOwner(player, assist.pet);
+  maybePetAssistEmergencyRebirth(player, assist.pet);
+  if (assist.typeMods.ownerHealRatio > 0) {
+    const heal = Math.max(1, Math.floor(player.max_hp * assist.typeMods.ownerHealRatio));
+    player.hp = clamp(player.hp + heal, 1, player.max_hp);
+    player.send(`${petName} guard heal ${heal}`);
+  }
+  if (assist.typeMods.lifestealRatio > 0) {
+    const heal = Math.max(1, Math.floor(dealt * assist.typeMods.lifestealRatio));
+    player.hp = clamp(player.hp + heal, 1, player.max_hp);
+    player.send(`${petName} siphon heal ${heal}`);
+  }
+  if (assist.typeMods.breakDefChance > 0 && Math.random() <= assist.typeMods.breakDefChance) {
+    const debuffs = ensureTargetDebuffs(mob);
+    debuffs.armorBreak = { expiresAt: Date.now() + 2500, defMultiplier: assist.typeMods.breakDefMultiplier || 0.85 };
+    player.send(`${petName} guard break ${mob.name}`);
+  }
+  if (assist.typeMods.breakMdefChance > 0 && Math.random() <= assist.typeMods.breakMdefChance) {
+    const debuffs = ensureTargetDebuffs(mob);
+    debuffs.petMagicBreak = { mdefMultiplier: assist.typeMods.breakMdefMultiplier || 0.85, expiresAt: Date.now() + 2500 };
+    player.send(`${petName} arcane break ${mob.name}`);
+  }
+  if (assist.typeMods.warHornChance > 0 && Math.random() <= assist.typeMods.warHornChance) {
+    applyHealBlockDebuff(mob);
+    player.send(`${petName} war horn ${mob.name}`);
+  }
+  if (assist.typeMods.sunderChance > 0 && Math.random() <= assist.typeMods.sunderChance) {
+    const debuffs = ensureTargetDebuffs(mob);
+    debuffs.armorBreak = { expiresAt: Date.now() + 3500, defMultiplier: Math.min(Number(debuffs.armorBreak?.defMultiplier || 1), assist.typeMods.sunderDefMultiplier || 0.9) };
+    debuffs.petMagicBreak = { expiresAt: Date.now() + 3500, mdefMultiplier: Math.min(Number(debuffs.petMagicBreak?.mdefMultiplier || 1), assist.typeMods.sunderMdefMultiplier || 0.9) };
+    player.send(`${petName} sunder ${mob.name}`);
+  }
+  if (assist.typeMods.divineGuardChance > 0 && Math.random() <= assist.typeMods.divineGuardChance) {
+    const buffs = ensureTargetBuffs(player);
+    buffs.protectShield = { expiresAt: Date.now() + 2000, dmgReduction: 1 - (assist.typeMods.divineGuardDamageMul || 0.9) };
+    player.send(`${petName} divine guard`);
+  }
+  if (assist.typeMods.soulChainChance > 0 && Math.random() <= assist.typeMods.soulChainChance) {
+    const debuffs = ensureTargetDebuffs(mob);
+    debuffs.weak = {
+      expiresAt: Date.now() + 2500,
+      dmgReduction: Math.max(Number(debuffs.weak?.dmgReduction || 0), assist.typeMods.soulChainWeakReduction || 0.1)
+    };
+    const buffs = ensureTargetBuffs(player);
+    buffs.protectShield = {
+      expiresAt: Date.now() + 1500,
+      dmgReduction: Math.max(Number(buffs.protectShield?.dmgReduction || 0), assist.typeMods.soulChainGuardRatio || 0.01)
+    };
+    player.send(`${petName} soul chain ${mob.name}`);
+  }
+  if (assist.typeMods.dodgeGuardChance > 0 && Math.random() <= assist.typeMods.dodgeGuardChance) {
+    const buffs = ensureTargetBuffs(player);
+    buffs.protectShield = { expiresAt: Date.now() + 1200, dmgReduction: Math.max(Number(buffs.protectShield?.dmgReduction || 0), 1 - (assist.typeMods.dodgeGuardDamageMul || 0.95)) };
+    player.send(`${petName} dodge guard`);
+  }
+  if (assist.typeMods.splashChance > 0 && Math.random() <= assist.typeMods.splashChance) {
+    const pool = (Array.isArray(allMobs) ? allMobs : [])
+      .filter((m) => m && m.id !== mob.id && Number(m.hp || 0) > 0);
+    if (pool.length > 0) {
+      const splashTarget = pool[randInt(0, pool.length - 1)];
+      const splashResult = applyDamageToMob(splashTarget, Math.max(1, Math.floor(dealt * assist.typeMods.splashRatio)), player.name, roomRealmId);
+      const splashDealt = Math.max(0, Number(splashResult?.damageTaken || 0));
+      if (splashDealt > 0) player.send(`${petName} splash ${splashTarget.name} ${splashDealt}`);
+    }
+  }
+  if (assist.typeMods.aoeChance > 0 && assist.typeMods.aoeTargets > 0 && Math.random() <= assist.typeMods.aoeChance) {
+    const pool = (Array.isArray(allMobs) ? allMobs : [])
+      .filter((m) => m && m.id !== mob.id && Number(m.hp || 0) > 0);
+    if (pool.length > 0) {
+      const maxTargets = Math.min(pool.length, Math.max(1, Math.floor(assist.typeMods.aoeTargets || 1)));
+      let hits = 0;
+      while (pool.length > 0 && hits < maxTargets) {
+        const idx = randInt(0, pool.length - 1);
+        const aoeTarget = pool.splice(idx, 1)[0];
+        const aoeResult = applyDamageToMob(
+          aoeTarget,
+          Math.max(1, Math.floor(dealt * (assist.typeMods.aoeRatio || 0.3))),
+          player.name,
+          roomRealmId
+        );
+        const aoeDealt = Math.max(0, Number(aoeResult?.damageTaken || 0));
+        if (aoeDealt > 0) {
+          hits += 1;
+          player.send(`${petName} aoe ${aoeTarget.name} ${aoeDealt}`);
+        }
+      }
+    }
+  }
+  if (assist.typeMods.arcaneEchoChance > 0 && Math.random() <= assist.typeMods.arcaneEchoChance && mob.hp > 0) {
+    const echo = applyDamageToMob(mob, Math.max(1, Math.floor(dealt * (assist.typeMods.arcaneEchoRatio || 0.2))), player.name, roomRealmId);
+    const echoDealt = Math.max(0, Number(echo?.damageTaken || 0));
+    if (echoDealt > 0) player.send(`${petName} echo ${echoDealt}`);
+  }
+  if (assist.typeMods.quickStrikeChance > 0 && Math.random() <= assist.typeMods.quickStrikeChance && mob.hp > 0) {
+    const quick = applyDamageToMob(mob, Math.max(1, Math.floor(dealt * (assist.typeMods.quickStrikeRatio || 0.4))), player.name, roomRealmId);
+    const quickDealt = Math.max(0, Number(quick?.damageTaken || 0));
+    if (quickDealt > 0) player.send(`${petName} quick ${quickDealt}`);
+  }
+  if (mob.hp > 0) {
+    const comboChance = (hasPetSkillOnPet(assist.pet, 'pet_combo_adv') ? 0.09 : hasPetSkillOnPet(assist.pet, 'pet_combo') ? 0.06 : 0)
+      + (assist.typeMods.comboChanceBonus || 0);
+    if (comboChance > 0 && Math.random() <= comboChance) {
+      const comboRatio = (hasPetSkillOnPet(assist.pet, 'pet_combo_adv') ? 0.9 : 0.6) + (assist.typeMods.comboRatioBonus || 0);
+      const comboResult = applyDamageToMob(mob, Math.max(1, Math.floor(dealt * comboRatio)), player.name, roomRealmId);
+      const comboDealt = Math.max(0, Number(comboResult?.damageTaken || 0));
+      if (comboDealt > 0) player.send(`${petName} combo ${comboDealt}`);
+    }
+  }
+  if (mob.hp > 0 && assist.typeMods.counterLashChance > 0 && Math.random() <= assist.typeMods.counterLashChance) {
+    const lash = applyDamageToMob(mob, Math.max(1, Math.floor(dealt * (assist.typeMods.counterLashRatio || 0.35))), player.name, roomRealmId);
+    const lashDealt = Math.max(0, Number(lash?.damageTaken || 0));
+    if (lashDealt > 0) player.send(`${petName} counterlash ${lashDealt}`);
+  }
+  if (mob.hp <= 0) {
+    applyPetAssistKillSoul(player, assist.pet);
+  }
+  return { damageTaken: dealt };
+}
+
+function calcPetAssistDamageToPlayer(attacker, target) {
+  const pet = getActivePet(attacker);
+  if (!pet || !target || Number(target.hp || 0) <= 0) return null;
+  const aptitude = pet.aptitude || {};
+  const growth = Math.max(0.8, Number(pet.growth || 1));
+  const level = Math.max(1, Math.floor(Number(pet.level || 1)));
+  const battleType = normalizePetBattleType(pet, aptitude);
+  const targetDef = Math.max(0, Number(target.def || 0));
+  const targetMdef = Math.max(0, Number(target.mdef || 0));
+
+  let base = 0;
+  const typeMods = {
+    baseMul: 1,
+    critChanceBonus: 0,
+    critDamageMul: 1.5,
+    comboChanceBonus: 0,
+    comboRatioBonus: 0,
+    breakMdefChance: 0,
+    breakDefChance: 0,
+    ownerHealRatio: 0,
+    aoeChance: 0,
+    aoeTargets: 0,
+    aoeRatio: 0,
+    lifestealRatio: 0,
+    arcaneEchoChance: 0,
+    arcaneEchoRatio: 0,
+    warHornChance: 0,
+    sunderChance: 0,
+    sunderDefMultiplier: 0.93,
+    sunderMdefMultiplier: 0.93,
+    divineGuardChance: 0,
+    divineGuardDamageMul: 0.9,
+    dodgeGuardChance: 0,
+    dodgeGuardDamageMul: 0.96,
+    quickStrikeChance: 0,
+    quickStrikeRatio: 0.35,
+    counterLashChance: 0,
+    counterLashRatio: 0.28,
+    soulChainChance: 0,
+    soulChainWeakReduction: 0,
+    soulChainGuardRatio: 0,
+    breakDefMultiplier: 0.9,
+    breakMdefMultiplier: 0.9
+  };
+  if (battleType === 'magic') {
+    base = (Number(aptitude.mag || 0) * 1.55 + level * 4.5) * growth - targetMdef * 0.5;
+    typeMods.baseMul = 0.95;
+    typeMods.breakMdefChance = 0.15;
+    if (hasPetSkillOnPet(pet, 'pet_spirit')) base *= 1.04;
+    if (hasPetSkillOnPet(pet, 'pet_spirit_adv')) base *= 1.06;
+  } else if (battleType === 'tank') {
+    base = ((Number(aptitude.hp || 0) * 0.14) + (Number(aptitude.def || 0) * 1.05) + level * 3.5) * growth - targetDef * 0.45;
+    typeMods.baseMul = 0.65;
+    typeMods.breakDefChance = 0.18;
+    typeMods.ownerHealRatio = 0.012;
+    if (hasPetSkillOnPet(pet, 'pet_guard')) base *= 1.04;
+    if (hasPetSkillOnPet(pet, 'pet_tough_skin')) base *= 1.03;
+    if (hasPetSkillOnPet(pet, 'pet_tough_skin_adv')) base *= 1.05;
+  } else {
+    base = (Number(aptitude.atk || 0) * 1.55 + level * 4.5) * growth - targetDef * 0.5;
+    typeMods.baseMul = 1.0;
+    typeMods.critChanceBonus = 0.04;
+    typeMods.critDamageMul = 1.55;
+    typeMods.comboChanceBonus = 0.03;
+    typeMods.comboRatioBonus = 0.15;
+    if (hasPetSkillOnPet(pet, 'pet_bash')) base *= 1.04;
+    if (hasPetSkillOnPet(pet, 'pet_bash_adv')) base *= 1.06;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_fury')) base *= 1.04;
+  if (hasPetSkillOnPet(pet, 'pet_fury_adv')) base *= 1.06;
+  if (hasPetSkillOnPet(pet, 'pet_overload')) base *= 1.025;
+  if (hasPetSkillOnPet(pet, 'pet_overload_adv')) base *= 1.04;
+  if (hasPetSkillOnPet(pet, 'pet_focus')) {
+    base *= 1.015;
+    typeMods.critChanceBonus += 0.015;
+    typeMods.breakDefChance += 0.03;
+    typeMods.breakMdefChance += 0.03;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_focus_adv')) {
+    base *= 1.03;
+    typeMods.critChanceBonus += 0.025;
+    typeMods.breakDefChance += 0.05;
+    typeMods.breakMdefChance += 0.05;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_quick_step')) {
+    typeMods.comboChanceBonus += 0.02;
+    typeMods.quickStrikeChance += 0.08;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_quick_step_adv')) {
+    typeMods.comboChanceBonus += 0.04;
+    typeMods.quickStrikeChance += 0.14;
+    typeMods.quickStrikeRatio += 0.06;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_dodge')) {
+    typeMods.dodgeGuardChance += 0.08;
+    typeMods.dodgeGuardDamageMul = Math.min(typeMods.dodgeGuardDamageMul, 0.95);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_dodge_adv')) {
+    typeMods.dodgeGuardChance += 0.14;
+    typeMods.dodgeGuardDamageMul = Math.min(typeMods.dodgeGuardDamageMul, 0.92);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_lifesteal')) typeMods.lifestealRatio += 0.02;
+  if (hasPetSkillOnPet(pet, 'pet_lifesteal_adv')) typeMods.lifestealRatio += 0.035;
+  if (hasPetSkillOnPet(pet, 'pet_counter')) typeMods.counterLashChance += 0.08;
+  if (hasPetSkillOnPet(pet, 'pet_counter_adv')) { typeMods.counterLashChance += 0.14; typeMods.counterLashRatio += 0.1; }
+  if (hasPetSkillOnPet(pet, 'pet_break')) {
+    typeMods.breakDefChance += 0.08;
+    typeMods.breakDefMultiplier = Math.min(typeMods.breakDefMultiplier, 0.92);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_break_adv')) {
+    typeMods.breakDefChance += 0.14;
+    typeMods.breakDefMultiplier = Math.min(typeMods.breakDefMultiplier, 0.86);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_magic_break')) {
+    typeMods.breakMdefChance += 0.08;
+    typeMods.breakMdefMultiplier = Math.min(typeMods.breakMdefMultiplier, 0.92);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_magic_break_adv')) {
+    typeMods.breakMdefChance += 0.14;
+    typeMods.breakMdefMultiplier = Math.min(typeMods.breakMdefMultiplier, 0.86);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_bloodline')) typeMods.ownerHealRatio += 0.006;
+  if (hasPetSkillOnPet(pet, 'pet_bloodline_adv')) typeMods.ownerHealRatio += 0.012;
+  if (hasPetSkillOnPet(pet, 'pet_sunder')) typeMods.sunderChance += 0.12;
+  if (hasPetSkillOnPet(pet, 'pet_sunder_adv')) {
+    typeMods.sunderChance += 0.18;
+    typeMods.sunderDefMultiplier = 0.88;
+    typeMods.sunderMdefMultiplier = 0.88;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_arcane_echo')) { typeMods.arcaneEchoChance += 0.08; typeMods.arcaneEchoRatio = Math.max(typeMods.arcaneEchoRatio, 0.16); }
+  if (hasPetSkillOnPet(pet, 'pet_arcane_echo_adv')) { typeMods.arcaneEchoChance += 0.14; typeMods.arcaneEchoRatio = Math.max(typeMods.arcaneEchoRatio, 0.24); }
+  if (hasPetSkillOnPet(pet, 'pet_divine_guard')) {
+    typeMods.divineGuardChance = 0.08;
+    typeMods.divineGuardDamageMul = 0.88;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_soul_chain')) {
+    typeMods.soulChainChance += 0.08;
+    typeMods.soulChainWeakReduction = Math.max(typeMods.soulChainWeakReduction, 0.1);
+    typeMods.soulChainGuardRatio = Math.max(typeMods.soulChainGuardRatio, 0.01);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_soul_chain_adv')) {
+    typeMods.soulChainChance += 0.14;
+    typeMods.soulChainWeakReduction = Math.max(typeMods.soulChainWeakReduction, 0.16);
+    typeMods.soulChainGuardRatio = Math.max(typeMods.soulChainGuardRatio, 0.02);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_war_horn')) typeMods.warHornChance += 0.08;
+  if (hasPetSkillOnPet(pet, 'pet_war_horn_adv')) typeMods.warHornChance += 0.14;
+
+  base *= typeMods.baseMul;
+  let damage = Math.max(1, Math.floor(base));
+  let crit = false;
+  const critChance =
+    (hasPetSkillOnPet(pet, 'pet_crit_adv') ? 0.06 : hasPetSkillOnPet(pet, 'pet_crit') ? 0.04 : 0) +
+    typeMods.critChanceBonus;
+  if (critChance > 0 && Math.random() <= critChance) {
+    damage = Math.max(1, Math.floor(damage * typeMods.critDamageMul));
+    crit = true;
+  }
+  return { pet, battleType, damage, crit, typeMods };
+}
+
+function applyPetAssistAttackToPlayer(attacker, target) {
+  const assist = calcPetAssistDamageToPlayer(attacker, target);
+  if (!assist) return null;
+  const dealt = applyDamageToPlayer(target, assist.damage);
+  if (dealt <= 0) return null;
+  const petName = String(assist.pet?.name || 'Pet');
+  attacker.send(`${petName} assist ${target.name} ${dealt}${assist.crit ? ' crit' : ''}`);
+  target.send(`${petName} assist hit ${dealt}`);
+  maybePetAssistCleanseOwner(attacker, assist.pet);
+  maybePetAssistEmergencyRebirth(attacker, assist.pet);
+
+  if (assist.typeMods.ownerHealRatio > 0) {
+    const heal = Math.max(1, Math.floor(attacker.max_hp * assist.typeMods.ownerHealRatio));
+    attacker.hp = clamp(attacker.hp + heal, 1, attacker.max_hp);
+    attacker.send(`${petName} guard heal ${heal}`);
+  }
+  if (assist.typeMods.lifestealRatio > 0) {
+    const heal = Math.max(1, Math.floor(dealt * assist.typeMods.lifestealRatio));
+    attacker.hp = clamp(attacker.hp + heal, 1, attacker.max_hp);
+    attacker.send(`${petName} siphon heal ${heal}`);
+  }
+  if (assist.typeMods.breakDefChance > 0 && Math.random() <= assist.typeMods.breakDefChance) {
+    const debuffs = ensureTargetDebuffs(target);
+    debuffs.armorBreak = { expiresAt: Date.now() + 2000, defMultiplier: assist.typeMods.breakDefMultiplier || 0.9 };
+    attacker.send(`${petName} guard break ${target.name}`);
+    target.send('你受到宠物破防影响。');
+  }
+  if (assist.typeMods.breakMdefChance > 0 && Math.random() <= assist.typeMods.breakMdefChance) {
+    const debuffs = ensureTargetDebuffs(target);
+    debuffs.petMagicBreak = { mdefMultiplier: assist.typeMods.breakMdefMultiplier || 0.9, expiresAt: Date.now() + 2000 };
+    attacker.send(`${petName} arcane break ${target.name}`);
+    target.send('你受到宠物破魔影响。');
+  }
+  if (assist.typeMods.warHornChance > 0 && Math.random() <= assist.typeMods.warHornChance) {
+    applyHealBlockDebuff(target);
+    attacker.send(`${petName} war horn ${target.name}`);
+    target.send('你受到宠物禁疗影响。');
+  }
+  if (assist.typeMods.sunderChance > 0 && Math.random() <= assist.typeMods.sunderChance) {
+    const debuffs = ensureTargetDebuffs(target);
+    debuffs.armorBreak = { expiresAt: Date.now() + 2500, defMultiplier: Math.min(Number(debuffs.armorBreak?.defMultiplier || 1), assist.typeMods.sunderDefMultiplier || 0.93) };
+    debuffs.petMagicBreak = { expiresAt: Date.now() + 2500, mdefMultiplier: Math.min(Number(debuffs.petMagicBreak?.mdefMultiplier || 1), assist.typeMods.sunderMdefMultiplier || 0.93) };
+    attacker.send(`${petName} sunder ${target.name}`);
+    target.send('你受到宠物撕裂压制。');
+  }
+  if (assist.typeMods.divineGuardChance > 0 && Math.random() <= assist.typeMods.divineGuardChance) {
+    const buffs = ensureTargetBuffs(attacker);
+    buffs.protectShield = { expiresAt: Date.now() + 1600, dmgReduction: 1 - (assist.typeMods.divineGuardDamageMul || 0.9) };
+    attacker.send(`${petName} divine guard`);
+  }
+  if (assist.typeMods.soulChainChance > 0 && Math.random() <= assist.typeMods.soulChainChance) {
+    const debuffs = ensureTargetDebuffs(target);
+    debuffs.weak = {
+      expiresAt: Date.now() + 2000,
+      dmgReduction: Math.max(Number(debuffs.weak?.dmgReduction || 0), assist.typeMods.soulChainWeakReduction || 0.1)
+    };
+    const buffs = ensureTargetBuffs(attacker);
+    buffs.protectShield = {
+      expiresAt: Date.now() + 1200,
+      dmgReduction: Math.max(Number(buffs.protectShield?.dmgReduction || 0), assist.typeMods.soulChainGuardRatio || 0.01)
+    };
+    attacker.send(`${petName} soul chain ${target.name}`);
+    target.send('你受到宠物魂链压制。');
+  }
+  if (assist.typeMods.dodgeGuardChance > 0 && Math.random() <= assist.typeMods.dodgeGuardChance) {
+    const buffs = ensureTargetBuffs(attacker);
+    buffs.protectShield = { expiresAt: Date.now() + 1000, dmgReduction: Math.max(Number(buffs.protectShield?.dmgReduction || 0), 1 - (assist.typeMods.dodgeGuardDamageMul || 0.96)) };
+    attacker.send(`${petName} dodge guard`);
+  }
+  if (assist.typeMods.arcaneEchoChance > 0 && Math.random() <= assist.typeMods.arcaneEchoChance && target.hp > 0) {
+    const echoDealt = applyDamageToPlayer(target, Math.max(1, Math.floor(dealt * (assist.typeMods.arcaneEchoRatio || 0.16))));
+    if (echoDealt > 0) {
+      attacker.send(`${petName} echo ${target.name} ${echoDealt}`);
+      target.send(`${petName} echo hit ${echoDealt}`);
+    }
+  }
+  if (assist.typeMods.quickStrikeChance > 0 && Math.random() <= assist.typeMods.quickStrikeChance && target.hp > 0) {
+    const quickDealt = applyDamageToPlayer(target, Math.max(1, Math.floor(dealt * (assist.typeMods.quickStrikeRatio || 0.35))));
+    if (quickDealt > 0) {
+      attacker.send(`${petName} quick ${target.name} ${quickDealt}`);
+      target.send(`${petName} quick hit ${quickDealt}`);
+    }
+  }
+  if (target.hp > 0) {
+    const comboChance =
+      (hasPetSkillOnPet(assist.pet, 'pet_combo_adv') ? 0.08 : hasPetSkillOnPet(assist.pet, 'pet_combo') ? 0.05 : 0) +
+      (assist.typeMods.comboChanceBonus || 0);
+    if (comboChance > 0 && Math.random() <= comboChance) {
+      const comboRatio = (hasPetSkillOnPet(assist.pet, 'pet_combo_adv') ? 0.8 : 0.55) + (assist.typeMods.comboRatioBonus || 0);
+      const comboDealt = applyDamageToPlayer(target, Math.max(1, Math.floor(dealt * comboRatio)));
+      if (comboDealt > 0) {
+        attacker.send(`${petName} combo ${target.name} ${comboDealt}`);
+        target.send(`${petName} combo hit ${comboDealt}`);
+      }
+    }
+  }
+  if (target.hp > 0 && assist.typeMods.counterLashChance > 0 && Math.random() <= assist.typeMods.counterLashChance) {
+    const lashDealt = applyDamageToPlayer(target, Math.max(1, Math.floor(dealt * (assist.typeMods.counterLashRatio || 0.28))));
+    if (lashDealt > 0) {
+      attacker.send(`${petName} counterlash ${target.name} ${lashDealt}`);
+      target.send(`${petName} counterlash hit ${lashDealt}`);
+    }
+  }
+  if (target.hp <= 0) {
+    applyPetAssistKillSoul(attacker, assist.pet);
+  }
+  return { damageTaken: dealt };
+}
+
 function getPetLevelCap(player) {
   return Math.max(1, Math.floor(Number(player?.level || 1)) + PET_LEVEL_CAP_OFFSET);
 }
@@ -8605,6 +9415,7 @@ function normalizePetState(player) {
         mag: Math.max(aptRange.mag[0], Math.min(aptRange.mag[1], Math.floor(Number(aptitudeRaw.mag || aptRange.mag[0])))),
         agility: Math.max(aptRange.agility[0], Math.min(aptRange.agility[1], Math.floor(Number(aptitudeRaw.agility || aptRange.agility[0]))))
       };
+      const battleType = normalizePetBattleType(pet, aptitude);
       const skillSlots = Math.max(PET_BASE_SKILL_SLOTS, Math.min(PET_MAX_SKILL_SLOTS, Math.floor(Number(pet.skillSlots || PET_BASE_SKILL_SLOTS))));
       const rawSkills = Array.isArray(pet.skills) ? pet.skills : [];
       const skills = Array.from(new Set(rawSkills.map((idValue) => String(idValue || '').trim()).filter(Boolean)))
@@ -8620,7 +9431,8 @@ function normalizePetState(player) {
         level,
         exp,
         name,
-          role: mappedRole,
+        role: mappedRole,
+        battleType,
         growth,
         aptitude,
         skillSlots,
@@ -8688,6 +9500,9 @@ function createRandomPet(rarity = 'normal') {
     skills.push(normalSkills[randInt(0, normalSkills.length - 1)].id);
   }
   const aptRange = PET_RARITY_APTITUDE_RANGE[safeRarity] || PET_RARITY_APTITUDE_RANGE.normal;
+  const battleTypes = ['physical', 'magic', 'tank'];
+  const battleType = battleTypes[randInt(0, battleTypes.length - 1)];
+  const aptitude = rollPetAptitudeByBattleType(aptRange, battleType);
   return {
     id: `pet_${Date.now()}_${randInt(100, 999)}`,
     rarity: safeRarity,
@@ -8695,14 +9510,9 @@ function createRandomPet(rarity = 'normal') {
     exp: 0,
     name: `${role}${randInt(1, 99)}`,
     role,
+    battleType,
     growth,
-    aptitude: {
-      hp: randInt(aptRange.hp[0], aptRange.hp[1]),
-      atk: randInt(aptRange.atk[0], aptRange.atk[1]),
-      def: randInt(aptRange.def[0], aptRange.def[1]),
-      mag: randInt(aptRange.mag[0], aptRange.mag[1]),
-      agility: randInt(aptRange.agility[0], aptRange.agility[1])
-    },
+    aptitude,
     skillSlots: PET_BASE_SKILL_SLOTS,
     skills
   };
@@ -8876,6 +9686,7 @@ function buildPetStatePayload(player) {
     expNeed: getPetLevelExpNeed(Math.max(1, Math.floor(Number(pet.level || 1)))),
     name: pet.name,
     role: pet.role,
+    battleType: pet.battleType || normalizePetBattleType(pet, pet.aptitude),
     growth: pet.growth,
     aptitude: pet.aptitude,
     skillSlots: pet.skillSlots,
@@ -10727,6 +11538,9 @@ io.on('connection', (socket) => {
         }
         basePet.aptitude[key] = Math.max(aptRange[key][0], Math.min(aptRange[key][1], rolled));
       });
+      const baseBattleType = normalizePetBattleType({ battleType: basePet.battleType }, basePet.aptitude);
+      basePet.battleType = baseBattleType;
+      biasSynthesizedPetAptitudeByBattleType(basePet, aptRange, baseBattleType);
 
       const mainSkills = Array.isArray(basePet.skills) ? basePet.skills : [];
       const subSkills = Array.isArray(feedPet.skills) ? feedPet.skills : [];
@@ -10886,6 +11700,9 @@ io.on('connection', (socket) => {
           Math.min(aptRange[key][1], rolled)
         );
       });
+      const baseBattleType = normalizePetBattleType({ battleType: basePet.battleType }, basePet.aptitude);
+      basePet.battleType = baseBattleType;
+      biasSynthesizedPetAptitudeByBattleType(basePet, aptRange, baseBattleType);
 
       const mainSkills = Array.isArray(basePet.skills) ? basePet.skills : [];
       const subSkills = Array.isArray(feedPet.skills) ? feedPet.skills : [];
@@ -13142,6 +13959,9 @@ async function combatTick() {
       if (skill && ['attack', 'spell', 'cleave', 'dot', 'aoe'].includes(skill.type)) {
         notifyMastery(player, skill);
       }
+      if (target.hp > 0) {
+        applyPetAssistAttackToPlayer(player, target);
+      }
       if (hasSpecialRingEquipped(player, 'ring_magic') &&
           canTriggerMagicRing(player, chosenSkillId, skill) &&
           Math.random() <= 0.1) {
@@ -13335,12 +14155,16 @@ async function combatTick() {
         const skillName = skill.id === 'slash' ? '普通攻击' : skill.name;
         player.send(`你释放了 ${skillName}，造成范围伤害。`);
         const deadTargets = mobs.filter((target) => target.hp <= 0);
-        if (deadTargets.length) {
-          for (const target of deadTargets) {
+        if (mob.hp > 0) {
+          applyPetAssistAttackToMob(player, mob, roomRealmId, mobs);
+        }
+        const deadTargetsAfterPet = mobs.filter((target) => target.hp <= 0);
+        if (deadTargetsAfterPet.length) {
+          for (const target of deadTargetsAfterPet) {
             applyPetKillSoulOnKill(player);
             await processMobDeath(player, target, online);
           }
-          if (deadTargets.some((target) => target.id === mob.id)) {
+          if (deadTargetsAfterPet.some((target) => target.id === mob.id)) {
             player.combat = null;
           }
           sendRoomState(player.position.zone, player.position.room, roomRealmId);
@@ -13394,6 +14218,9 @@ async function combatTick() {
         }
         if (tryApplyHealBlockEffect(player, mob)) {
           player.send(`禁疗效果作用于 ${mob.name}。`);
+        }
+        if (mob.hp > 0) {
+          applyPetAssistAttackToMob(player, mob, roomRealmId, mobs);
         }
         if (skill && skill.id === 'assassinate') {
           const extraTargets = mobs.filter((m) => m.id !== mob.id);
@@ -14287,3 +15114,4 @@ start().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+

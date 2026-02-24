@@ -5165,6 +5165,7 @@ body.dark .sabak-empty {
 }
 
 .summon-bar-fill.hp { background: linear-gradient(90deg, #8b1f1f, #d05a2f); }
+.summon-bar-fill.mp { background: linear-gradient(90deg, #1f4f8b, #4b9dff); }
 .summon-bar-fill.exp { background: linear-gradient(90deg, #1f6b3b, #35b36c); }
 
 .summon-stats {
@@ -5604,6 +5605,7 @@ body.dark .changeclass-options .chip:disabled {
 }
 
 .summon-bar-fill.hp { background: linear-gradient(90deg, #8b1f1f, #d05a2f); }
+.summon-bar-fill.mp { background: linear-gradient(90deg, #1f4f8b, #4b9dff); }
 .summon-bar-fill.exp { background: linear-gradient(90deg, #1f6b3b, #35b36c); }
 
 .summon-stats {

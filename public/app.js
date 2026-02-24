@@ -564,6 +564,11 @@ const petUi = {
   summary: document.getElementById('pet-summary'),
   list: document.getElementById('pet-list'),
   detail: document.getElementById('pet-detail'),
+  equipList: document.getElementById('pet-equip-list'),
+  equipItem: document.getElementById('pet-equip-item'),
+  equipBtn: document.getElementById('pet-equip-btn'),
+  unequipSlot: document.getElementById('pet-unequip-slot'),
+  unequipBtn: document.getElementById('pet-unequip-btn'),
   setActive: document.getElementById('pet-set-active'),
   setRest: document.getElementById('pet-set-rest'),
   rename: document.getElementById('pet-rename'),
@@ -2521,6 +2526,22 @@ function renderPetModal() {
     empty.textContent = '暂无宠物，击杀BOSS后有概率掉落宠物。';
     petUi.list.appendChild(empty);
   } else {
+    const getPetBattleTypeText = (pet) => {
+      if (!pet) return '-';
+      if (pet.battleTypeLabel) return pet.battleTypeLabel;
+      const key = String(pet.battleType || '').toLowerCase();
+      if (key === 'physical') return '物理宠';
+      if (key === 'magic') return '法术宠';
+      if (key === 'tank') return '血宠';
+      return '-';
+    };
+    const getPetBattleTypeDesc = (pet) => {
+      const key = String(pet?.battleType || '').toLowerCase();
+      if (key === 'physical') return '单体爆发更高，暴击/连击更强';
+      if (key === 'magic') return '协战可溅射，擅长压制魔御';
+      if (key === 'tank') return '伤害较低，能护主回血并压制目标防御';
+      return '';
+    };
     pets.forEach((pet) => {
       const row = document.createElement('div');
       row.className = `pet-entry${selectedPetId === pet.id ? ' active' : ''}`;
@@ -2534,7 +2555,7 @@ function renderPetModal() {
       }
       row.appendChild(nameSpan);
       row.appendChild(document.createTextNode(
-        ` | 等级:${Number(pet.level || 1)}/${Number(pet.levelCap || 1)} EXP:${Number(pet.exp || 0)}/${Number(pet.expNeed || 0)} | 成长:${Number(pet.growth || 1).toFixed(3)} | 技能:${(pet.skills || []).length}/${pet.skillSlots} | 战力:${pet.power || 0}`
+        ` | ${getPetBattleTypeText(pet)} | 等级:${Number(pet.level || 1)}/${Number(pet.levelCap || 1)} EXP:${Number(pet.exp || 0)}/${Number(pet.expNeed || 0)} | 成长:${Number(pet.growth || 1).toFixed(3)} | 技能:${(pet.skills || []).length}/${pet.skillSlots} | 战力:${pet.power || 0}`
       ));
       const listEffects = Array.isArray(pet.skillEffects) ? pet.skillEffects.filter((text) => String(text || '').trim()) : [];
       if (listEffects.length) {
@@ -2570,9 +2591,11 @@ function renderPetModal() {
       `稀有度: ${selected.rarityLabel || '-'}`,
       `等级: ${Number(selected.level || 1)}/${Number(selected.levelCap || 1)}`,
       `经验: ${Number(selected.exp || 0)}/${Number(selected.expNeed || 0)}`,
-      `类型: ${selected.role || '-'}`,
+      `种类: ${selected.role || '-'}`,
+      `定位: ${getPetBattleTypeText(selected)}`,
+      `定位说明: ${getPetBattleTypeDesc(selected) || '-'}`,
       `成长: ${Number(selected.growth || 1).toFixed(3)}`,
-      `资质: HP ${selected.aptitude?.hp || 0} / 攻 ${selected.aptitude?.atk || 0} / 防 ${selected.aptitude?.def || 0} / 法 ${selected.aptitude?.mag || 0} / 速 ${selected.aptitude?.speed || 0}`
+      `资质: HP ${selected.aptitude?.hp || 0} / 攻 ${selected.aptitude?.atk || 0} / 防 ${selected.aptitude?.def || 0} / 法 ${selected.aptitude?.mag || 0} / 速 ${selected.aptitude?.agility || 0}`
     ];
     lines.forEach((text) => {
       const line = document.createElement('div');
@@ -2603,6 +2626,75 @@ function renderPetModal() {
       });
     }
     petUi.detail.appendChild(skillLine);
+  }
+
+  const petEquipSlotLabels = {
+    weapon: '武器',
+    chest: '衣服',
+    head: '头盔',
+    waist: '腰带',
+    feet: '鞋子',
+    neck: '项链',
+    ring_left: '左戒指',
+    ring_right: '右戒指',
+    bracelet_left: '左手镯',
+    bracelet_right: '右手镯'
+  };
+  if (petUi.equipList) {
+    petUi.equipList.innerHTML = '';
+    const equippedItems = Array.isArray(selected?.equippedItems) ? selected.equippedItems : [];
+    if (!selected) {
+      const empty = document.createElement('div');
+      empty.className = 'pet-book-entry';
+      empty.textContent = '请选择宠物';
+      petUi.equipList.appendChild(empty);
+    } else if (!equippedItems.length) {
+      const empty = document.createElement('div');
+      empty.className = 'pet-book-entry';
+      empty.textContent = '暂无已穿戴装备';
+      petUi.equipList.appendChild(empty);
+    } else {
+      equippedItems.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'pet-book-entry';
+        applyRarityClass(row, item);
+        const slotLabel = petEquipSlotLabels[item.slot] || item.slot || '装备';
+        row.textContent = `${slotLabel}: ${formatItemName(item)}`;
+        petUi.equipList.appendChild(row);
+      });
+    }
+  }
+  if (petUi.equipItem) {
+    petUi.equipItem.innerHTML = '';
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '';
+    emptyOpt.textContent = '选择背包装备';
+    petUi.equipItem.appendChild(emptyOpt);
+    const equipables = (Array.isArray(lastState?.items) ? lastState.items : [])
+      .filter((item) => item && item.slot)
+      .filter((item) => Number(item.qty || 0) > 0);
+    equipables.forEach((item) => {
+      const opt = document.createElement('option');
+      opt.value = item.key || item.id;
+      opt.textContent = `${formatItemName(item)} x${Number(item.qty || 1)}`;
+      petUi.equipItem.appendChild(opt);
+    });
+    if (petUi.equipBtn) petUi.equipBtn.disabled = !selected || equipables.length <= 0;
+  }
+  if (petUi.unequipSlot) {
+    petUi.unequipSlot.innerHTML = '';
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '';
+    emptyOpt.textContent = '选择已穿戴部位';
+    petUi.unequipSlot.appendChild(emptyOpt);
+    const equippedItems = Array.isArray(selected?.equippedItems) ? selected.equippedItems : [];
+    equippedItems.forEach((item) => {
+      const opt = document.createElement('option');
+      opt.value = item.slot || '';
+      opt.textContent = `${petEquipSlotLabels[item.slot] || item.slot}: ${item.name}`;
+      petUi.unequipSlot.appendChild(opt);
+    });
+    if (petUi.unequipBtn) petUi.unequipBtn.disabled = !selected || equippedItems.length <= 0;
   }
 
   if (petUi.bookList) {
@@ -2673,6 +2765,7 @@ function renderPetModal() {
     const epicIndex = rarityOrder.indexOf('epic');
     const eligibleCount = pets.filter((pet) => {
       if (!pet || pet.id === petState?.activePetId) return false;
+      if (Array.isArray(pet.equippedItems) && pet.equippedItems.length > 0) return false;
       const idx = rarityOrder.indexOf(String(pet.rarity || ''));
       return idx >= 0 && (epicIndex < 0 || idx < epicIndex);
     }).length;
@@ -4793,27 +4886,34 @@ function showAutoFullBossModal() {
     container.appendChild(levelDiv);
 
     const hpPct = summon.max_hp > 0 ? (summon.hp / summon.max_hp) * 100 : 0;
-    const expPct = summon.exp && summon.exp_next ? (summon.exp / summon.exp_next) * 100 : 0;
+    const hasMpBar = Number(summon.max_mp || 0) > 0;
+    const hpCur = Math.max(0, Math.floor(Number(summon.hp || 0)));
+    const hpMax = Math.max(0, Math.floor(Number(summon.max_hp || 0)));
+    const mpCur = Math.max(0, Math.floor(Number(summon.mp || 0)));
+    const mpMax = Math.max(0, Math.floor(Number(summon.max_mp || 0)));
+    const secondPct = hasMpBar
+      ? (summon.max_mp > 0 ? (Number(summon.mp || 0) / Number(summon.max_mp || 1)) * 100 : 0)
+      : (summon.exp && summon.exp_next ? (summon.exp / summon.exp_next) * 100 : 0);
 
     const hpRow = document.createElement('div');
     hpRow.className = 'summon-bar-row';
     hpRow.innerHTML = `
-      <span class="summon-bar-label">生命</span>
+      <span class="summon-bar-label">生命 ${hpCur}/${hpMax}</span>
       <div class="summon-bar">
         <div class="summon-bar-fill hp" style="width: ${hpPct}%"></div>
       </div>
     `;
     container.appendChild(hpRow);
 
-    const expRow = document.createElement('div');
-    expRow.className = 'summon-bar-row';
-    expRow.innerHTML = `
-      <span class="summon-bar-label">经验</span>
+    const secondRow = document.createElement('div');
+    secondRow.className = 'summon-bar-row';
+    secondRow.innerHTML = `
+      <span class="summon-bar-label">${hasMpBar ? `法力 ${mpCur}/${mpMax}` : '经验'}</span>
       <div class="summon-bar">
-        <div class="summon-bar-fill exp" style="width: ${expPct}%"></div>
+        <div class="summon-bar-fill ${hasMpBar ? 'mp' : 'exp'}" style="width: ${secondPct}%"></div>
       </div>
     `;
-    container.appendChild(expRow);
+    container.appendChild(secondRow);
 
     const statsDiv = document.createElement('div');
     statsDiv.className = 'summon-stats';
@@ -4834,6 +4934,44 @@ function showAutoFullBossModal() {
     container.appendChild(statsDiv);
 
     ui.summonDetails.appendChild(container);
+  }
+
+  function buildActivePetSummonEntry(state) {
+    const petState = state && state.pet;
+    if (!petState || !petState.activePetId || !Array.isArray(petState.pets)) return null;
+    const pet = petState.pets.find((p) => p && p.id === petState.activePetId);
+    if (!pet) return null;
+    const apt = pet.aptitude || {};
+    const level = Math.max(1, Number(pet.level || 1));
+    const growth = Math.max(0.8, Number(pet.growth || 1));
+    const battleType = String(pet.battleType || 'physical');
+
+    const typeMul = battleType === 'magic'
+      ? { hp: 0.95, mp: 1.2, atk: 0.8, def: 0.95, mdef: 1.15 }
+      : battleType === 'tank'
+        ? { hp: 1.2, mp: 0.8, atk: 0.8, def: 1.2, mdef: 1.0 }
+        : { hp: 1.0, mp: 0.9, atk: 1.2, def: 1.0, mdef: 0.9 };
+
+    const maxHp = Math.max(1, Math.floor(((Number(apt.hp || 0) * 3.8) + (Number(apt.def || 0) * 1.2) + level * 38) * growth * typeMul.hp));
+    const maxMp = Math.max(1, Math.floor(((Number(apt.mag || 0) * 2.8) + level * 22) * Math.max(0.9, growth) * typeMul.mp));
+    const atk = Math.max(1, Math.floor(((Number(apt.atk || 0) * 1.35) + level * 5) * growth * typeMul.atk));
+    const def = Math.max(0, Math.floor(((Number(apt.def || 0) * 1.2) + level * 4) * growth * typeMul.def));
+    const mdef = Math.max(0, Math.floor((((Number(apt.mag || 0) * 0.75) + (Number(apt.def || 0) * 0.65)) + level * 4) * growth * typeMul.mdef));
+
+    return {
+      id: `pet:${pet.id}`,
+      name: `[宠物] ${pet.name}`,
+      level,
+      levelMax: Number(pet.levelCap || level),
+      hp: maxHp,
+      max_hp: maxHp,
+      mp: maxMp,
+      max_mp: maxMp,
+      atk,
+      def,
+      mdef,
+      isPet: true
+    };
   }
 
 // 套装掉落数据
@@ -6619,8 +6757,10 @@ function renderState(state) {
     const summons = Array.isArray(state.summons) && state.summons.length
       ? state.summons
       : (state.summon ? [state.summon] : []);
-    if (summons.length) {
-      const summonEntries = summons.map((summon, index) => ({
+    const activePetSummon = buildActivePetSummonEntry(state);
+    const summonList = activePetSummon ? [...summons, activePetSummon] : summons;
+    if (summonList.length) {
+      const summonEntries = summonList.map((summon, index) => ({
         id: summon.id || `summon-${index}`,
         label: `${summon.name} Lv${summon.level}/${summon.levelMax || 8}`,
         raw: summon
@@ -8869,6 +9009,22 @@ if (petUi.release) {
     sendPetAction('release', { petId });
   });
 }
+if (petUi.equipBtn) {
+  petUi.equipBtn.addEventListener('click', () => {
+    const petId = selectedPetId;
+    const itemKey = String(petUi.equipItem?.value || '');
+    if (!petId || !itemKey) return;
+    sendPetAction('equip_item', { petId, itemKey });
+  });
+}
+if (petUi.unequipBtn) {
+  petUi.unequipBtn.addEventListener('click', () => {
+    const petId = selectedPetId;
+    const slot = String(petUi.unequipSlot?.value || '');
+    if (!petId || !slot) return;
+    sendPetAction('unequip_item', { petId, slot });
+  });
+}
 if (petUi.useBookBtn) {
   petUi.useBookBtn.addEventListener('click', () => {
     if (!selectedPetId) return showToast('请先选择宠物');
@@ -8901,6 +9057,7 @@ if (petUi.synthBelowEpicBtn) {
     const epicIndex = rarityOrder.indexOf('epic');
     const eligible = pets.filter((pet) => {
       if (!pet || pet.id === petState.activePetId) return false;
+      if (Array.isArray(pet.equippedItems) && pet.equippedItems.length > 0) return false;
       const idx = rarityOrder.indexOf(String(pet.rarity || ''));
       return idx >= 0 && (epicIndex < 0 || idx < epicIndex);
     });

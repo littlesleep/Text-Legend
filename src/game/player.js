@@ -48,6 +48,28 @@ function getActivePetAgilityBonus(player) {
   return agility / 100;
 }
 
+function getActivePetEquipmentEntries(player) {
+  const petState = player?.flags?.pet;
+  if (!petState || !Array.isArray(petState.pets) || !petState.activePetId) return [];
+  const active = petState.pets.find((pet) => pet && pet.id === petState.activePetId);
+  const equipped = active?.equipment;
+  if (!equipped || typeof equipped !== 'object') return [];
+  return Object.values(equipped)
+    .filter((entry) => entry && entry.id && (entry.durability == null || entry.durability > 0))
+    .map((entry) => {
+      ensureDurability(entry);
+      const item = ITEM_TEMPLATES[entry.id];
+      if (!item || !item.slot) return null;
+      return {
+        item,
+        effects: entry.effects || null,
+        refine_level: entry.refine_level || 0,
+        base_roll_pct: normalizeEquipBaseRollPct(item, entry.base_roll_pct, 100)
+      };
+    })
+    .filter(Boolean);
+}
+
 function rarityByPrice(item) {
   if (!item) return 'common';
   if (item.rarity) return item.rarity;
@@ -505,8 +527,9 @@ export function computeDerived(player) {
   let poisonEffectCount = 0;
   let comboEffectCount = 0;
   let healblockEffectCount = 0;
-  const petSkills = getActivePetSkillSet(player);
-  const petAgilityBonus = getActivePetAgilityBonus(player);
+  // 宠物不再直接影响人物属性；宠物技能与宠物装备仅作用于宠物自身战斗。
+  const petSkills = new Set();
+  const petAgilityBonus = 0;
   if (petSkills.has('pet_bash')) petAtkPct += 0.08;
   if (petSkills.has('pet_guard')) {
     petDefPct += 0.12;
