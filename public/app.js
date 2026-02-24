@@ -574,6 +574,7 @@ const petUi = {
   synthMain: document.getElementById('pet-synth-main'),
   synthSub: document.getElementById('pet-synth-sub'),
   synthBtn: document.getElementById('pet-synth-btn'),
+  synthBelowEpicBtn: document.getElementById('pet-synth-below-epic-btn'),
   close: document.getElementById('pet-close')
 };
 const changeClassUi = {
@@ -2666,6 +2667,17 @@ function renderPetModal() {
     }
     petUi.synthSub.disabled = subCandidates.length <= 0;
     if (petUi.synthBtn) petUi.synthBtn.disabled = pets.length < 2;
+  }
+  if (petUi.synthBelowEpicBtn) {
+    const rarityOrder = Array.isArray(lastState?.pet?.rarityOrder) ? lastState.pet.rarityOrder : ['normal', 'excellent', 'rare', 'epic', 'legendary', 'supreme', 'ultimate'];
+    const epicIndex = rarityOrder.indexOf('epic');
+    const eligibleCount = pets.filter((pet) => {
+      if (!pet || pet.id === petState?.activePetId) return false;
+      const idx = rarityOrder.indexOf(String(pet.rarity || ''));
+      return idx >= 0 && (epicIndex < 0 || idx < epicIndex);
+    }).length;
+    petUi.synthBelowEpicBtn.disabled = eligibleCount < 2;
+    petUi.synthBelowEpicBtn.textContent = '一键合成';
   }
 }
 
@@ -8879,6 +8891,31 @@ if (petUi.synthBtn) {
     });
     if (!confirmed) return;
     sendPetAction('synthesize', { mainPetId, subPetId });
+  });
+}
+if (petUi.synthBelowEpicBtn) {
+  petUi.synthBelowEpicBtn.addEventListener('click', async () => {
+    const petState = lastState?.pet || {};
+    const pets = Array.isArray(petState.pets) ? petState.pets : [];
+    const rarityOrder = Array.isArray(petState.rarityOrder) ? petState.rarityOrder : ['normal', 'excellent', 'rare', 'epic', 'legendary', 'supreme', 'ultimate'];
+    const epicIndex = rarityOrder.indexOf('epic');
+    const eligible = pets.filter((pet) => {
+      if (!pet || pet.id === petState.activePetId) return false;
+      const idx = rarityOrder.indexOf(String(pet.rarity || ''));
+      return idx >= 0 && (epicIndex < 0 || idx < epicIndex);
+    });
+    if (eligible.length < 2) {
+      showToast('没有可批量合成的宠物（已自动排除出战宠物）');
+      return;
+    }
+    const costPer = Number(petState.synthesisCostGold || 0);
+    const maxRuns = Math.floor(eligible.length / 2);
+    const ok = await confirmModal({
+      title: '一键合成',
+      text: `将批量合成普通/优秀/稀有宠物（不包含出战宠物）。\n最多可尝试 ${maxRuns} 次，单次消耗 ${costPer} 金。`
+    });
+    if (!ok) return;
+    sendPetAction('synthesize_below_epic');
   });
 }
 if (petUi.synthMain) {

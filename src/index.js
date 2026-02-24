@@ -10688,6 +10688,97 @@ io.on('connection', (socket) => {
     const emitResult = (ok, msg) => socket.emit('pet_result', { ok, msg });
     const fail = (msg) => emitResult(false, msg);
     let dirty = false;
+    const petRarityIndex = (rarity) => PET_RARITY_ORDER.indexOf(String(rarity || ''));
+    const synthesizePetPair = (mainPet, subPet) => {
+      if (!mainPet || !subPet) return { ok: false, msg: 'pet not found' };
+      if (mainPet.id === subPet.id) return { ok: false, msg: 'main and sub cannot be same' };
+      if (player.gold < PET_SYNTHESIS_COST_GOLD) return { ok: false, msg: 'gold not enough' };
+
+      const beforeMain = JSON.parse(JSON.stringify(mainPet));
+      const beforeSub = JSON.parse(JSON.stringify(subPet));
+      player.gold -= PET_SYNTHESIS_COST_GOLD;
+
+      const basePet = mainPet;
+      const feedPet = subPet;
+      const baseRarity = PET_RARITY_ORDER.includes(String(basePet.rarity || '')) ? String(basePet.rarity) : 'normal';
+      const growthRange = PET_RARITY_GROWTH_RANGE[baseRarity] || PET_RARITY_GROWTH_RANGE.normal;
+      const aptRange = PET_RARITY_APTITUDE_RANGE[baseRarity] || PET_RARITY_APTITUDE_RANGE.normal;
+
+      const mainGrowth = Number(basePet.growth || growthRange[0]);
+      const subGrowth = Number(feedPet.growth || growthRange[0]);
+      let growthMin = Math.min(mainGrowth, subGrowth) * 0.98;
+      let growthMax = Math.max(mainGrowth, subGrowth) * 1.03;
+      if (growthMax < growthMin) growthMax = growthMin;
+      let nextGrowth = growthMin + Math.random() * Math.max(0, growthMax - growthMin);
+      if (Math.random() < 0.08) nextGrowth += 0.01 + Math.random() * 0.02;
+      basePet.growth = Number(Math.max(growthRange[0], Math.min(growthRange[1], nextGrowth)).toFixed(3));
+
+      if (!basePet.aptitude || typeof basePet.aptitude !== 'object') basePet.aptitude = {};
+      ['hp', 'atk', 'def', 'mag', 'agility'].forEach((key) => {
+        const parentA = Math.floor(Number(basePet?.aptitude?.[key] || aptRange[key][0]));
+        const parentB = Math.floor(Number(feedPet?.aptitude?.[key] || aptRange[key][0]));
+        let rollMin = Math.floor(Math.min(parentA, parentB) * 0.9);
+        let rollMax = Math.floor(Math.max(parentA, parentB) * 1.1);
+        if (rollMax < rollMin) rollMax = rollMin;
+        let rolled = randInt(Math.max(1, rollMin), Math.max(1, rollMax));
+        if (Math.random() < 0.12) {
+          const burstFactor = 1.03 + Math.random() * 0.05;
+          rolled = Math.floor(rolled * burstFactor);
+        }
+        basePet.aptitude[key] = Math.max(aptRange[key][0], Math.min(aptRange[key][1], rolled));
+      });
+
+      const mainSkills = Array.isArray(basePet.skills) ? basePet.skills : [];
+      const subSkills = Array.isArray(feedPet.skills) ? feedPet.skills : [];
+      const skillPool = Array.from(new Set([...mainSkills, ...subSkills]
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && getPetSkillDef(id))));
+
+      const mainSlots = Math.max(PET_BASE_SKILL_SLOTS, Math.floor(Number(basePet.skillSlots || PET_BASE_SKILL_SLOTS)));
+      const subSlots = Math.max(PET_BASE_SKILL_SLOTS, Math.floor(Number(feedPet.skillSlots || PET_BASE_SKILL_SLOTS)));
+      const parentMinSlots = Math.max(PET_BASE_SKILL_SLOTS, Math.min(mainSlots, subSlots));
+      const parentMaxSlots = Math.max(parentMinSlots, Math.min(PET_MAX_SKILL_SLOTS, Math.max(mainSlots, subSlots)));
+      let nextSkillSlots = randInt(parentMinSlots, parentMaxSlots);
+      if (Math.random() < 0.35) nextSkillSlots += 1;
+      if (Math.random() < 0.10) nextSkillSlots += 1;
+      nextSkillSlots = Math.max(PET_BASE_SKILL_SLOTS, Math.min(PET_MAX_SKILL_SLOTS, nextSkillSlots));
+      const slotDelta = nextSkillSlots - mainSlots;
+      basePet.skillSlots = nextSkillSlots;
+
+      let inheritCount = randInt(2, 4);
+      if (skillPool.length >= 6 && Math.random() < 0.35) inheritCount += 1;
+      if (skillPool.length >= 8 && Math.random() < 0.2) inheritCount += 1;
+      inheritCount = skillPool.length <= 0 ? 0 : Math.max(1, Math.min(inheritCount, nextSkillSlots, skillPool.length));
+      const remainingPool = skillPool.slice();
+      const nextSkills = [];
+      while (remainingPool.length > 0 && nextSkills.length < inheritCount) {
+        const idx = randInt(0, remainingPool.length - 1);
+        nextSkills.push(remainingPool.splice(idx, 1)[0]);
+      }
+      basePet.skills = nextSkills;
+
+      basePet.level = 1;
+      basePet.exp = 0;
+
+      petState.pets = petState.pets.filter((pet) => pet.id !== feedPet.id);
+      if (petState.activePetId === feedPet.id) petState.activePetId = basePet.id;
+      dirty = true;
+
+      let slotText = '';
+      if (slotDelta > 0) slotText = ` | slot +${slotDelta}`;
+      else if (slotDelta < 0) slotText = ` | slot ${slotDelta}`;
+
+      if (logLoot) {
+        logLoot(
+          `[pet][alchemy] ${player.name} main=${beforeMain.name}/${beforeMain.id} sub=${beforeSub.name}/${beforeSub.id} ` +
+          `growth:${Number(beforeMain.growth || 0).toFixed(3)}+${Number(beforeSub.growth || 0).toFixed(3)}->${Number(basePet.growth || 0).toFixed(3)} ` +
+          `slots:${Number(beforeMain.skillSlots || 0)}|${Number(beforeSub.skillSlots || 0)}->${Number(basePet.skillSlots || 0)} ` +
+          `skills:${(Array.isArray(beforeMain.skills) ? beforeMain.skills.length : 0)}|${(Array.isArray(beforeSub.skills) ? beforeSub.skills.length : 0)}->${(Array.isArray(basePet.skills) ? basePet.skills.length : 0)} ` +
+          `rarity=${baseRarity}`
+        );
+      }
+      return { ok: true, pet: basePet, slotText };
+    };
 
     if (!action) return fail('invalid action');
 
@@ -10857,6 +10948,50 @@ io.on('connection', (socket) => {
       const activityMsgs = recordTreasurePetFestivalActivity(player, { petSyntheses: 1 });
       activityMsgs.forEach((msg) => player.send?.(msg));
       emitResult(true, `synthesis success: ${basePet.name} | growth ${basePet.growth.toFixed(3)} | skills ${basePet.skills.length}/${basePet.skillSlots}${slotText}`);
+    } else if (action === 'synthesize_below_epic') {
+      const epicIndex = PET_RARITY_ORDER.indexOf('epic');
+      if (epicIndex < 0) return fail('epic rarity not configured');
+      let synthCount = 0;
+      let stopReason = 'not enough pets';
+      for (let i = 0; i < 1000; i += 1) {
+        const candidates = (Array.isArray(petState.pets) ? petState.pets : [])
+          .filter((pet) => pet && pet.id !== petState.activePetId)
+          .filter((pet) => {
+            const idx = petRarityIndex(pet.rarity);
+            return idx >= 0 && idx < epicIndex;
+          })
+          .sort((a, b) => {
+            const r = petRarityIndex(a.rarity) - petRarityIndex(b.rarity);
+            if (r !== 0) return r;
+            const lv = Number(a.level || 1) - Number(b.level || 1);
+            if (lv !== 0) return lv;
+            return String(a.id || '').localeCompare(String(b.id || ''));
+          });
+        if (candidates.length < 2) {
+          stopReason = 'not enough pets';
+          break;
+        }
+        if (player.gold < PET_SYNTHESIS_COST_GOLD) {
+          stopReason = 'gold not enough';
+          break;
+        }
+        const result = synthesizePetPair(candidates[0], candidates[1]);
+        if (!result.ok) {
+          stopReason = result.msg || 'synthesis failed';
+          break;
+        }
+        synthCount += 1;
+      }
+      if (synthCount <= 0) return fail(stopReason);
+      const remainCount = (Array.isArray(petState.pets) ? petState.pets : [])
+        .filter((pet) => pet && pet.id !== petState.activePetId)
+        .filter((pet) => {
+          const idx = petRarityIndex(pet.rarity);
+          return idx >= 0 && idx < epicIndex;
+        }).length;
+      const activityMsgs = recordTreasurePetFestivalActivity(player, { petSyntheses: synthCount });
+      activityMsgs.forEach((msg) => player.send?.(msg));
+      emitResult(true, `batch synthesis done: ${synthCount} times | cost ${synthCount * PET_SYNTHESIS_COST_GOLD} gold | remain <epic ${remainCount} | stop: ${stopReason}`);
     } else {
       return fail('unknown action');
     }
