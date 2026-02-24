@@ -9378,6 +9378,50 @@ function getPetLevelExpNeed(level) {
   return Math.max(1, Math.floor(baseNeed * PET_EXP_NEED_RATIO));
 }
 
+const PET_EQUIP_SLOT_KEYS = [
+  'weapon',
+  'chest',
+  'head',
+  'waist',
+  'feet',
+  'neck',
+  'ring_left',
+  'ring_right',
+  'bracelet_left',
+  'bracelet_right'
+];
+
+function normalizePetEquipmentState(equipment) {
+  const next = {};
+  for (const slotKey of PET_EQUIP_SLOT_KEYS) next[slotKey] = null;
+  if (!equipment || typeof equipment !== 'object') return next;
+  for (const [slotKey, raw] of Object.entries(equipment)) {
+    if (!PET_EQUIP_SLOT_KEYS.includes(slotKey)) continue;
+    if (!raw || typeof raw !== 'object' || !raw.id) continue;
+    const itemTpl = ITEM_TEMPLATES[raw.id];
+    if (!itemTpl || !itemTpl.slot) continue;
+    if (String(itemTpl.slot) !== String(slotKey)) continue;
+    next[slotKey] = {
+      id: String(raw.id),
+      qty: 1,
+      effects: normalizeEffects(raw.effects || null),
+      durability: raw.durability == null ? null : Math.max(0, Math.floor(Number(raw.durability || 0))),
+      max_durability: raw.max_durability == null ? null : Math.max(1, Math.floor(Number(raw.max_durability || 1))),
+      refine_level: Math.max(0, Math.floor(Number(raw.refine_level || 0))),
+      base_roll_pct: raw.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(raw.base_roll_pct || 100))))
+    };
+  }
+  return next;
+}
+
+function buildPetEquippedItemPayload(pet, slotKey) {
+  if (!pet?.equipment || !slotKey) return null;
+  const slot = pet.equipment[slotKey];
+  if (!slot || !slot.id) return null;
+  const item = buildInventoryItemPayload({ ...slot, qty: 1 });
+  return { ...item, slot: slotKey };
+}
+
 function calcPetPower(pet) {
   if (!pet) return 0;
   const aptitude = pet.aptitude || {};
@@ -9497,6 +9541,7 @@ function normalizePetState(player) {
       const skills = Array.from(new Set(rawSkills.map((idValue) => String(idValue || '').trim()).filter(Boolean)))
         .filter((skillId) => Boolean(getPetSkillDef(skillId)))
         .slice(0, skillSlots);
+      const equipment = normalizePetEquipmentState(pet.equipment);
       const levelRaw = Math.floor(Number(pet.level || playerLevel));
       const level = Math.max(1, Math.min(petLevelCap, Number.isFinite(levelRaw) ? levelRaw : playerLevel));
       const expNeed = getPetLevelExpNeed(level);
@@ -9519,6 +9564,7 @@ function normalizePetState(player) {
         aptitude,
         skillSlots,
         skills,
+        equipment,
         combatMp,
         combatMpUpdatedAt
       };
@@ -9779,6 +9825,9 @@ function buildPetStatePayload(player) {
     skillNames: (pet.skills || []).map((skillId) => getPetSkillDef(skillId)?.name || skillId),
     skillEffects: (pet.skills || []).map((skillId) => PET_SKILL_EFFECTS[skillId] || ''),
     combatMp: Math.max(0, Math.floor(Number(pet.combatMp || 0))),
+    equippedItems: PET_EQUIP_SLOT_KEYS
+      .map((slotKey) => buildPetEquippedItemPayload(pet, slotKey))
+      .filter(Boolean),
     power: calcPetPower(pet)
   }));
   const books = PET_BOOK_LIBRARY
@@ -11575,7 +11624,7 @@ io.on('connection', (socket) => {
     if (!player) return;
     const { clean } = sanitizePayload(
       payload,
-      ['action', 'petId', 'name', 'bookId', 'qty', 'mainPetId', 'subPetId'],
+      ['action', 'petId', 'name', 'bookId', 'qty', 'mainPetId', 'subPetId', 'itemKey', 'slot'],
       'pet_action'
     );
     const action = String(clean?.action || '').trim().toLowerCase();
@@ -11698,6 +11747,8 @@ io.on('connection', (socket) => {
     } else if (action === 'release') {
       const pet = getPetById(clean?.petId);
       if (!pet) return fail('pet not found');
+      pet.equipment = normalizePetEquipmentState(pet.equipment);
+      if (Object.values(pet.equipment).some(Boolean)) return fail('pet has equipped items');
       petState.pets = petState.pets.filter((entry) => entry.id !== pet.id);
       if (petState.activePetId === pet.id) {
         petState.activePetId = null;
@@ -11713,6 +11764,66 @@ io.on('connection', (socket) => {
       pet.name = name;
       dirty = true;
       emitResult(true, `rename success: ${pet.name}`);
+    } else if (action === 'equip_item') {
+      const pet = getPetById(clean?.petId);
+      if (!pet) return fail('pet not found');
+      pet.equipment = normalizePetEquipmentState(pet.equipment);
+      const itemKey = String(clean?.itemKey || '').trim();
+      if (!itemKey) return fail('item not selected');
+      normalizeInventory(player);
+      const invIndex = Array.isArray(player.inventory)
+        ? player.inventory.findIndex((entry) => entry && getItemKey(entry) === itemKey)
+        : -1;
+      if (invIndex < 0) return fail('item not found in bag');
+      const inv = player.inventory[invIndex];
+      const itemTpl = ITEM_TEMPLATES[inv?.id];
+      if (!itemTpl || !itemTpl.slot) return fail('only equipment can be equipped');
+      const slotKey = String(itemTpl.slot);
+      if (!PET_EQUIP_SLOT_KEYS.includes(slotKey)) return fail('unsupported pet equip slot');
+      if (pet.equipment[slotKey]) return fail('pet slot already occupied');
+
+      const equipEntry = {
+        id: String(inv.id),
+        qty: 1,
+        effects: normalizeEffects(inv.effects || null),
+        durability: inv.durability == null ? null : Math.floor(Number(inv.durability || 0)),
+        max_durability: inv.max_durability == null ? null : Math.floor(Number(inv.max_durability || 0)),
+        refine_level: Math.max(0, Math.floor(Number(inv.refine_level || 0))),
+        base_roll_pct: inv.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(inv.base_roll_pct || 100))))
+      };
+      if (Number(inv.qty || 1) > 1) {
+        inv.qty = Math.max(0, Math.floor(Number(inv.qty || 1)) - 1);
+        if (inv.qty <= 0) player.inventory.splice(invIndex, 1);
+      } else {
+        player.inventory.splice(invIndex, 1);
+      }
+      pet.equipment[slotKey] = equipEntry;
+      normalizeInventory(player);
+      dirty = true;
+      emitResult(true, `pet equipped: ${itemTpl.name}`);
+    } else if (action === 'unequip_item') {
+      const pet = getPetById(clean?.petId);
+      if (!pet) return fail('pet not found');
+      pet.equipment = normalizePetEquipmentState(pet.equipment);
+      const slotKey = String(clean?.slot || '').trim();
+      if (!PET_EQUIP_SLOT_KEYS.includes(slotKey)) return fail('invalid slot');
+      const equipped = pet.equipment[slotKey];
+      if (!equipped || !equipped.id) return fail('slot is empty');
+      const itemTpl = ITEM_TEMPLATES[equipped.id];
+      addItem(
+        player,
+        equipped.id,
+        1,
+        equipped.effects || null,
+        equipped.durability ?? null,
+        equipped.max_durability ?? null,
+        equipped.refine_level ?? 0,
+        equipped.base_roll_pct ?? null
+      );
+      pet.equipment[slotKey] = null;
+      normalizeInventory(player);
+      dirty = true;
+      emitResult(true, `pet unequipped: ${itemTpl?.name || equipped.id}`);
     } else if (action === 'comprehend') {
       return fail('comprehend is automatic on pet level up');
     } else if (action === 'buy_book') {
@@ -11744,6 +11855,9 @@ io.on('connection', (socket) => {
       const mainPet = getPetById(clean?.mainPetId);
       const subPet = getPetById(clean?.subPetId);
       if (!mainPet || !subPet) return fail('pet not found');
+      mainPet.equipment = normalizePetEquipmentState(mainPet.equipment);
+      subPet.equipment = normalizePetEquipmentState(subPet.equipment);
+      if (Object.values(subPet.equipment).some(Boolean)) return fail('sub pet has equipped items');
       if (mainPet.id === subPet.id) return fail('main and sub cannot be same');
       if (player.gold < PET_SYNTHESIS_COST_GOLD) return fail('gold not enough');
       const beforeMain = JSON.parse(JSON.stringify(mainPet));
@@ -11858,6 +11972,10 @@ io.on('connection', (socket) => {
       for (let i = 0; i < 1000; i += 1) {
         const candidates = (Array.isArray(petState.pets) ? petState.pets : [])
           .filter((pet) => pet && pet.id !== petState.activePetId)
+          .filter((pet) => {
+            const eq = normalizePetEquipmentState(pet.equipment);
+            return !Object.values(eq).some(Boolean);
+          })
           .filter((pet) => {
             const idx = petRarityIndex(pet.rarity);
             return idx >= 0 && idx < epicIndex;
