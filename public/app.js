@@ -1903,7 +1903,7 @@ function promptDualModal({
   });
 }
 
-function promptMultiSelectModal({ title, text, options, selectedValues }) {
+function promptMultiSelectModal({ title, text, options, selectedValues, singleSelect = false, submitOnSelect = false }) {
   if (!promptUi.modal || !promptUi.input || !promptUi.options) return Promise.resolve(null);
   return new Promise((resolve) => {
     const selected = new Set(Array.isArray(selectedValues) ? selectedValues : []);
@@ -1983,6 +1983,10 @@ function promptMultiSelectModal({ title, text, options, selectedValues }) {
         btn.classList.add('active');
       }
       btn.addEventListener('click', () => {
+        if (singleSelect) {
+          selected.clear();
+          promptUi.options?.querySelectorAll('.prompt-option.active').forEach((node) => node.classList.remove('active'));
+        }
         if (selected.has(opt.value)) {
           selected.delete(opt.value);
           btn.classList.remove('active');
@@ -1990,6 +1994,7 @@ function promptMultiSelectModal({ title, text, options, selectedValues }) {
           selected.add(opt.value);
           btn.classList.add('active');
         }
+        if (submitOnSelect) onOk();
       });
       promptUi.options.appendChild(btn);
     });
@@ -2575,6 +2580,56 @@ function showPetModal() {
 function sendPetAction(action, extra = {}) {
   if (!socket) return;
   socket.emit('pet_action', { action, ...extra });
+}
+
+function getPetByStateId(petId) {
+  const pets = Array.isArray(lastState?.pet?.pets) ? lastState.pet.pets : [];
+  return pets.find((p) => p && p.id === petId) || null;
+}
+
+function buildPetSynthesisPreviewText(mainPet, subPet) {
+  if (!mainPet || !subPet) return '请选择主宠和副宠';
+  const mainSkills = Array.isArray(mainPet.skills) ? mainPet.skills : [];
+  const subSkills = Array.isArray(subPet.skills) ? subPet.skills : [];
+  const skillNamesMain = Array.isArray(mainPet.skillNames) ? mainPet.skillNames : mainSkills;
+  const skillNamesSub = Array.isArray(subPet.skillNames) ? subPet.skillNames : subSkills;
+  const skillPool = Array.from(new Set([...skillNamesMain, ...skillNamesSub].map((v) => String(v || '').trim()).filter(Boolean)));
+  let inheritMin = 2;
+  let inheritMax = 4;
+  if (skillPool.length >= 6) inheritMax += 1;
+  if (skillPool.length >= 8) inheritMax += 1;
+  inheritMin = Math.min(Math.max(0, inheritMin), skillPool.length);
+  inheritMax = Math.min(Math.max(0, inheritMax), skillPool.length);
+  const baseSlots = Math.max(3, Number(mainPet.skillSlots || 3), Number(subPet.skillSlots || 3));
+  const aptKeys = [
+    ['hp', '生命'],
+    ['atk', '攻击'],
+    ['def', '防御'],
+    ['mag', '魔法'],
+    ['agility', '速度']
+  ];
+  const aptLines = aptKeys.map(([key, label]) => {
+    const a = Number(mainPet?.aptitude?.[key] || 0);
+    const b = Number(subPet?.aptitude?.[key] || 0);
+    const min = Math.floor(Math.min(a, b) * 0.9);
+    const max = Math.floor(Math.max(a, b) * 1.1);
+    return `${label}: 约 ${Math.max(1, min)} ~ ${Math.max(Math.max(1, min), max)}`;
+  });
+  const g1 = Number(mainPet.growth || 1);
+  const g2 = Number(subPet.growth || 1);
+  const gMin = Math.min(g1, g2) * 0.98;
+  const gMax = Math.max(g1, g2) * 1.03;
+  return [
+    `主宠：${mainPet.name}（外形保留，等级重置为1）`,
+    `副宠：${subPet.name}（将被消耗）`,
+    `消耗：${Number(lastState?.pet?.synthesisCostGold || 0)} 金币`,
+    `技能池(${skillPool.length})：${skillPool.length ? skillPool.join('、') : '无'}`,
+    `预计继承技能数：${inheritMin}~${inheritMax}`,
+    `技能格基础：${baseSlots}，扩格概率：+1格 35%，额外+1格 10%`,
+    `成长预估：${gMin.toFixed(3)} ~ ${gMax.toFixed(3)}（8%概率超成长）`,
+    ...aptLines,
+    '是否确认炼妖？'
+  ].join('\n');
 }
 
 function showChangeClassModal(currentClassId) {
@@ -4272,7 +4327,7 @@ function showAutoFullBossModal() {
       `修真冲关：${Number(cult.kills || 0)} 次`,
       `行会攻坚贡献：${Number(guild.contribution || 0)} 点`,
       `锻造狂欢：${Number(refine.attempts || 0)} 次（+10 ${milestone['10'] ? '已达成' : '未达成'} / +20 ${milestone['20'] ? '已达成' : '未达成'} / +30 ${milestone['30'] ? '已达成' : '未达成'}）`,
-      '选择操作（可多选）'
+      '点击下方按钮会立即执行'
     ];
     const selected = await promptMultiSelectModal({
       title: '活动中心',
@@ -4286,7 +4341,9 @@ function showAutoFullBossModal() {
         { value: 'rank_guild', label: '查看行会攻坚榜' },
         { value: 'rank_refine', label: '查看锻造榜' }
       ],
-      selectedValues: []
+      selectedValues: [],
+      singleSelect: true,
+      submitOnSelect: true
     });
     if (!selected || !selected.length) return;
     if (!socket) {
@@ -8434,11 +8491,18 @@ if (petUi.useBookBtn) {
   });
 }
 if (petUi.synthBtn) {
-  petUi.synthBtn.addEventListener('click', () => {
+  petUi.synthBtn.addEventListener('click', async () => {
     const mainPetId = String(petUi.synthMain?.value || '');
     const subPetId = String(petUi.synthSub?.value || '');
     if (!mainPetId || !subPetId) return showToast('请选择两只宠物');
     if (mainPetId === subPetId) return showToast('主副宠不能相同');
+    const mainPet = getPetByStateId(mainPetId);
+    const subPet = getPetByStateId(subPetId);
+    const confirmed = await confirmModal({
+      title: '炼妖预览',
+      text: buildPetSynthesisPreviewText(mainPet, subPet)
+    });
+    if (!confirmed) return;
     sendPetAction('synthesize', { mainPetId, subPetId });
   });
 }

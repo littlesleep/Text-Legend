@@ -10478,83 +10478,105 @@ io.on('connection', (socket) => {
       if (!mainPet || !subPet) return fail('pet not found');
       if (mainPet.id === subPet.id) return fail('main and sub cannot be same');
       if (player.gold < PET_SYNTHESIS_COST_GOLD) return fail('gold not enough');
+      const beforeMain = JSON.parse(JSON.stringify(mainPet));
+      const beforeSub = JSON.parse(JSON.stringify(subPet));
       player.gold -= PET_SYNTHESIS_COST_GOLD;
 
-      const keepMain = Math.random() < 0.5;
-      const basePet = keepMain ? mainPet : subPet;
-      const feedPet = keepMain ? subPet : mainPet;
-
-      const baseRarity = PET_RARITY_ORDER.includes(basePet.rarity) ? basePet.rarity : 'normal';
+      // 梦幻风炼妖：固定主宠外形，副宠作为材料
+      const basePet = mainPet;
+      const feedPet = subPet;
+      const baseRarity = PET_RARITY_ORDER.includes(String(basePet.rarity || '')) ? String(basePet.rarity) : 'normal';
       const growthRange = PET_RARITY_GROWTH_RANGE[baseRarity] || PET_RARITY_GROWTH_RANGE.normal;
-      const mixGrowth = Number(basePet.growth || growthRange[0]) * 0.85 + Number(feedPet.growth || growthRange[0]) * 0.15;
-      basePet.growth = Math.max(growthRange[0], Math.min(growthRange[1], Number(mixGrowth.toFixed(3))));
-
       const aptRange = PET_RARITY_APTITUDE_RANGE[baseRarity] || PET_RARITY_APTITUDE_RANGE.normal;
+
+      const mainGrowth = Number(basePet.growth || growthRange[0]);
+      const subGrowth = Number(feedPet.growth || growthRange[0]);
+      let growthMin = Math.min(mainGrowth, subGrowth) * 0.98;
+      let growthMax = Math.max(mainGrowth, subGrowth) * 1.03;
+      if (growthMax < growthMin) growthMax = growthMin;
+      let nextGrowth = growthMin + Math.random() * Math.max(0, growthMax - growthMin);
+      if (Math.random() < 0.08) {
+        nextGrowth += 0.01 + Math.random() * 0.02; // 超成长
+      }
+      basePet.growth = Number(Math.max(growthRange[0], Math.min(growthRange[1], nextGrowth)).toFixed(3));
+
+      if (!basePet.aptitude || typeof basePet.aptitude !== 'object') basePet.aptitude = {};
       ['hp', 'atk', 'def', 'mag', 'agility'].forEach((key) => {
-        const baseVal = Math.floor(Number(basePet?.aptitude?.[key] || aptRange[key][0]));
-        const feedVal = Math.floor(Number(feedPet?.aptitude?.[key] || aptRange[key][0]));
-        const mixed = Math.floor(baseVal * 0.75 + feedVal * 0.25 + randInt(0, 6));
-        const maxBySum = baseVal + feedVal;
+        const parentA = Math.floor(Number(basePet?.aptitude?.[key] || aptRange[key][0]));
+        const parentB = Math.floor(Number(feedPet?.aptitude?.[key] || aptRange[key][0]));
+        let rollMin = Math.floor(Math.min(parentA, parentB) * 0.9);
+        let rollMax = Math.floor(Math.max(parentA, parentB) * 1.1);
+        if (rollMax < rollMin) rollMax = rollMin;
+        let rolled = randInt(Math.max(1, rollMin), Math.max(1, rollMax));
+        if (Math.random() < 0.12) {
+          const burstFactor = 1.03 + Math.random() * 0.05;
+          rolled = Math.floor(rolled * burstFactor);
+        }
         basePet.aptitude[key] = Math.max(
           aptRange[key][0],
-          Math.min(aptRange[key][1], maxBySum, mixed)
+          Math.min(aptRange[key][1], rolled)
         );
       });
 
-      let unlocked = false;
-      const slotsNow = Math.max(PET_BASE_SKILL_SLOTS, Math.floor(Number(basePet.skillSlots || PET_BASE_SKILL_SLOTS)));
-      
       const mainSkills = Array.isArray(basePet.skills) ? basePet.skills : [];
       const subSkills = Array.isArray(feedPet.skills) ? feedPet.skills : [];
-      const mainUniqueSkills = new Set(mainSkills);
-      const subUniqueSkills = new Set(subSkills);
-      
-      const allUniqueSkills = new Set([...mainUniqueSkills, ...subUniqueSkills]);
-      const totalUniqueSkills = allUniqueSkills.size;
-      
-      const maxSkillSlots = totalUniqueSkills;
-      
-      let unlockChance = PET_SYNTHESIS_UNLOCK_SLOT_CHANCE;
-      if (totalUniqueSkills >= 6) {
-        unlockChance = 0.0125;
-      } else if (totalUniqueSkills >= 8) {
-        unlockChance = 0.0075;
-      } else if (totalUniqueSkills >= 10) {
-        unlockChance = 0.005;
-      } else if (totalUniqueSkills >= 12) {
-        unlockChance = 0.0025;
+      const skillPool = Array.from(new Set([...mainSkills, ...subSkills]
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && getPetSkillDef(id))));
+
+      const baseSlots = Math.max(
+        PET_BASE_SKILL_SLOTS,
+        Math.floor(Number(basePet.skillSlots || PET_BASE_SKILL_SLOTS)),
+        Math.floor(Number(feedPet.skillSlots || PET_BASE_SKILL_SLOTS))
+      );
+      let nextSkillSlots = baseSlots;
+      let slotGain = 0;
+      if (Math.random() < 0.35) {
+        nextSkillSlots += 1;
+        slotGain += 1;
       }
-      
-      if (slotsNow >= 4 && slotsNow < maxSkillSlots && Math.random() < unlockChance) {
-        basePet.skillSlots = slotsNow + 1;
-        unlocked = true;
+      if (Math.random() < 0.10) {
+        nextSkillSlots += 1;
+        slotGain += 1;
       }
-      
-      const inheritable = [...subUniqueSkills].filter((skillId) => skillId && !mainUniqueSkills.has(skillId));
-      if (inheritable.length > 0 && Math.random() < PET_SYNTHESIS_INHERIT_CHANCE) {
-        let remaining = inheritable.slice();
-        let learnedAny = false;
-        while (remaining.length > 0) {
-          if (learnedAny) {
-            const slotsLeft = Math.max(0, Math.floor(Number(basePet.skillSlots || PET_BASE_SKILL_SLOTS)) - (basePet.skills || []).length);
-            if (slotsLeft <= 0) break;
-          }
-          const pickIndex = randInt(0, remaining.length - 1);
-          const pickSkill = remaining.splice(pickIndex, 1)[0];
-          learnPetSkill(basePet, pickSkill, true);
-          learnedAny = true;
-          if (remaining.length === 0) break;
-          if (Math.random() >= PET_SYNTHESIS_MULTI_SKILL_CHANCE) break;
-        }
+      nextSkillSlots = Math.max(PET_BASE_SKILL_SLOTS, Math.min(PET_MAX_SKILL_SLOTS, nextSkillSlots));
+      basePet.skillSlots = nextSkillSlots;
+
+      let inheritCount = randInt(2, 4);
+      if (skillPool.length >= 6 && Math.random() < 0.35) inheritCount += 1;
+      if (skillPool.length >= 8 && Math.random() < 0.2) inheritCount += 1;
+      inheritCount = skillPool.length <= 0
+        ? 0
+        : Math.max(1, Math.min(inheritCount, nextSkillSlots, skillPool.length));
+
+      const remainingPool = skillPool.slice();
+      const nextSkills = [];
+      while (remainingPool.length > 0 && nextSkills.length < inheritCount) {
+        const idx = randInt(0, remainingPool.length - 1);
+        nextSkills.push(remainingPool.splice(idx, 1)[0]);
       }
+      basePet.skills = nextSkills;
+
+      // 炼妖后重置等级，重新养成
+      basePet.level = 1;
+      basePet.exp = 0;
 
       petState.pets = petState.pets.filter((pet) => pet.id !== feedPet.id);
       if (petState.activePetId === feedPet.id) {
         petState.activePetId = basePet.id;
       }
       dirty = true;
-      const unlockText = unlocked ? ' | slot unlocked' : '';
-      emitResult(true, `synthesis success: ${basePet.name}${unlockText}`);
+      const slotText = slotGain > 0 ? ` | slot +${slotGain}` : '';
+      if (logLoot) {
+        logLoot(
+          `[pet][alchemy] ${player.name} main=${beforeMain.name}/${beforeMain.id} sub=${beforeSub.name}/${beforeSub.id} ` +
+          `growth:${Number(beforeMain.growth || 0).toFixed(3)}+${Number(beforeSub.growth || 0).toFixed(3)}->${Number(basePet.growth || 0).toFixed(3)} ` +
+          `slots:${Number(beforeMain.skillSlots || 0)}|${Number(beforeSub.skillSlots || 0)}->${Number(basePet.skillSlots || 0)} ` +
+          `skills:${(Array.isArray(beforeMain.skills) ? beforeMain.skills.length : 0)}|${(Array.isArray(beforeSub.skills) ? beforeSub.skills.length : 0)}->${(Array.isArray(basePet.skills) ? basePet.skills.length : 0)} ` +
+          `rarity=${baseRarity}`
+        );
+      }
+      emitResult(true, `synthesis success: ${basePet.name} | growth ${basePet.growth.toFixed(3)} | skills ${basePet.skills.length}/${basePet.skillSlots}${slotText}`);
     } else {
       return fail('unknown action');
     }
