@@ -8947,6 +8947,28 @@ async function sendState(player) {
   }
 }
 
+function buildRoomStatePayload(zoneId, roomId, realmId = 1) {
+  const effectiveRealmId = getRoomRealmId(zoneId, roomId, realmId);
+  const zone = WORLD[zoneId];
+  const room = zone?.rooms?.[roomId];
+  const cached = getRoomCommonState(zoneId, roomId, effectiveRealmId);
+  return {
+    room: {
+      zone: zone?.name || zoneId,
+      name: room?.name || roomId,
+      zoneId,
+      roomId
+    },
+    mobs: cached.mobs,
+    players: cached.roomPlayers,
+    bossRespawn: cached.nextRespawn,
+    worldBossRank: cached.bossRank,
+    worldBossClassRank: cached.bossClassRank || null,
+    worldBossNextRespawn: cached.bossNextRespawn,
+    server_time: Date.now()
+  };
+}
+
 async function sendRoomState(zoneId, roomId, realmId = 1) {
   const effectiveRealmId = getRoomRealmId(zoneId, roomId, realmId);
   const players = listOnlinePlayers(effectiveRealmId)
@@ -8970,7 +8992,11 @@ async function sendRoomState(zoneId, roomId, realmId = 1) {
   }
   
   // 使用Promise.all并行发送
-  await Promise.all(players.map(p => sendState(p)));
+  const roomState = buildRoomStatePayload(zoneId, roomId, effectiveRealmId);
+  players.forEach((p) => {
+    if (!p.socket) return;
+    p.socket.emit('room_state', roomState);
+  });
 }
 
 const WORLD_BOSS_ROOM = { zoneId: 'wb', roomId: 'lair' };

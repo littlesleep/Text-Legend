@@ -5650,6 +5650,22 @@ function handleIncomingState(payload) {
   }
 }
 
+function handleIncomingRoomState(payload) {
+  if (!payload) return;
+  const baseState = pendingState || lastState;
+  if (!baseState || !baseState.room || !payload.room) return;
+  if (payload.room.zoneId !== baseState.room.zoneId || payload.room.roomId !== baseState.room.roomId) return;
+  const mergedState = {
+    ...baseState,
+    ...payload,
+    room: {
+      ...(baseState.room || {}),
+      ...(payload.room || {})
+    }
+  };
+  handleIncomingState(mergedState);
+}
+
 function isStateThrottleActive() {
   return stateThrottleEnabled && !stateThrottleOverride && !isBossRoomState(lastState);
 }
@@ -7578,6 +7594,9 @@ function enterGame(name) {
   socket.on('state', (payload) => {
     console.log('Received state payload:', payload);
     handleIncomingState(payload);
+  });
+  socket.on('room_state', (payload) => {
+    handleIncomingRoomState(payload);
   });
   
   socket.on('observe_data', (data) => {
