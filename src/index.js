@@ -7808,8 +7808,8 @@ let PET_SKILL_EFFECTS = {
   pet_sunder_adv: '被动：协战概率施加撕裂压制（约18%~24%，降防/降魔御至约85%~88%）',
   pet_arcane_echo: '被动：协战概率追加回响伤害（约8%~12%，追加约16%~22%）',
   pet_arcane_echo_adv: '被动：协战概率追加回响伤害（约14%~20%，追加约24%~32%）',
-  pet_aoe: '被动：协战概率触发横扫（PVE约18%：额外1目标/30%；PVP约10%：主目标追加18%）',
-  pet_aoe_adv: '被动：协战概率触发横扫（PVE约30%：额外2目标/45%；PVP约18%：主目标追加28%）',
+  pet_aoe: '被动：协战概率触发横扫（PVE约18%：额外1目标/30%；PVP约10%：主目标追加18%）；蓝耗=最大法力10%（最低45）',
+  pet_aoe_adv: '被动：协战概率触发横扫（PVE约30%：额外2目标/45%；PVP约18%：主目标追加28%）；蓝耗=最大法力18%（最低80）',
   pet_divine_guard: '被动：协战后概率给予主人神佑减伤（PVE约12%/减伤15%，PVP约8%/减伤12%）',
   pet_kill_soul: '被动：宠物协战击杀时恢复主人生命/法力（各约最大值4.5%）',
   pet_war_horn: '被动：协战概率施加禁疗（额外概率约8%~20%，持续5秒，治疗约10%）',
@@ -9023,24 +9023,27 @@ function applyPetAssistAttackToMob(player, mob, roomRealmId, allMobs = null) {
     }
   }
   if (assist.typeMods.aoeChance > 0 && assist.typeMods.aoeTargets > 0 && Math.random() <= assist.typeMods.aoeChance) {
-    const pool = (Array.isArray(allMobs) ? allMobs : [])
-      .filter((m) => m && m.id !== mob.id && Number(m.hp || 0) > 0);
-    if (pool.length > 0) {
-      const maxTargets = Math.min(pool.length, Math.max(1, Math.floor(assist.typeMods.aoeTargets || 1)));
-      let hits = 0;
-      while (pool.length > 0 && hits < maxTargets) {
-        const idx = randInt(0, pool.length - 1);
-        const aoeTarget = pool.splice(idx, 1)[0];
-        const aoeResult = applyDamageToMob(
-          aoeTarget,
-          Math.max(1, Math.floor(dealt * (assist.typeMods.aoeRatio || 0.3))),
-          player.name,
-          roomRealmId
-        );
-        const aoeDealt = Math.max(0, Number(aoeResult?.damageTaken || 0));
-        if (aoeDealt > 0) {
-          hits += 1;
-          player.send(`${petName} aoe ${aoeTarget.name} ${aoeDealt}`);
+    const mpUse = tryConsumePetMpForSkill(assist.pet, 'pet_aoe');
+    if (mpUse.ok) {
+      const pool = (Array.isArray(allMobs) ? allMobs : [])
+        .filter((m) => m && m.id !== mob.id && Number(m.hp || 0) > 0);
+      if (pool.length > 0) {
+        const maxTargets = Math.min(pool.length, Math.max(1, Math.floor(assist.typeMods.aoeTargets || 1)));
+        let hits = 0;
+        while (pool.length > 0 && hits < maxTargets) {
+          const idx = randInt(0, pool.length - 1);
+          const aoeTarget = pool.splice(idx, 1)[0];
+          const aoeResult = applyDamageToMob(
+            aoeTarget,
+            Math.max(1, Math.floor(dealt * (assist.typeMods.aoeRatio || 0.3))),
+            player.name,
+            roomRealmId
+          );
+          const aoeDealt = Math.max(0, Number(aoeResult?.damageTaken || 0));
+          if (aoeDealt > 0) {
+            hits += 1;
+            player.send(`${petName} aoe ${aoeTarget.name} ${aoeDealt}`);
+          }
         }
       }
     }
@@ -9324,10 +9327,13 @@ function applyPetAssistAttackToPlayer(attacker, target) {
     }
   }
   if (assist.typeMods.aoeChance > 0 && Math.random() <= assist.typeMods.aoeChance && target.hp > 0) {
-    const sweepDealt = applyDamageToPlayer(target, Math.max(1, Math.floor(dealt * (assist.typeMods.aoeRatio || 0.18))));
-    if (sweepDealt > 0) {
-      attacker.send(`${petName} sweep ${target.name} ${sweepDealt}`);
-      target.send(`${petName} sweep hit ${sweepDealt}`);
+    const mpUse = tryConsumePetMpForSkill(assist.pet, 'pet_aoe');
+    if (mpUse.ok) {
+      const sweepDealt = applyDamageToPlayer(target, Math.max(1, Math.floor(dealt * (assist.typeMods.aoeRatio || 0.18))));
+      if (sweepDealt > 0) {
+        attacker.send(`${petName} sweep ${target.name} ${sweepDealt}`);
+        target.send(`${petName} sweep hit ${sweepDealt}`);
+      }
     }
   }
   if (assist.typeMods.quickStrikeChance > 0 && Math.random() <= assist.typeMods.quickStrikeChance && target.hp > 0) {
@@ -9391,6 +9397,59 @@ function calcPetPower(pet) {
   );
 }
 
+function calcPetBattlePanelDerivedStats(pet) {
+  if (!pet) return { maxHp: 1, maxMp: 1, atk: 1, def: 0, mdef: 0 };
+  const apt = pet.aptitude || {};
+  const level = Math.max(1, Number(pet.level || 1));
+  const growth = Math.max(0.8, Number(pet.growth || 1));
+  const battleType = String(pet.battleType || normalizePetBattleType(pet, apt));
+  const typeMul = battleType === 'magic'
+    ? { hp: 0.95, mp: 1.2, atk: 0.8, def: 0.95, mdef: 1.15 }
+    : battleType === 'tank'
+      ? { hp: 1.2, mp: 0.8, atk: 0.8, def: 1.2, mdef: 1.0 }
+      : { hp: 1.0, mp: 0.9, atk: 1.2, def: 1.0, mdef: 0.9 };
+  const maxHp = Math.max(1, Math.floor(((Number(apt.hp || 0) * 3.8) + (Number(apt.def || 0) * 1.2) + level * 38) * growth * typeMul.hp));
+  const maxMp = Math.max(1, Math.floor(((Number(apt.mag || 0) * 2.8) + level * 22) * Math.max(0.9, growth) * typeMul.mp));
+  const atk = Math.max(1, Math.floor(((Number(apt.atk || 0) * 1.35) + level * 5) * growth * typeMul.atk));
+  const def = Math.max(0, Math.floor(((Number(apt.def || 0) * 1.2) + level * 4) * growth * typeMul.def));
+  const mdef = Math.max(0, Math.floor((((Number(apt.mag || 0) * 0.75) + (Number(apt.def || 0) * 0.65)) + level * 4) * growth * typeMul.mdef));
+  return { maxHp, maxMp, atk, def, mdef };
+}
+
+function regenPetCombatMp(pet) {
+  if (!pet) return 0;
+  const { maxMp } = calcPetBattlePanelDerivedStats(pet);
+  const now = Date.now();
+  const lastAt = Number(pet.combatMpUpdatedAt || 0);
+  let current = Number.isFinite(Number(pet.combatMp)) ? Number(pet.combatMp) : maxMp;
+  current = Math.max(0, Math.min(maxMp, Math.floor(current)));
+  if (lastAt > 0 && now > lastAt) {
+    const elapsedSec = Math.floor((now - lastAt) / 1000);
+    if (elapsedSec > 0) {
+      const regen = elapsedSec * Math.max(8, Math.floor(maxMp * 0.03));
+      current = Math.min(maxMp, current + regen);
+    }
+  }
+  pet.combatMp = current;
+  pet.combatMpUpdatedAt = now;
+  return current;
+}
+
+function tryConsumePetMpForSkill(pet, skillBaseId) {
+  if (!pet || !skillBaseId) return { ok: false, cost: 0, current: 0, max: 0 };
+  const tier = getPetSkillTierOnPet(pet, skillBaseId);
+  if (!tier) return { ok: false, cost: 0, current: 0, max: 0 };
+  const { maxMp } = calcPetBattlePanelDerivedStats(pet);
+  const current = regenPetCombatMp(pet);
+  const cost = tier >= 2
+    ? Math.max(80, Math.floor(maxMp * 0.18))
+    : Math.max(45, Math.floor(maxMp * 0.1));
+  if (current < cost) return { ok: false, cost, current, max: maxMp };
+  pet.combatMp = Math.max(0, current - cost);
+  pet.combatMpUpdatedAt = Date.now();
+  return { ok: true, cost, current: pet.combatMp, max: maxMp };
+}
+
 function normalizePetState(player) {
   if (!player) return null;
   if (!player.flags) player.flags = {};
@@ -9442,6 +9501,12 @@ function normalizePetState(player) {
       const level = Math.max(1, Math.min(petLevelCap, Number.isFinite(levelRaw) ? levelRaw : playerLevel));
       const expNeed = getPetLevelExpNeed(level);
       const exp = level >= petLevelCap ? 0 : Math.max(0, Math.min(expNeed - 1, Math.floor(Number(pet.exp || 0))));
+      const panelStats = calcPetBattlePanelDerivedStats({ battleType, aptitude, growth, level });
+      const rawCombatMp = Number(pet.combatMp);
+      const combatMp = Number.isFinite(rawCombatMp)
+        ? Math.max(0, Math.min(panelStats.maxMp, Math.floor(rawCombatMp)))
+        : panelStats.maxMp;
+      const combatMpUpdatedAt = Math.max(0, Math.floor(Number(pet.combatMpUpdatedAt || 0)));
       return {
         id,
         rarity,
@@ -9453,7 +9518,9 @@ function normalizePetState(player) {
         growth,
         aptitude,
         skillSlots,
-        skills
+        skills,
+        combatMp,
+        combatMpUpdatedAt
       };
     });
 
@@ -9711,6 +9778,7 @@ function buildPetStatePayload(player) {
     skillTiers: (pet.skills || []).map((skillId) => getPetSkillTier(skillId)),
     skillNames: (pet.skills || []).map((skillId) => getPetSkillDef(skillId)?.name || skillId),
     skillEffects: (pet.skills || []).map((skillId) => PET_SKILL_EFFECTS[skillId] || ''),
+    combatMp: Math.max(0, Math.floor(Number(pet.combatMp || 0))),
     power: calcPetPower(pet)
   }));
   const books = PET_BOOK_LIBRARY

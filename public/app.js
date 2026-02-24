@@ -2495,6 +2495,22 @@ function showRepairModal() {
 function renderPetModal() {
   if (!petUi.modal || !petUi.list || !petUi.detail) return;
   petUi.detail.style.whiteSpace = 'pre-line';
+  const getPetBattleTypeText = (pet) => {
+    if (!pet) return '-';
+    if (pet.battleTypeLabel) return pet.battleTypeLabel;
+    const key = String(pet.battleType || '').toLowerCase();
+    if (key === 'physical') return '物理宠';
+    if (key === 'magic') return '法术宠';
+    if (key === 'tank') return '血宠';
+    return '-';
+  };
+  const getPetBattleTypeDesc = (pet) => {
+    const key = String(pet?.battleType || '').toLowerCase();
+    if (key === 'physical') return '单体爆发更高，暴击/连击更强';
+    if (key === 'magic') return '协战可溅射，擅长压制魔御';
+    if (key === 'tank') return '伤害较低，能护主回血并压制目标防御';
+    return '';
+  };
   const petState = lastState?.pet || null;
   const pets = Array.isArray(petState?.pets) ? petState.pets : [];
   const books = Array.isArray(petState?.books) ? petState.books : [];
@@ -2526,22 +2542,6 @@ function renderPetModal() {
     empty.textContent = '暂无宠物，击杀BOSS后有概率掉落宠物。';
     petUi.list.appendChild(empty);
   } else {
-    const getPetBattleTypeText = (pet) => {
-      if (!pet) return '-';
-      if (pet.battleTypeLabel) return pet.battleTypeLabel;
-      const key = String(pet.battleType || '').toLowerCase();
-      if (key === 'physical') return '物理宠';
-      if (key === 'magic') return '法术宠';
-      if (key === 'tank') return '血宠';
-      return '-';
-    };
-    const getPetBattleTypeDesc = (pet) => {
-      const key = String(pet?.battleType || '').toLowerCase();
-      if (key === 'physical') return '单体爆发更高，暴击/连击更强';
-      if (key === 'magic') return '协战可溅射，擅长压制魔御';
-      if (key === 'tank') return '伤害较低，能护主回血并压制目标防御';
-      return '';
-    };
     pets.forEach((pet) => {
       const row = document.createElement('div');
       row.className = `pet-entry${selectedPetId === pet.id ? ' active' : ''}`;
@@ -4887,10 +4887,6 @@ function showAutoFullBossModal() {
 
     const hpPct = summon.max_hp > 0 ? (summon.hp / summon.max_hp) * 100 : 0;
     const hasMpBar = Number(summon.max_mp || 0) > 0;
-    const hpCur = Math.max(0, Math.floor(Number(summon.hp || 0)));
-    const hpMax = Math.max(0, Math.floor(Number(summon.max_hp || 0)));
-    const mpCur = Math.max(0, Math.floor(Number(summon.mp || 0)));
-    const mpMax = Math.max(0, Math.floor(Number(summon.max_mp || 0)));
     const secondPct = hasMpBar
       ? (summon.max_mp > 0 ? (Number(summon.mp || 0) / Number(summon.max_mp || 1)) * 100 : 0)
       : (summon.exp && summon.exp_next ? (summon.exp / summon.exp_next) * 100 : 0);
@@ -4898,7 +4894,7 @@ function showAutoFullBossModal() {
     const hpRow = document.createElement('div');
     hpRow.className = 'summon-bar-row';
     hpRow.innerHTML = `
-      <span class="summon-bar-label">生命 ${hpCur}/${hpMax}</span>
+      <span class="summon-bar-label">生命</span>
       <div class="summon-bar">
         <div class="summon-bar-fill hp" style="width: ${hpPct}%"></div>
       </div>
@@ -4908,7 +4904,7 @@ function showAutoFullBossModal() {
     const secondRow = document.createElement('div');
     secondRow.className = 'summon-bar-row';
     secondRow.innerHTML = `
-      <span class="summon-bar-label">${hasMpBar ? `法力 ${mpCur}/${mpMax}` : '经验'}</span>
+      <span class="summon-bar-label">${hasMpBar ? '法力' : '经验'}</span>
       <div class="summon-bar">
         <div class="summon-bar-fill ${hasMpBar ? 'mp' : 'exp'}" style="width: ${secondPct}%"></div>
       </div>
@@ -4958,6 +4954,7 @@ function showAutoFullBossModal() {
     const def = Math.max(0, Math.floor(((Number(apt.def || 0) * 1.2) + level * 4) * growth * typeMul.def));
     const mdef = Math.max(0, Math.floor((((Number(apt.mag || 0) * 0.75) + (Number(apt.def || 0) * 0.65)) + level * 4) * growth * typeMul.mdef));
 
+    const currentMp = Number.isFinite(Number(pet.combatMp)) ? Number(pet.combatMp) : maxMp;
     return {
       id: `pet:${pet.id}`,
       name: `[宠物] ${pet.name}`,
@@ -4965,7 +4962,7 @@ function showAutoFullBossModal() {
       levelMax: Number(pet.levelCap || level),
       hp: maxHp,
       max_hp: maxHp,
-      mp: maxMp,
+      mp: Math.max(0, Math.min(maxMp, Math.floor(currentMp))),
       max_mp: maxMp,
       atk,
       def,
