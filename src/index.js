@@ -164,7 +164,13 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   pingInterval: 20000,
-  pingTimeout: 60000
+  pingTimeout: 60000,
+  perMessageDeflate: {
+    threshold: 1024
+  },
+  httpCompression: {
+    threshold: 1024
+  }
 });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -6910,9 +6916,14 @@ function transferOneEquipmentChance(from, to, chance) {
 // 房间状态缓存（用于BOSS房间优化）
 const roomStateCache = new Map();
 const roomStateDataCache = new Map();
+const roomStatePatchMetaCache = new Map();
 let roomStateLastUpdate = 0;
 let roomStateCachedData = null;
 const ROOM_STATE_TTL = 100; // 100ms缓存时间
+const ROOM_STATE_PLAYERS_TTL = 1000;
+const ROOM_STATE_RANK_TTL = 1000;
+const STATE_DYNAMIC_AUX_TTL = 5000;
+const STATE_STATIC_AUX_TTL = 30000;
 const VIP_SELF_CLAIM_CACHE_TTL = 10000; // VIP自领缓存10秒
 const STATE_THROTTLE_CACHE_TTL = 10000; // 状态节流缓存10秒
 const DAILY_LUCKY_CACHE_TTL = 30000; // 每日幸运玩家缓存30秒
@@ -8936,6 +8947,36 @@ async function sendState(player) {
     stateThrottleLastSent.set(key, Date.now());
   }
   const state = await buildState(player);
+  const now = Date.now();
+  if (!player._stateAuxSentAt) player._stateAuxSentAt = {};
+  const auxSentAt = player._stateAuxSentAt;
+  const shouldSendAux = (bucket, ttlMs) => {
+    if (forceSend) {
+      auxSentAt[bucket] = now;
+      return true;
+    }
+    const lastAt = Number(auxSentAt[bucket] || 0);
+    if (now - lastAt >= ttlMs) {
+      auxSentAt[bucket] = now;
+      return true;
+    }
+    return false;
+  };
+  if (!shouldSendAux('dynamic_aux', STATE_DYNAMIC_AUX_TTL)) {
+    delete state.crossRank;
+    delete state.daily_lucky;
+    delete state.zhuxian_tower_rank_top10;
+    delete state.worldBossRank;
+    delete state.worldBossClassRank;
+    delete state.worldBossNextRespawn;
+  }
+  if (!shouldSendAux('static_aux', STATE_STATIC_AUX_TTL)) {
+    delete state.treasure_sets;
+    delete state.auto_full_boss_list;
+    delete state.svip_settings;
+    delete state.refine_config;
+    delete state.effect_reset_config;
+  }
   player.socket.emit('state', state);
   player.forceStateRefresh = false;
   if (exitsHash && key) {
@@ -8952,7 +8993,40 @@ function buildRoomStatePayload(zoneId, roomId, realmId = 1) {
   const zone = WORLD[zoneId];
   const room = zone?.rooms?.[roomId];
   const cached = getRoomCommonState(zoneId, roomId, effectiveRealmId);
-  return {
+  const cacheKey = `${effectiveRealmId}:${zoneId}:${roomId}`;
+  const now = Date.now();
+  const meta = roomStatePatchMetaCache.get(cacheKey) || {
+    playersHash: null,
+    rankHash: null,
+    lastPlayersAt: 0,
+    lastRankAt: 0
+  };
+  const playersHash = JSON.stringify((cached.roomPlayers || []).map((p) => [
+    p.name,
+    p.classId,
+    p.level,
+    p.guildId || '',
+    p.realmId || 1,
+    p.pk || 0
+  ]));
+  const rankHash = JSON.stringify({
+    rank: cached.bossRank || [],
+    classRank: cached.bossClassRank || null,
+    next: cached.bossNextRespawn || null
+  });
+  const includePlayers = playersHash !== meta.playersHash || (now - meta.lastPlayersAt >= ROOM_STATE_PLAYERS_TTL);
+  const includeRank = rankHash !== meta.rankHash || (now - meta.lastRankAt >= ROOM_STATE_RANK_TTL);
+  if (includePlayers) {
+    meta.playersHash = playersHash;
+    meta.lastPlayersAt = now;
+  }
+  if (includeRank) {
+    meta.rankHash = rankHash;
+    meta.lastRankAt = now;
+  }
+  roomStatePatchMetaCache.set(cacheKey, meta);
+
+  const payload = {
     room: {
       zone: zone?.name || zoneId,
       name: room?.name || roomId,
@@ -8960,28 +9034,37 @@ function buildRoomStatePayload(zoneId, roomId, realmId = 1) {
       roomId
     },
     mobs: cached.mobs,
-    players: cached.roomPlayers,
     bossRespawn: cached.nextRespawn,
-    worldBossRank: cached.bossRank,
-    worldBossClassRank: cached.bossClassRank || null,
-    worldBossNextRespawn: cached.bossNextRespawn,
-    server_time: Date.now()
+    server_time: now
   };
+  if (includePlayers) {
+    payload.players = cached.roomPlayers;
+  }
+  if (includeRank) {
+    payload.worldBossRank = cached.bossRank;
+    payload.worldBossClassRank = cached.bossClassRank || null;
+    payload.worldBossNextRespawn = cached.bossNextRespawn;
+  }
+  return payload;
 }
 
 async function sendRoomState(zoneId, roomId, realmId = 1) {
   const effectiveRealmId = getRoomRealmId(zoneId, roomId, realmId);
+  const roomCacheKey = `${effectiveRealmId}:${zoneId}:${roomId}`;
   const players = listOnlinePlayers(effectiveRealmId)
     .filter((p) => p.position.zone === zoneId && p.position.room === roomId);
   
-  if (players.length === 0) return;
+  if (players.length === 0) {
+    roomStatePatchMetaCache.delete(roomCacheKey);
+    return;
+  }
   
   // BOSS房间优化：批量处理，减少序列化开销
   const isBoss = isBossRoom(zoneId, roomId, effectiveRealmId);
   
   if (isBoss && players.length > 5) {
     // BOSS房间且人很多时，使用节流，每100ms最多更新一次
-    const cacheKey = `${effectiveRealmId}:${zoneId}:${roomId}`;
+    const cacheKey = roomCacheKey;
     const now = Date.now();
     const lastUpdate = roomStateCache.get(cacheKey) || 0;
     
@@ -8995,7 +9078,7 @@ async function sendRoomState(zoneId, roomId, realmId = 1) {
   const roomState = buildRoomStatePayload(zoneId, roomId, effectiveRealmId);
   players.forEach((p) => {
     if (!p.socket) return;
-    p.socket.emit('room_state', roomState);
+    p.socket.volatile.emit('room_state', roomState);
   });
 }
 

@@ -5650,6 +5650,33 @@ function handleIncomingState(payload) {
   }
 }
 
+function mergeStatePayloadWithLast(payload) {
+  if (!payload || !lastState) return payload;
+  const merged = {
+    ...lastState,
+    ...payload
+  };
+  if (lastState.player || payload.player) {
+    merged.player = {
+      ...(lastState.player || {}),
+      ...(payload.player || {})
+    };
+  }
+  if (lastState.room || payload.room) {
+    merged.room = {
+      ...(lastState.room || {}),
+      ...(payload.room || {})
+    };
+  }
+  if (lastState.stats || payload.stats) {
+    merged.stats = {
+      ...(lastState.stats || {}),
+      ...(payload.stats || {})
+    };
+  }
+  return merged;
+}
+
 function handleIncomingRoomState(payload) {
   if (!payload) return;
   const baseState = pendingState || lastState;
@@ -7593,7 +7620,7 @@ function enterGame(name) {
   });
   socket.on('state', (payload) => {
     console.log('Received state payload:', payload);
-    handleIncomingState(payload);
+    handleIncomingState(mergeStatePayloadWithLast(payload));
   });
   socket.on('room_state', (payload) => {
     handleIncomingRoomState(payload);
