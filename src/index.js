@@ -3489,8 +3489,15 @@ function totalRewardMultiplier({ vipActive, svipActive = false, guildActive, cul
   return 1 + vipBonus + guildBonus + cultivationBonus + partyBonus + treasureBonus;
 }
 
-function buildItemView(itemId, effects = null, durability = null, max_durability = null, refine_level = 0) {
+function buildItemView(itemId, effects = null, durability = null, max_durability = null, refine_level = 0, base_roll_pct = null) {
   const item = ITEM_TEMPLATES[itemId] || { id: itemId, name: itemId, type: 'unknown' };
+  const isEquipment = Boolean(item?.slot);
+  const baseRollPct = isEquipment ? Math.max(50, Math.min(150, Math.floor(Number(base_roll_pct ?? 100) || 100))) : null;
+  const rollStat = (value) => {
+    const base = Number(value || 0);
+    if (!isEquipment || base <= 0) return base;
+    return Math.max(1, Math.floor(base * baseRollPct / 100));
+  };
   // 优先使用装备模板中手动设置的 rarity，如果没有才使用价格计算
   const rarity = item.rarity || rarityByPrice(item);
   const effectSkillName = effects?.skill ? getSkillNameById(effects.skill) : '';
@@ -3502,24 +3509,32 @@ function buildItemView(itemId, effects = null, durability = null, max_durability
     rarity,
     is_set: isSetItem(itemId),
     price: item.price || 0,
-    hp: item.hp || 0,
-    mp: item.mp || 0,
-    atk: item.atk || 0,
-    def: item.def || 0,
-    mdef: item.mdef || 0,
-    mag: item.mag || 0,
-    spirit: item.spirit || 0,
-    dex: item.dex || 0,
+    hp: rollStat(item.hp || 0),
+    mp: rollStat(item.mp || 0),
+    atk: rollStat(item.atk || 0),
+    def: rollStat(item.def || 0),
+    mdef: rollStat(item.mdef || 0),
+    mag: rollStat(item.mag || 0),
+    spirit: rollStat(item.spirit || 0),
+    dex: rollStat(item.dex || 0),
     durability: durability ?? null,
     max_durability: max_durability ?? null,
     effects: effects || null,
     effectSkillName,
-    refine_level: refine_level || 0
+    refine_level: refine_level || 0,
+    base_roll_pct: baseRollPct
   };
 }
 
 function buildInventoryItemPayload(slot) {
   const item = ITEM_TEMPLATES[slot.id] || { id: slot.id, name: slot.id, type: 'unknown' };
+  const isEquipment = Boolean(item?.slot);
+  const baseRollPct = isEquipment ? Math.max(50, Math.min(150, Math.floor(Number(slot.base_roll_pct ?? 100) || 100))) : null;
+  const rollStat = (value) => {
+    const base = Number(value || 0);
+    if (!isEquipment || base <= 0) return base;
+    return Math.max(1, Math.floor(base * baseRollPct / 100));
+  };
   const effects = slot.effects || null;
   const effectSkillName = effects?.skill ? getSkillNameById(effects.skill) : '';
   // 检查是否为商店装备
@@ -3536,17 +3551,18 @@ function buildInventoryItemPayload(slot) {
     rarity,
     is_set: isSetItem(item.id),
     price: item.price || 0,
-    hp: item.hp || 0,
-    mp: item.mp || 0,
-    atk: item.atk || 0,
-    def: item.def || 0,
-    mdef: item.mdef || 0,
-    mag: item.mag || 0,
-    spirit: item.spirit || 0,
-    dex: item.dex || 0,
+    hp: rollStat(item.hp || 0),
+    mp: rollStat(item.mp || 0),
+    atk: rollStat(item.atk || 0),
+    def: rollStat(item.def || 0),
+    mdef: rollStat(item.mdef || 0),
+    mag: rollStat(item.mag || 0),
+    spirit: rollStat(item.spirit || 0),
+    dex: rollStat(item.dex || 0),
     durability: slot.durability ?? null,
     max_durability: slot.max_durability ?? null,
     refine_level: slot.refine_level || 0,
+    base_roll_pct: baseRollPct,
     effects,
     effectSkillName,
     is_shop_item: isShopItem,
@@ -3571,7 +3587,8 @@ function buildMailItemView(entry) {
     entry.effects || null,
     entry.durability,
     entry.max_durability,
-    entry.refine_level ?? 0
+    entry.refine_level ?? 0,
+    entry.base_roll_pct ?? null
   );
   return {
     ...view,
@@ -8646,7 +8663,15 @@ async function buildState(player) {
       durability: equipped.durability ?? null,
       max_durability: equipped.max_durability ?? null,
       refine_level: equipped.refine_level || 0,
-      item: buildItemView(equipped.id, equipped.effects || null)
+      base_roll_pct: equipped.base_roll_pct ?? null,
+      item: buildItemView(
+        equipped.id,
+        equipped.effects || null,
+        equipped.durability ?? null,
+        equipped.max_durability ?? null,
+        equipped.refine_level || 0,
+        equipped.base_roll_pct ?? null
+      )
     }));
   const party = getPartyByMember(player.name, realmId);
   const partyMembers = party
@@ -10409,7 +10434,7 @@ io.on('connection', (socket) => {
           const slot = resolveInventorySlotByKey(player, key);
           if (!slot) continue;
           const qty = Math.max(1, Number(totalQty));
-          if (!removeItem(player, slot.id, qty, slot.effects, slot.durability ?? null, slot.max_durability ?? null, slot.refine_level ?? null)) {
+          if (!removeItem(player, slot.id, qty, slot.effects, slot.durability ?? null, slot.max_durability ?? null, slot.refine_level ?? null, slot.base_roll_pct ?? null)) {
             return socket.emit('mail_send_result', { ok: false, msg: '附件数量超过背包数量。' });
           }
         items.push({
@@ -10418,7 +10443,8 @@ io.on('connection', (socket) => {
           effects: slot.effects || null,
           durability: slot.durability ?? null,
           max_durability: slot.max_durability ?? null,
-          refine_level: slot.refine_level ?? null
+          refine_level: slot.refine_level ?? null,
+          base_roll_pct: slot.base_roll_pct ?? null
         });
       }
     }

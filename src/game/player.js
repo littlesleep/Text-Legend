@@ -5,6 +5,27 @@ import { clamp } from './utils.js';
 import { getClassLevelBonusConfig as getClassLevelBonusFromConfig, getRefineBonusPerLevel } from './settings.js';
 import { getTreasureBonus, getTreasureRandomAttrBonus, normalizeTreasureState } from './treasure.js';
 
+const EQUIP_BASE_ROLL_MIN_PCT = 50;
+const EQUIP_BASE_ROLL_MAX_PCT = 150;
+
+function randomEquipBaseRollPct() {
+  return Math.floor(Math.random() * (EQUIP_BASE_ROLL_MAX_PCT - EQUIP_BASE_ROLL_MIN_PCT + 1)) + EQUIP_BASE_ROLL_MIN_PCT;
+}
+
+function normalizeEquipBaseRollPct(item, value, fallback = 100) {
+  if (!item?.slot) return null;
+  const raw = Number(value);
+  const next = Number.isFinite(raw) ? Math.floor(raw) : Math.floor(Number(fallback) || 100);
+  return clamp(next, EQUIP_BASE_ROLL_MIN_PCT, EQUIP_BASE_ROLL_MAX_PCT);
+}
+
+function scaleEquipBaseStat(value, baseRollPct) {
+  const base = Number(value || 0);
+  if (base <= 0) return 0;
+  const pct = clamp(Math.floor(Number(baseRollPct || 100)), EQUIP_BASE_ROLL_MIN_PCT, EQUIP_BASE_ROLL_MAX_PCT);
+  return Math.max(1, Math.floor(base * pct / 100));
+}
+
 function getActivePetSkillSet(player) {
   const petState = player?.flags?.pet;
   if (!petState || !Array.isArray(petState.pets) || !petState.activePetId) return new Set();
@@ -83,7 +104,8 @@ export function getItemKey(slot) {
     const dur = slot.durability ?? 100;
     const maxDur = slot.max_durability ?? 100;
     const refineLevel = slot.refine_level ?? 0;
-    baseKey += `@${dur}/${maxDur}/+${refineLevel}`;
+    const baseRollPct = normalizeEquipBaseRollPct(item, slot.base_roll_pct, 100);
+    baseKey += `@${dur}/${maxDur}/+${refineLevel}/r${baseRollPct}`;
   }
   return baseKey;
 }
@@ -98,6 +120,9 @@ function ensureDurability(equipped) {
   if (!equipped || !equipped.id) return;
   const item = ITEM_TEMPLATES[equipped.id];
   if (!item) return;
+  if (item.slot) {
+    equipped.base_roll_pct = normalizeEquipBaseRollPct(item, equipped.base_roll_pct, 100);
+  }
   if (!equipped.max_durability) {
     equipped.max_durability = 100;
   }
@@ -451,7 +476,8 @@ export function computeDerived(player) {
     .map((equipped) => ({
       item: ITEM_TEMPLATES[equipped.id],
       effects: equipped.effects || null,
-      refine_level: equipped.refine_level || 0
+      refine_level: equipped.refine_level || 0,
+      base_roll_pct: normalizeEquipBaseRollPct(ITEM_TEMPLATES[equipped.id], equipped.base_roll_pct, 100)
     }))
     .filter((entry) => entry.item);
 
@@ -652,12 +678,12 @@ export function computeDerived(player) {
   for (const entry of bonus) {
     const item = entry.item;
     const setBonus = activeSetIds.has(item.id) ? activeSetBonusRates.get(item.id) : null;
-    const baseAtk = item.atk || 0;
-    const baseMag = item.mag || 0;
-    const baseSpirit = item.spirit || 0;
-    const baseDef = item.def || 0;
-    const baseMdef = item.mdef || 0;
-    const baseDex = item.dex || 0;
+    const baseAtk = scaleEquipBaseStat(item.atk || 0, entry.base_roll_pct);
+    const baseMag = scaleEquipBaseStat(item.mag || 0, entry.base_roll_pct);
+    const baseSpirit = scaleEquipBaseStat(item.spirit || 0, entry.base_roll_pct);
+    const baseDef = scaleEquipBaseStat(item.def || 0, entry.base_roll_pct);
+    const baseMdef = scaleEquipBaseStat(item.mdef || 0, entry.base_roll_pct);
+    const baseDex = scaleEquipBaseStat(item.dex || 0, entry.base_roll_pct);
     let atk = baseAtk;
     let mag = baseMag;
     let spirit = baseSpirit;
@@ -902,7 +928,7 @@ export function bagLimit(player) {
   return maxBagSlots(player.level);
 }
 
-export function addItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null) {
+export function addItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
   if (!player.inventory) player.inventory = [];
   const normalized = normalizeEffects(effects);
   const itemTemplate = ITEM_TEMPLATES[itemId];
@@ -914,6 +940,7 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
     const finalDur = durability !== null ? durability : maxDur;
     const finalMaxDur = max_durability !== null ? max_durability : maxDur;
     const finalRefineLevel = refine_level !== null ? refine_level : 0;
+    const finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, randomEquipBaseRollPct());
     
     // 尝试找到耐久度和锻造等级完全相同的装备进行堆叠
     const slot = player.inventory.find((i) => 
@@ -921,7 +948,8 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
       sameEffects(i.effects, normalized) &&
       i.durability === finalDur &&
       i.max_durability === finalMaxDur &&
-      (i.refine_level ?? 0) === finalRefineLevel
+      (i.refine_level ?? 0) === finalRefineLevel &&
+      normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) === finalBaseRollPct
     );
     
     if (slot) {
@@ -933,7 +961,8 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
         effects: normalized,
         durability: finalDur,
         max_durability: finalMaxDur,
-        refine_level: finalRefineLevel
+        refine_level: finalRefineLevel,
+        base_roll_pct: finalBaseRollPct
       });
     }
   } else {
@@ -952,7 +981,7 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
 }
 
 
-export function addItemToList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null) {
+export function addItemToList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
   const target = Array.isArray(list) ? list : [];
   const normalized = normalizeEffects(effects);
   const itemTemplate = ITEM_TEMPLATES[itemId];
@@ -963,13 +992,15 @@ export function addItemToList(list, itemId, qty = 1, effects = null, durability 
     const finalDur = durability !== null ? durability : maxDur;
     const finalMaxDur = max_durability !== null ? max_durability : maxDur;
     const finalRefineLevel = refine_level !== null ? refine_level : 0;
+    const finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, randomEquipBaseRollPct());
 
     const slot = target.find((i) =>
       i.id === itemId &&
       sameEffects(i.effects, normalized) &&
       i.durability === finalDur &&
       i.max_durability === finalMaxDur &&
-      (i.refine_level ?? 0) === finalRefineLevel
+      (i.refine_level ?? 0) === finalRefineLevel &&
+      normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) === finalBaseRollPct
     );
 
     if (slot) {
@@ -981,7 +1012,8 @@ export function addItemToList(list, itemId, qty = 1, effects = null, durability 
         effects: normalized,
         durability: finalDur,
         max_durability: finalMaxDur,
-        refine_level: finalRefineLevel
+        refine_level: finalRefineLevel,
+        base_roll_pct: finalBaseRollPct
       });
     }
   } else {
@@ -1013,19 +1045,22 @@ export function normalizeItemList(items) {
     let finalDur = slot.durability;
     let finalMaxDur = slot.max_durability;
     let finalRefineLevel = slot.refine_level;
+    let finalBaseRollPct = slot.base_roll_pct;
 
     if (isEquipment) {
       finalDur = slot.durability !== null ? slot.durability : 100;
       finalMaxDur = slot.max_durability !== null ? slot.max_durability : 100;
       finalRefineLevel = slot.refine_level !== null ? slot.refine_level : 0;
+      finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, slot.base_roll_pct, 100);
     }
 
-    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}`;
+    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}|${finalBaseRollPct ?? ''}`;
     const cur = merged.get(key) || { id, qty: 0, effects };
     if (isEquipment) {
       cur.durability = finalDur;
       cur.max_durability = finalMaxDur;
       cur.refine_level = finalRefineLevel;
+      cur.base_roll_pct = finalBaseRollPct;
     }
     cur.qty += qty;
     merged.set(key, cur);
@@ -1037,10 +1072,11 @@ export function normalizeWarehouse(player) {
   player.warehouse = normalizeItemList(player.warehouse);
 }
 
-export function removeItemFromList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null) {
+export function removeItemFromList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
   if (!Array.isArray(list)) return { ok: false, list: [] };
   const normalized = normalizeEffects(effects);
-  const needsMeta = durability != null || max_durability != null || refine_level != null;
+  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null;
+  const itemTemplate = ITEM_TEMPLATES[itemId];
   const slot = list.find((i) => {
     if (!i || i.id !== itemId) return false;
     if (normalized && !sameEffects(i.effects, normalized)) return false;
@@ -1048,6 +1084,7 @@ export function removeItemFromList(list, itemId, qty = 1, effects = null, durabi
       if (durability != null && i.durability !== durability) return false;
       if (max_durability != null && i.max_durability !== max_durability) return false;
       if (refine_level != null && (i.refine_level ?? 0) !== refine_level) return false;
+      if (base_roll_pct != null && normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) !== normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, 100)) return false;
     }
     return true;
   });
@@ -1074,20 +1111,23 @@ export function normalizeInventory(player) {
     let finalDur = slot.durability;
     let finalMaxDur = slot.max_durability;
     let finalRefineLevel = slot.refine_level;
+    let finalBaseRollPct = slot.base_roll_pct;
 
     // 只为装备添加默认耐久度和锻造等级
     if (isEquipment) {
       finalDur = slot.durability !== null ? slot.durability : 100;
       finalMaxDur = slot.max_durability !== null ? slot.max_durability : 100;
       finalRefineLevel = slot.refine_level !== null ? slot.refine_level : 0;
+      finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, slot.base_roll_pct, 100);
     }
 
-    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}`;
+    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}|${finalBaseRollPct ?? ''}`;
     const cur = merged.get(key) || { id, qty: 0, effects };
     if (isEquipment) {
       cur.durability = finalDur;
       cur.max_durability = finalMaxDur;
       cur.refine_level = finalRefineLevel;
+      cur.base_roll_pct = finalBaseRollPct;
     }
     cur.qty += qty;
     merged.set(key, cur);
@@ -1126,10 +1166,11 @@ function resolveEquipSlot(player, item) {
   return slot;
 }
 
-export function removeItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null) {
+export function removeItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
   if (!player || !player.inventory) return false;
   const normalized = normalizeEffects(effects);
-  const needsMeta = durability != null || max_durability != null || refine_level != null;
+  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null;
+  const itemTemplate = ITEM_TEMPLATES[itemId];
   const slot = player.inventory.find((i) => {
     if (!i || i.id !== itemId) return false;
     if (normalized && !sameEffects(i.effects, normalized)) return false;
@@ -1137,6 +1178,7 @@ export function removeItem(player, itemId, qty = 1, effects = null, durability =
       if (durability != null && i.durability !== durability) return false;
       if (max_durability != null && i.max_durability !== max_durability) return false;
       if (refine_level != null && (i.refine_level ?? 0) !== refine_level) return false;
+      if (base_roll_pct != null && normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) !== normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, 100)) return false;
     }
     return true;
   });
@@ -1149,11 +1191,11 @@ export function removeItem(player, itemId, qty = 1, effects = null, durability =
   return true;
 }
 
-export function equipItem(player, itemId, effects = null, durability = null, max_durability = null, refine_level = null) {
+export function equipItem(player, itemId, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
   const item = ITEM_TEMPLATES[itemId];
   if (!item || !item.slot) return { ok: false, msg: '\u8BE5\u7269\u54C1\u65E0\u6CD5\u88C5\u5907\u3002' };
   const normalized = normalizeEffects(effects);
-  const needsMeta = durability != null || max_durability != null || refine_level != null;
+  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null;
   let has = player.inventory.find((i) => {
     if (!i || i.id !== itemId) return false;
     if (normalized && !sameEffects(i.effects, normalized)) return false;
@@ -1161,6 +1203,7 @@ export function equipItem(player, itemId, effects = null, durability = null, max
       if (durability != null && i.durability !== durability) return false;
       if (max_durability != null && i.max_durability !== max_durability) return false;
       if (refine_level != null && (i.refine_level ?? 0) !== refine_level) return false;
+      if (base_roll_pct != null && normalizeEquipBaseRollPct(item, i.base_roll_pct, 100) !== normalizeEquipBaseRollPct(item, base_roll_pct, 100)) return false;
     }
     return true;
   });
@@ -1172,7 +1215,7 @@ export function equipItem(player, itemId, effects = null, durability = null, max
   normalizeEquipment(player);
   const slot = resolveEquipSlot(player, item);
   if (player.equipment[slot]) {
-    addItem(player, player.equipment[slot].id, 1, player.equipment[slot].effects, player.equipment[slot].durability, player.equipment[slot].max_durability, player.equipment[slot].refine_level);
+    addItem(player, player.equipment[slot].id, 1, player.equipment[slot].effects, player.equipment[slot].durability, player.equipment[slot].max_durability, player.equipment[slot].refine_level, player.equipment[slot].base_roll_pct);
   }
 
   const maxDur = 100;
@@ -1180,8 +1223,9 @@ export function equipItem(player, itemId, effects = null, durability = null, max
   const itemDur = has.durability != null ? has.durability : maxDur;
   const itemMaxDur = has.max_durability != null ? has.max_durability : maxDur;
   const itemRefineLevel = has.refine_level != null ? has.refine_level : 0;
-  player.equipment[slot] = { id: itemId, durability: itemDur, max_durability: itemMaxDur, effects: has.effects || null, refine_level: itemRefineLevel };
-  removeItem(player, itemId, 1, has.effects, itemDur, itemMaxDur, itemRefineLevel);
+  const itemBaseRollPct = normalizeEquipBaseRollPct(item, has.base_roll_pct, 100);
+  player.equipment[slot] = { id: itemId, durability: itemDur, max_durability: itemMaxDur, effects: has.effects || null, refine_level: itemRefineLevel, base_roll_pct: itemBaseRollPct };
+  removeItem(player, itemId, 1, has.effects, itemDur, itemMaxDur, itemRefineLevel, itemBaseRollPct);
   computeDerived(player);
   return { ok: true, msg: `\u5DF2\u88C5\u5907${item.name}\u3002` };
 }
@@ -1196,7 +1240,7 @@ export function unequipItem(player, slot) {
   }
   const current = player.equipment[slot];
   if (!current) return { ok: false, msg: '\u8BE5\u90E8\u4F4D\u6CA1\u6709\u88C5\u5907\u3002' };
-  addItem(player, current.id, 1, current.effects, current.durability, current.max_durability, current.refine_level);
+  addItem(player, current.id, 1, current.effects, current.durability, current.max_durability, current.refine_level, current.base_roll_pct);
   player.equipment[slot] = null;
   computeDerived(player);
   return { ok: true, msg: `\u5DF2\u5378\u4E0B${ITEM_TEMPLATES[current.id].name}\u3002` };

@@ -1757,10 +1757,10 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!canAddToListWithLimit(player.warehouse, WAREHOUSE_LIMIT, resolved.slot)) {
           return send('仓库已满。');
         }
-        if (!removeItem(player, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null)) {
+        if (!removeItem(player, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null)) {
           return send('背包里没有足够数量。');
         }
-        player.warehouse = addItemToList(player.warehouse, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null);
+        player.warehouse = addItemToList(player.warehouse, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null);
         player.forceStateRefresh = true;
         send(`已存入仓库：${resolved.item.name} x${finalQty}`);
         return;
@@ -2048,7 +2048,8 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         resolved.slot.effects || null,
         resolved.slot.durability ?? null,
         resolved.slot.max_durability ?? null,
-        resolved.slot.refine_level ?? null
+        resolved.slot.refine_level ?? null,
+        resolved.slot.base_roll_pct ?? null
       );
       if (res.ok) player.forceStateRefresh = true;
       send(res.msg);
