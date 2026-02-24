@@ -2027,7 +2027,10 @@ function promptMultiSelectModal({
               console.error('[promptMultiSelectModal.onSelect] failed:', err);
             }
           }
-          if (closeOnSelect) onOk();
+          const shouldClose = typeof closeOnSelect === 'function'
+            ? !!closeOnSelect(opt.value, Array.from(selected))
+            : !!closeOnSelect;
+          if (shouldClose) onOk();
         }
       });
       promptUi.options.appendChild(btn);
@@ -4495,7 +4498,7 @@ function showAutoFullBossModal() {
       `修真冲关：${Number(cult.kills || 0)} 次`,
       `行会攻坚贡献：${Number(guild.contribution || 0)} 点`,
       `锻造狂欢：${Number(refine.attempts || 0)} 次（+10 ${milestone['10'] ? '已达成' : '未达成'} / +20 ${milestone['20'] ? '已达成' : '未达成'} / +30 ${milestone['30'] ? '已达成' : '未达成'}）`,
-      '点击下方按钮会立即执行（不会自动关闭窗口）'
+      '点击下方按钮会立即执行（查看排行榜会切换到榜单窗口）'
     ];
     await promptMultiSelectModal({
       title: '活动中心',
@@ -4512,7 +4515,7 @@ function showAutoFullBossModal() {
       selectedValues: [],
       singleSelect: true,
       submitOnSelect: true,
-      closeOnSelect: false,
+      closeOnSelect: (value) => String(value || '').startsWith('rank_'),
       hideOk: true,
       cancelText: '关闭',
       onSelect: (value) => runActivityCenterAction(value)
