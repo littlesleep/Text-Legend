@@ -2454,6 +2454,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         player.forceStateRefresh = true;
         return;
       }
+      if (item.id === 'pet_training_fruit') {
+        return send('宠物修炼果无法直接使用，请在宠物修炼界面操作。');
+      }
       if (!removeItem(player, item.id, 1, resolved.slot.effects)) return send('背包里没有该物品。');
       if (item.type !== 'consumable') {
         addItem(player, item.id, 1, resolved.slot.effects);
