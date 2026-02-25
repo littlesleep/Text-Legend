@@ -61,3 +61,14 @@ export async function countUsedRechargeCardsByUser(userId) {
     .first();
   return Number(row?.total || 0);
 }
+
+export async function listUsedRechargeUserIds() {
+  const rows = await knex('recharge_cards')
+    .whereNotNull('used_at')
+    .whereNotNull('used_by_user_id')
+    .where('used_by_user_id', '>', 0)
+    .distinct('used_by_user_id as userId');
+  return rows
+    .map((row) => Math.floor(Number(row?.userId || 0)))
+    .filter((uid, idx, arr) => Number.isFinite(uid) && uid > 0 && arr.indexOf(uid) === idx);
+}
