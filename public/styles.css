@@ -6401,6 +6401,11 @@ body.dark .sponsor-markdown .sponsor-tip {
 
 .pet-book-entry {
   cursor: default;
+  color: #d9c4a8;
+}
+
+body.dark .pet-book-entry {
+  color: #e7d5bf;
 }
 
 .pet-entry.active {

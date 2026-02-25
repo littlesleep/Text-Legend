@@ -2658,9 +2658,13 @@ function renderPetModal() {
       equippedItems.forEach((item) => {
         const row = document.createElement('div');
         row.className = 'pet-book-entry';
-        applyRarityClass(row, item);
         const slotLabel = petEquipSlotLabels[item.slot] || item.slot || '装备';
-        row.textContent = `${slotLabel}: ${formatItemName(item)}（点击卸下）`;
+        row.textContent = `${slotLabel}: `;
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = formatItemName(item);
+        applyRarityClass(nameSpan, item);
+        row.appendChild(nameSpan);
+        row.appendChild(document.createTextNode('（点击卸下）'));
         row.style.cursor = 'pointer';
         row.addEventListener('click', () => {
           if (!selected?.id || !item.slot) return;
@@ -2689,8 +2693,11 @@ function renderPetModal() {
       equipables.forEach((item) => {
         const row = document.createElement('div');
         row.className = 'pet-book-entry';
-        applyRarityClass(row, item);
-        row.textContent = `${formatItemName(item)} x${Number(item.qty || 1)}（点击穿戴）`;
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${formatItemName(item)} x${Number(item.qty || 1)}`;
+        applyRarityClass(nameSpan, item);
+        row.appendChild(nameSpan);
+        row.appendChild(document.createTextNode('（点击穿戴）'));
         row.style.cursor = 'pointer';
         row.addEventListener('click', () => {
           if (!selected?.id) return;
