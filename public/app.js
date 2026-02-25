@@ -3611,13 +3611,14 @@ function openTrainingBatchModal(trainingId) {
 
   const currentLevel = training[trainingId] || 0;
   const cost = trainingCost(currentLevel);
+  const needFruit = playerTrainingFruitNeededByLevel(currentLevel);
   const perLevel = getTrainingPerLevel(trainingId);
   const totalBonus = currentLevel * perLevel;
 
   // 显示修炼属性信息
   trainingBatchUi.modal.querySelector('.modal-title').textContent = opt.label;
   trainingBatchUi.modal.querySelector('#training-batch-text').innerHTML =
-    `当前等级：Lv${currentLevel}<br>属性加成：+${totalBonus.toFixed(2)}<br>单次消耗：${cost} 金币`;
+    `当前等级：Lv${currentLevel}<br>属性加成：+${totalBonus.toFixed(2)}<br>单次消耗：${cost} 金币${needFruit ? ` + 修炼果x${needFruit}` : ''}`;
 
   // 重置输入
   trainingBatchUi.countInput.value = 1;
@@ -3655,12 +3656,14 @@ function updateTrainingBatchCost() {
   if (!opt) return;
 
   const perLevel = getTrainingPerLevel(selectedTrainingType);
+  const fruitOwned = Math.max(0, Math.floor(Number((lastState?.items || []).find((it) => String(it?.id || '') === 'training_fruit')?.qty || 0)));
 
   // 计算总费用
   let totalCost = 0;
   for (let i = 0; i < count; i++) {
     totalCost += trainingCost(currentLevel + i);
   }
+  const totalFruitNeed = playerTrainingFruitNeededForBatch(currentLevel, count);
 
   const targetLevel = currentLevel + count;
   const targetBonus = targetLevel * perLevel;
@@ -3668,6 +3671,7 @@ function updateTrainingBatchCost() {
   if (count === 1) {
     trainingBatchUi.costDisplay.innerHTML = `
       <div class="training-batch-total-cost">消耗：${totalCost} 金币</div>
+      ${totalFruitNeed > 0 ? `<div>修炼果：${totalFruitNeed}（当前 ${fruitOwned}）</div>` : ''}
     `;
   } else {
     const currentBonus = currentLevel * perLevel;
@@ -3677,13 +3681,14 @@ function updateTrainingBatchCost() {
       <div>修炼 ${count} 次：Lv${currentLevel} → Lv${targetLevel}</div>
       <div>属性增加：+${bonusIncrease.toFixed(2)}</div>
       <div class="training-batch-total-cost">总花费：${totalCost} 金币</div>
+      ${totalFruitNeed > 0 ? `<div>修炼果：${totalFruitNeed}（当前 ${fruitOwned}）</div>` : ''}
     `;
   }
 
   // 检查金币是否足够
   const playerGold = lastState?.stats?.gold || 0;
   console.log('[updateTrainingBatchCost] playerGold:', playerGold, 'totalCost:', totalCost);
-  trainingBatchUi.confirm.disabled = playerGold < totalCost;
+  trainingBatchUi.confirm.disabled = playerGold < totalCost || fruitOwned < totalFruitNeed;
   console.log('[updateTrainingBatchCost] confirm.disabled:', trainingBatchUi.confirm.disabled);
 }
 
@@ -3708,7 +3713,7 @@ function executeBatchTraining() {
 
   // 检查按钮是否被禁用
   if (trainingBatchUi.confirm.disabled) {
-    alert('金币不足，无法修炼');
+    alert('金币或修炼果不足，无法修炼');
     console.log('[DEBUG] Button is disabled, returning');
     return;
   }
@@ -5756,6 +5761,20 @@ function trainingCost(currentLevel) {
   return Math.max(1, Math.floor(base + currentLevel * (base * 0.2)));
 }
 
+function playerTrainingFruitNeededByLevel(currentLevel) {
+  return Number(currentLevel) >= 500 ? 1 : 0;
+}
+
+function playerTrainingFruitNeededForBatch(currentLevel, count) {
+  const start = Math.max(0, Math.floor(Number(currentLevel) || 0));
+  const times = Math.max(0, Math.floor(Number(count) || 0));
+  let need = 0;
+  for (let i = 0; i < times; i += 1) {
+    need += playerTrainingFruitNeededByLevel(start + i);
+  }
+  return need;
+}
+
 function formatItemTooltip(item) {
   if (!item) return '';
   const skillLabel = getEffectSkillLabel(item);
@@ -7363,12 +7382,13 @@ function renderState(state) {
     const trainingButtons = TRAINING_OPTIONS.map((opt) => {
       const currentLevel = training[opt.id] || 0;
       const cost = trainingCost(currentLevel);
+      const needFruit = playerTrainingFruitNeededByLevel(currentLevel);
       const perLevel = getTrainingPerLevel(opt.id);
       const totalBonus = currentLevel * perLevel;
       return {
         id: opt.id,
         label: `${opt.label} Lv${currentLevel}`,
-        tooltip: `${opt.label} 属性+${totalBonus.toFixed(2)}\n单次消耗 ${cost} 金币\n点击选择修炼次数`,
+        tooltip: `${opt.label} 属性+${totalBonus.toFixed(2)}\n单次消耗 ${cost} 金币${needFruit ? ` + 修炼果x${needFruit}` : ''}\nLv500后继续修炼需修炼果\n点击选择修炼次数`,
         raw: { id: opt.id }
       };
     });
