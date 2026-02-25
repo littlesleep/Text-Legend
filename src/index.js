@@ -7639,11 +7639,10 @@ function isAutoFullOnlySelectedCultivationBosses(player) {
 }
 
 function isAutoFullCultivationBossFocused(player) {
-  const filter = getAutoFullBossFilterSet(player);
-  if (filter == null || filter.size === 0) return false;
-  // 仅当玩家明确只选择了具体修真BOSS名称时，才在修真秘境内蹲守。
-  // 勾选“修真BOSS”分类应表现为：有BOSS打BOSS，无BOSS回普通经验房。
-  return isAutoFullOnlySelectedCultivationBosses(player);
+  // 当前统一策略：勾选任意BOSS（包括具体修真BOSS名称）时，
+  // 只在“有BOSS可打”时前往BOSS房；没有BOSS时回普通经验房挂机。
+  // 因此关闭修真BOSS蹲守模式，避免在修真秘境空房间来回切换。
+  return false;
 }
 
 function isAutoFullBossAllowed(player, mobTemplate) {
