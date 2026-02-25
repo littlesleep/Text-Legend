@@ -1394,6 +1394,114 @@ app.post('/admin/first-recharge-settings/reissue-divine-beast', async (req, res)
   });
 });
 
+app.post('/admin/first-recharge-settings/reissue-divine-beast-all', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  const preferredRealmIdRaw = req.body?.realmId;
+  let preferredRealmId = 0;
+  if (preferredRealmIdRaw != null && preferredRealmIdRaw !== '') {
+    const realmInfo = await resolveRealmId(preferredRealmIdRaw);
+    if (realmInfo.error) return res.status(400).json({ error: realmInfo.error });
+    preferredRealmId = realmInfo.realmId;
+  }
+  const rechargeChars = await listUsedRechargeCharacters();
+  const onlinePlayers = Array.from(players.values());
+  const onlineByCharKey = new Map();
+  for (const p of onlinePlayers) {
+    const uid = Math.floor(Number(p?.userId || 0));
+    const name = String(p?.name || '').trim();
+    const rid = Math.floor(Number(p?.realmId || 1)) || 1;
+    if (!uid || !name) continue;
+    onlineByCharKey.set(`${uid}|${rid}|${name}`, p);
+  }
+  const candidateRows = [];
+  const seenCandidates = new Set();
+  for (const entry of rechargeChars) {
+    const uid = Math.floor(Number(entry?.userId || 0));
+    const charName = String(entry?.charName || '').trim();
+    if (!uid || !charName) continue;
+    let row = null;
+    if (preferredRealmId) {
+      row = await knex('characters')
+        .where({ user_id: uid, name: charName, realm_id: preferredRealmId })
+        .first();
+    } else {
+      row = await knex('characters')
+        .where({ user_id: uid, name: charName })
+        .orderBy('level', 'desc')
+        .first();
+    }
+    if (!row) continue;
+    const key = `${uid}|${row.realm_id || 1}|${row.name}`;
+    if (seenCandidates.has(key)) continue;
+    seenCandidates.add(key);
+    candidateRows.push(row);
+  }
+  const stats = {
+    totalRechargeChars: candidateRows.length,
+    markedSkipped: 0,
+    success: 0,
+    noCharacterSkipped: 0,
+    failed: 0
+  };
+  const failures = [];
+  for (const row of candidateRows) {
+    const userId = Math.floor(Number(row?.user_id || 0));
+    const rowRealmId = Math.floor(Number(row?.realm_id || 1)) || 1;
+    const rowName = String(row?.name || '').trim();
+    try {
+      if (await hasDivineBeastReissueCharacterMarker(userId, rowName, rowRealmId)) {
+        stats.markedSkipped += 1;
+        continue;
+      }
+      let player = onlineByCharKey.get(`${userId}|${rowRealmId}|${rowName}`) || null;
+      let saveOffline = null;
+      let targetName = rowName;
+      if (!player) {
+        player = await loadCharacter(row.user_id, row.name, row.realm_id || 1);
+        if (!player) {
+          stats.failed += 1;
+          failures.push(`uid=${userId}:角色加载失败`);
+          continue;
+        }
+        player.userId = userId;
+        player.realmId = rowRealmId;
+        targetName = player.name || rowName;
+        saveOffline = async () => saveCharacter(row.user_id, player, row.realm_id || 1);
+      } else {
+        targetName = player.name || rowName;
+      }
+      const petGrant = grantDivineBeastPetToPlayer(player);
+      if (!petGrant?.ok || !petGrant.pet) {
+        stats.failed += 1;
+        failures.push(`uid=${userId}:发神兽失败`);
+        continue;
+      }
+      if (saveOffline) await saveOffline();
+      else {
+        await savePlayer(player);
+        if (player?.socket) {
+          player.forceStateRefresh = true;
+          await sendState(player);
+          if (typeof player.send === 'function') player.send('管理员已补发马年神兽，请查看宠物。');
+        }
+      }
+      const operator = String(admin?.user?.username || admin?.user?.name || admin?.user?.id || '').trim();
+      await markDivineBeastReissueCharacterIssued(userId, targetName, rowRealmId, { source: 'admin_reissue_divine_beast_all', operator });
+      stats.success += 1;
+    } catch (err) {
+      stats.failed += 1;
+      failures.push(`uid=${userId}:${err?.message || err}`);
+    }
+  }
+  res.json({
+    ok: true,
+    preferredRealmId: preferredRealmId || null,
+    ...stats,
+    failures: failures.slice(0, 20)
+  });
+});
+
 app.post('/admin/first-recharge-settings/reissue-all', async (req, res) => {
   const admin = await requireAdmin(req);
   if (!admin) return res.status(401).json({ error: '无管理员权限。' });

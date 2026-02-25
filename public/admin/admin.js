@@ -41,6 +41,7 @@ const firstRechargeReissueCharInput = document.getElementById('first-recharge-re
 const firstRechargeReissueRealmInput = document.getElementById('first-recharge-reissue-realm');
 const firstRechargeReissueBtn = document.getElementById('first-recharge-reissue-btn');
 const firstRechargeReissueDivineBeastBtn = document.getElementById('first-recharge-reissue-divine-beast-btn');
+const firstRechargeReissueDivineBeastAllBtn = document.getElementById('first-recharge-reissue-divine-beast-all-btn');
 const firstRechargeReissueAllBtn = document.getElementById('first-recharge-reissue-all-btn');
 const firstRechargeMsg = document.getElementById('first-recharge-msg');
 const vipSelfClaimStatus = document.getElementById('vip-self-claim-status');
@@ -2953,6 +2954,31 @@ async function reissueDivineBeastForCharacter() {
     setTimeout(() => setFirstRechargeMsg(''), 2500);
   } catch (err) {
     setFirstRechargeMsg(`补发马年神兽失败: ${err.message}`, 'red');
+  }
+}
+
+async function reissueDivineBeastForAllRechargeUsers() {
+  if (!firstRechargeMsg) return;
+  const realmRaw = String(firstRechargeReissueRealmInput?.value || '').trim();
+  const realmId = realmRaw ? Math.max(1, Math.floor(Number(realmRaw) || 1)) : null;
+  const realmText = realmId ? `优先区服【${realmId}】` : '所有区服';
+  if (!window.confirm(`确认批量给全部充值角色补发马年神兽吗？将跳过已补发神兽标记角色。(${realmText})`)) {
+    return;
+  }
+  setFirstRechargeMsg('批量补发马年神兽中，请稍候...');
+  try {
+    const data = await api('/admin/first-recharge-settings/reissue-divine-beast-all', 'POST', { realmId });
+    const summary = [
+      `充值角色${Number(data?.totalRechargeChars || 0)}`,
+      `成功${Number(data?.success || 0)}`,
+      `已标记跳过${Number(data?.markedSkipped || 0)}`,
+      `无角色跳过${Number(data?.noCharacterSkipped || 0)}`,
+      `失败${Number(data?.failed || 0)}`
+    ].join('，');
+    const failures = Array.isArray(data?.failures) && data.failures.length ? `；失败样本：${data.failures.join(' | ')}` : '';
+    setFirstRechargeMsg(`批量补发马年神兽完成：${summary}${failures}`, Number(data?.failed || 0) > 0 ? '#cc7a00' : 'green');
+  } catch (err) {
+    setFirstRechargeMsg(`批量补发马年神兽失败: ${err.message}`, 'red');
   }
 }
 
@@ -6525,6 +6551,7 @@ if (firstRechargeLoadBtn) firstRechargeLoadBtn.addEventListener('click', loadFir
 if (firstRechargeSaveBtn) firstRechargeSaveBtn.addEventListener('click', saveFirstRechargeSettings);
 if (firstRechargeReissueBtn) firstRechargeReissueBtn.addEventListener('click', reissueFirstRechargeWelfare);
 if (firstRechargeReissueDivineBeastBtn) firstRechargeReissueDivineBeastBtn.addEventListener('click', reissueDivineBeastForCharacter);
+if (firstRechargeReissueDivineBeastAllBtn) firstRechargeReissueDivineBeastAllBtn.addEventListener('click', reissueDivineBeastForAllRechargeUsers);
 if (firstRechargeReissueAllBtn) firstRechargeReissueAllBtn.addEventListener('click', reissueAllRechargeUsersFirstRechargeWelfare);
 if (vipCodesPrev) {
   vipCodesPrev.addEventListener('click', () => {
