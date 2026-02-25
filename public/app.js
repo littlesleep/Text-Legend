@@ -796,8 +796,60 @@ let autoFullBossSelection = new Set();
 const AUTOAFK_BOSS_STORAGE_KEY = 'autoafkBossSelection';
 const AUTOAFK_SKILL_STORAGE_KEY = 'autoafkSkillSelection';
 let selectedPetId = null;
+let petModalLastRenderSignature = '';
 let guildPage = 0;
 const GUILD_PAGE_SIZE = 5;
+
+function buildPetModalRenderSignature(state = lastState) {
+  const petState = state?.pet || {};
+  const pets = Array.isArray(petState.pets) ? petState.pets : [];
+  const books = Array.isArray(petState.books) ? petState.books : [];
+  const items = Array.isArray(state?.items) ? state.items : [];
+  const trainAttr = String(petUi?.trainAttr?.value || '');
+  const trainCount = String(petUi?.trainCount?.value || '');
+  const useBook = String(petUi?.useBook?.value || '');
+  const petTrainFruitQty = Math.max(0, Math.floor(Number(items.find((it) => String(it?.id || '') === 'pet_training_fruit')?.qty || 0)));
+  const equipBagSig = items
+    .filter((it) => it && it.slot && Number(it.qty || 0) > 0)
+    .map((it) => `${String(it.key || it.id || '')}:${String(it.slot || '')}:${Number(it.qty || 0)}:${Number(it.refine_level || 0)}`)
+    .join(',');
+  const booksSig = books
+    .filter((b) => Number(b?.qty || 0) > 0)
+    .map((b) => `${String(b.id || '')}:${Number(b.qty || 0)}`)
+    .join(',');
+  const petsSig = pets.map((pet) => {
+    const t = pet?.training || {};
+    const eqSig = (Array.isArray(pet?.equippedItems) ? pet.equippedItems : [])
+      .map((e) => `${String(e.slot || '')}:${String(e.id || e.name || '')}:${Number(e.refine_level || 0)}`)
+      .join('.');
+    return [
+      String(pet?.id || ''),
+      String(pet?.name || ''),
+      String(pet?.role || ''),
+      String(pet?.rarity || ''),
+      Number(pet?.level || 0),
+      Number(pet?.exp || 0),
+      Number(pet?.power || 0),
+      Number(pet?.skillSlots || 0),
+      (Array.isArray(pet?.skills) ? pet.skills : []).join('.'),
+      Number(t.hp || 0), Number(t.mp || 0), Number(t.atk || 0), Number(t.def || 0), Number(t.mag || 0), Number(t.mdef || 0), Number(t.dex || 0),
+      eqSig
+    ].join('~');
+  }).join('|');
+  return [
+    String(selectedPetId || ''),
+    String(petState.activePetId || ''),
+    trainAttr,
+    trainCount,
+    useBook,
+    String(petState.maxOwned || ''),
+    String(petState.synthesisCostGold || ''),
+    String(petTrainFruitQty),
+    booksSig,
+    equipBagSig,
+    petsSig
+  ].join('||');
+}
 
 const authSection = document.getElementById('auth');
 const characterSection = document.getElementById('character');
@@ -2860,6 +2912,7 @@ function renderPetModal() {
     petUi.synthBelowEpicBtn.disabled = eligibleCount < 2;
     petUi.synthBelowEpicBtn.textContent = '一键合成';
   }
+  petModalLastRenderSignature = buildPetModalRenderSignature(lastState);
 }
 
 function showPetModal() {
@@ -7387,7 +7440,12 @@ function renderState(state) {
     if (shouldRenderUiSection('modal.repair', 180)) renderRepairList(state.equipment || []);
   }
   if (petUi.modal && !petUi.modal.classList.contains('hidden')) {
-    if (shouldRenderUiSection('modal.pet', 250)) renderPetModal();
+    if (shouldRenderUiSection('modal.pet', 250)) {
+      const petSig = buildPetModalRenderSignature(state);
+      if (petSig !== petModalLastRenderSignature) {
+        renderPetModal();
+      }
+    }
   }
   if (statsUi.modal && !statsUi.modal.classList.contains('hidden')) {
     if (shouldRenderUiSection('modal.stats', 220)) renderStatsModal();
@@ -9225,12 +9283,14 @@ if (petUi.synthMain) {
 }
 if (petUi.close) {
   petUi.close.addEventListener('click', () => {
+    petModalLastRenderSignature = '';
     petUi.modal?.classList.add('hidden');
   });
 }
 if (petUi.modal) {
   petUi.modal.addEventListener('click', (e) => {
     if (e.target === petUi.modal) {
+      petModalLastRenderSignature = '';
       petUi.modal.classList.add('hidden');
     }
   });
