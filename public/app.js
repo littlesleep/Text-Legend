@@ -797,8 +797,47 @@ const AUTOAFK_BOSS_STORAGE_KEY = 'autoafkBossSelection';
 const AUTOAFK_SKILL_STORAGE_KEY = 'autoafkSkillSelection';
 let selectedPetId = null;
 let petModalLastRenderSignature = '';
+let petModalLastRenderRefs = null;
+let petModalRenderQueued = false;
 let guildPage = 0;
 const GUILD_PAGE_SIZE = 5;
+
+function buildPetModalRenderRefSnapshot(state = lastState) {
+  return {
+    petRef: state?.pet || null,
+    itemsRef: Array.isArray(state?.items) ? state.items : null,
+    selectedPetId: String(selectedPetId || ''),
+    trainAttr: String(petUi?.trainAttr?.value || ''),
+    trainCount: String(petUi?.trainCount?.value || ''),
+    useBook: String(petUi?.useBook?.value || ''),
+    synthMain: String(petUi?.synthMain?.value || ''),
+    synthSub: String(petUi?.synthSub?.value || '')
+  };
+}
+
+function isPetModalRenderRefUnchanged(state = lastState) {
+  const prev = petModalLastRenderRefs;
+  if (!prev) return false;
+  const next = buildPetModalRenderRefSnapshot(state);
+  return prev.petRef === next.petRef
+    && prev.itemsRef === next.itemsRef
+    && prev.selectedPetId === next.selectedPetId
+    && prev.trainAttr === next.trainAttr
+    && prev.trainCount === next.trainCount
+    && prev.useBook === next.useBook
+    && prev.synthMain === next.synthMain
+    && prev.synthSub === next.synthSub;
+}
+
+function scheduleRenderPetModal() {
+  if (petModalRenderQueued) return;
+  petModalRenderQueued = true;
+  requestAnimationFrame(() => {
+    petModalRenderQueued = false;
+    if (!petUi.modal || petUi.modal.classList.contains('hidden')) return;
+    renderPetModal();
+  });
+}
 
 function buildPetModalRenderSignature(state = lastState) {
   const petState = state?.pet || {};
@@ -2622,7 +2661,7 @@ function renderPetModal() {
       nameSpan.textContent = `[${pet.rarityLabel || '-'}] ${pet.name}${activeMark}`;
       if (rarityKey) {
         nameSpan.classList.add(`rarity-${rarityKey}`);
-        if (rarityKey === 'ultimate') nameSpan.classList.add('highlight-marquee', 'ultimate-text');
+        if (rarityKey === 'ultimate') nameSpan.classList.add('ultimate-text');
       }
       row.appendChild(nameSpan);
       row.appendChild(document.createTextNode(
@@ -2637,7 +2676,7 @@ function renderPetModal() {
       }
       row.addEventListener('click', () => {
         selectedPetId = pet.id;
-        renderPetModal();
+        scheduleRenderPetModal();
       });
       petUi.list.appendChild(row);
     });
@@ -2654,7 +2693,7 @@ function renderPetModal() {
     const selectedRarityKey = normalizeRarityKey(selected.rarity);
     if (selectedRarityKey) {
       nameSpan.classList.add(`rarity-${selectedRarityKey}`);
-      if (selectedRarityKey === 'ultimate') nameSpan.classList.add('highlight-marquee', 'ultimate-text');
+      if (selectedRarityKey === 'ultimate') nameSpan.classList.add('ultimate-text');
     }
     nameLine.appendChild(nameSpan);
     petUi.detail.appendChild(nameLine);
@@ -2912,11 +2951,14 @@ function renderPetModal() {
     petUi.synthBelowEpicBtn.disabled = eligibleCount < 2;
     petUi.synthBelowEpicBtn.textContent = '一键合成';
   }
+  petModalLastRenderRefs = buildPetModalRenderRefSnapshot(lastState);
   petModalLastRenderSignature = buildPetModalRenderSignature(lastState);
 }
 
 function showPetModal() {
   if (!petUi.modal) return;
+  petModalLastRenderRefs = null;
+  petModalLastRenderSignature = '';
   renderPetModal();
   petUi.modal.classList.remove('hidden');
 }
@@ -7440,10 +7482,14 @@ function renderState(state) {
     if (shouldRenderUiSection('modal.repair', 180)) renderRepairList(state.equipment || []);
   }
   if (petUi.modal && !petUi.modal.classList.contains('hidden')) {
-    if (shouldRenderUiSection('modal.pet', 250)) {
+    if (shouldRenderUiSection('modal.pet', 500)) {
+      if (isPetModalRenderRefUnchanged(state)) {
+        // 宠物状态对象引用与关键控件值都没变，直接跳过
+      } else {
       const petSig = buildPetModalRenderSignature(state);
       if (petSig !== petModalLastRenderSignature) {
         renderPetModal();
+      }
       }
     }
   }
@@ -9213,14 +9259,14 @@ if (petUi.useBookBtn) {
 }
 if (petUi.trainAttr) {
   petUi.trainAttr.addEventListener('change', () => {
-    renderPetModal();
+    scheduleRenderPetModal();
   });
 }
 if (petUi.trainCount) {
   petUi.trainCount.addEventListener('input', () => {
     const next = Math.max(1, Math.min(999, Math.floor(Number(petUi.trainCount.value || 1)) || 1));
     petUi.trainCount.value = String(next);
-    renderPetModal();
+    scheduleRenderPetModal();
   });
 }
 if (petUi.trainBtn) {
@@ -9278,11 +9324,12 @@ if (petUi.synthMain) {
   petUi.synthMain.addEventListener('change', () => {
     const petId = String(petUi.synthMain.value || '');
     if (petId) selectedPetId = petId;
-    renderPetModal();
+    scheduleRenderPetModal();
   });
 }
 if (petUi.close) {
   petUi.close.addEventListener('click', () => {
+    petModalLastRenderRefs = null;
     petModalLastRenderSignature = '';
     petUi.modal?.classList.add('hidden');
   });
@@ -9290,6 +9337,7 @@ if (petUi.close) {
 if (petUi.modal) {
   petUi.modal.addEventListener('click', (e) => {
     if (e.target === petUi.modal) {
+      petModalLastRenderRefs = null;
       petModalLastRenderSignature = '';
       petUi.modal.classList.add('hidden');
     }
