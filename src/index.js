@@ -8775,15 +8775,48 @@ function biasSynthesizedPetAptitudeByBattleType(pet, aptRange, battleType) {
   }
 }
 
+function scalePetEquipBaseStat(value, baseRollPct) {
+  const base = Number(value || 0);
+  if (base <= 0) return 0;
+  const rollPct = Math.max(50, Math.min(150, Math.floor(Number(baseRollPct ?? 100) || 100)));
+  return Math.max(1, Math.floor(base * rollPct / 100));
+}
+
+function getPetEquipmentCombatStats(pet) {
+  const out = { hp: 0, atk: 0, def: 0, mdef: 0, mag: 0, spirit: 0, dex: 0 };
+  if (!pet) return out;
+  const equip = normalizePetEquipmentState(pet.equipment);
+  const refineBonusPerLevel = Math.max(0, Number(getRefineBonusPerLevel() || 0));
+  for (const entry of Object.values(equip)) {
+    if (!entry?.id) continue;
+    const tpl = ITEM_TEMPLATES[entry.id];
+    if (!tpl || !tpl.slot) continue;
+    const refineBonus = Math.max(0, Math.floor(Number(entry.refine_level || 0))) * refineBonusPerLevel;
+    out.hp += scalePetEquipBaseStat(tpl.hp || 0, entry.base_roll_pct) + refineBonus;
+    out.atk += scalePetEquipBaseStat(tpl.atk || 0, entry.base_roll_pct) + refineBonus;
+    out.def += scalePetEquipBaseStat(tpl.def || 0, entry.base_roll_pct) + refineBonus;
+    out.mdef += scalePetEquipBaseStat(tpl.mdef || 0, entry.base_roll_pct) + refineBonus;
+    out.mag += scalePetEquipBaseStat(tpl.mag || 0, entry.base_roll_pct) + refineBonus;
+    out.spirit += scalePetEquipBaseStat(tpl.spirit || 0, entry.base_roll_pct) + refineBonus;
+    out.dex += scalePetEquipBaseStat(tpl.dex || 0, entry.base_roll_pct) + refineBonus;
+  }
+  return out;
+}
+
 function calcPetAssistDamage(player, mob) {
   const pet = getActivePet(player);
   if (!pet || !mob || Number(mob.hp || 0) <= 0) return null;
   const aptitude = pet.aptitude || {};
+  const equipStats = getPetEquipmentCombatStats(pet);
   const growth = Math.max(0.8, Number(pet.growth || 1));
   const level = Math.max(1, Math.floor(Number(pet.level || 1)));
   const battleType = normalizePetBattleType(pet, aptitude);
   const mobDef = Math.max(0, Number(mob.def || 0));
   const mobMdef = Math.max(0, Number(mob.mdef || 0));
+  const petAtk = Number(aptitude.atk || 0) + Number(equipStats.atk || 0);
+  const petMag = Number(aptitude.mag || 0) + Number(equipStats.mag || 0) + Number(equipStats.spirit || 0);
+  const petHp = Number(aptitude.hp || 0) + Number(equipStats.hp || 0);
+  const petDef = Number(aptitude.def || 0) + Number(equipStats.def || 0);
 
   let base = 0;
   const typeMods = {
@@ -8822,7 +8855,7 @@ function calcPetAssistDamage(player, mob) {
     breakMdefMultiplier: 0.85
   };
   if (battleType === 'magic') {
-    base = (Number(aptitude.mag || 0) * 1.7 + level * 5) * growth - mobMdef * 0.45;
+    base = (petMag * 1.7 + level * 5) * growth - mobMdef * 0.45;
     typeMods.baseMul = 1.12;
     typeMods.splashChance = 0.35;
     typeMods.splashRatio = 0.4;
@@ -8830,7 +8863,7 @@ function calcPetAssistDamage(player, mob) {
     if (hasPetSkillOnPet(pet, 'pet_spirit')) base *= 1.045;
     if (hasPetSkillOnPet(pet, 'pet_spirit_adv')) base *= 1.0675;
   } else if (battleType === 'tank') {
-    base = ((Number(aptitude.hp || 0) * 0.16) + (Number(aptitude.def || 0) * 1.2) + level * 4) * growth - mobDef * 0.35;
+    base = ((petHp * 0.16) + (petDef * 1.2) + level * 4) * growth - mobDef * 0.35;
     typeMods.baseMul = 0.78;
     typeMods.breakDefChance = 0.25;
     typeMods.ownerHealRatio = 0.02;
@@ -8838,7 +8871,7 @@ function calcPetAssistDamage(player, mob) {
     if (hasPetSkillOnPet(pet, 'pet_tough_skin')) base *= 1.04;
     if (hasPetSkillOnPet(pet, 'pet_tough_skin_adv')) base *= 1.06;
   } else {
-    base = (Number(aptitude.atk || 0) * 1.7 + level * 5) * growth - mobDef * 0.45;
+    base = (petAtk * 1.7 + level * 5) * growth - mobDef * 0.45;
     typeMods.baseMul = 1.18;
     typeMods.critChanceBonus = 0.05;
     typeMods.critDamageMul = 1.65;
@@ -9083,11 +9116,16 @@ function calcPetAssistDamageToPlayer(attacker, target) {
   const pet = getActivePet(attacker);
   if (!pet || !target || Number(target.hp || 0) <= 0) return null;
   const aptitude = pet.aptitude || {};
+  const equipStats = getPetEquipmentCombatStats(pet);
   const growth = Math.max(0.8, Number(pet.growth || 1));
   const level = Math.max(1, Math.floor(Number(pet.level || 1)));
   const battleType = normalizePetBattleType(pet, aptitude);
   const targetDef = Math.max(0, Number(target.def || 0));
   const targetMdef = Math.max(0, Number(target.mdef || 0));
+  const petAtk = Number(aptitude.atk || 0) + Number(equipStats.atk || 0);
+  const petMag = Number(aptitude.mag || 0) + Number(equipStats.mag || 0) + Number(equipStats.spirit || 0);
+  const petHp = Number(aptitude.hp || 0) + Number(equipStats.hp || 0);
+  const petDef = Number(aptitude.def || 0) + Number(equipStats.def || 0);
 
   let base = 0;
   const typeMods = {
@@ -9124,13 +9162,13 @@ function calcPetAssistDamageToPlayer(attacker, target) {
     breakMdefMultiplier: 0.9
   };
   if (battleType === 'magic') {
-    base = (Number(aptitude.mag || 0) * 1.55 + level * 4.5) * growth - targetMdef * 0.5;
+    base = (petMag * 1.55 + level * 4.5) * growth - targetMdef * 0.5;
     typeMods.baseMul = 0.95;
     typeMods.breakMdefChance = 0.15;
     if (hasPetSkillOnPet(pet, 'pet_spirit')) base *= 1.04;
     if (hasPetSkillOnPet(pet, 'pet_spirit_adv')) base *= 1.06;
   } else if (battleType === 'tank') {
-    base = ((Number(aptitude.hp || 0) * 0.14) + (Number(aptitude.def || 0) * 1.05) + level * 3.5) * growth - targetDef * 0.45;
+    base = ((petHp * 0.14) + (petDef * 1.05) + level * 3.5) * growth - targetDef * 0.45;
     typeMods.baseMul = 0.65;
     typeMods.breakDefChance = 0.18;
     typeMods.ownerHealRatio = 0.012;
@@ -9138,7 +9176,7 @@ function calcPetAssistDamageToPlayer(attacker, target) {
     if (hasPetSkillOnPet(pet, 'pet_tough_skin')) base *= 1.03;
     if (hasPetSkillOnPet(pet, 'pet_tough_skin_adv')) base *= 1.05;
   } else {
-    base = (Number(aptitude.atk || 0) * 1.55 + level * 4.5) * growth - targetDef * 0.5;
+    base = (petAtk * 1.55 + level * 4.5) * growth - targetDef * 0.5;
     typeMods.baseMul = 1.0;
     typeMods.critChanceBonus = 0.04;
     typeMods.critDamageMul = 1.55;
