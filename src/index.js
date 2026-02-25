@@ -6198,6 +6198,107 @@ const AUTO_FULL_BOSS_LIST = Array.from(new Set(
     .filter((tpl) => tpl && tpl.name && isBossMob(tpl))
     .map((tpl) => String(tpl.name))
 )).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+
+function formatTreasurePctText(value) {
+  const pct = Number(value || 0) * 100;
+  if (!Number.isFinite(pct) || pct <= 0) return '';
+  const rounded = Math.round(pct * 1000) / 1000;
+  return `${Number.isInteger(rounded) ? rounded : rounded}%`;
+}
+
+function formatTreasureNumberText(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return '';
+  const rounded = Math.round(num * 1000) / 1000;
+  return `${Number.isInteger(rounded) ? rounded : rounded}`;
+}
+
+function buildTreasurePerLevelEffectText(treasureId) {
+  const effects = getTreasureDef(treasureId)?.effects || {};
+  const parts = [];
+  const pushPct = (label, key) => {
+    const pctText = formatTreasurePctText(effects[key]);
+    if (!pctText) return;
+    parts.push(`${label}+${pctText}/级`);
+  };
+  const pushFlat = (label, key) => {
+    const value = Number(effects[key] || 0);
+    if (!Number.isFinite(value) || value <= 0) return;
+    const rounded = Math.round(value * 1000) / 1000;
+    parts.push(`${label}+${Number.isInteger(rounded) ? rounded : rounded}/级`);
+  };
+  pushPct('攻/魔/道', 'atkPctPerLevel');
+  pushPct('防御', 'defPctPerLevel');
+  pushPct('魔御', 'mdefPctPerLevel');
+  pushPct('生命上限', 'maxHpPctPerLevel');
+  pushPct('法力上限', 'maxMpPctPerLevel');
+  pushPct('魔法', 'magPctPerLevel');
+  pushPct('道术', 'spiritPctPerLevel');
+  pushPct('命中', 'hitPctPerLevel');
+  pushPct('闪避', 'evadePctPerLevel');
+  pushPct('敏捷', 'dexPctPerLevel');
+  pushPct('打怪经验', 'expPctPerLevel');
+  pushFlat('元素攻击', 'elementAtkPerLevel');
+  return parts.join('，');
+}
+
+function buildTreasureAutoPassiveText(treasureId) {
+  const def = getTreasureAutoPassiveDef(treasureId);
+  if (!def?.type) return '';
+  const chanceBase = formatTreasurePctText(def.chanceBase || 0.04);
+  const chancePerStage = formatTreasurePctText(def.chancePerStage || 0);
+  const chanceText = chancePerStage
+    ? `命中后${chanceBase}几率触发（每段+${chancePerStage}，上限25%）`
+    : `命中后${chanceBase}几率触发`;
+  if (def.type === 'heal') {
+    const healBase = formatTreasurePctText(def.healRatioBase || 0.1);
+    const healPerStage = formatTreasurePctText(def.healRatioPerStage || 0);
+    return `${chanceText}，回复生命（基于本次伤害）${healBase}${healPerStage ? `（每段+${healPerStage}）` : ''}`;
+  }
+  if (def.type === 'mp') {
+    const mpBase = formatTreasurePctText(def.mpRatioBase || 0.01);
+    const mpPerStage = formatTreasurePctText(def.mpRatioPerStage || 0);
+    return `${chanceText}，回复法力上限${mpBase}${mpPerStage ? `（每段+${mpPerStage}）` : ''}`;
+  }
+  if (def.type === 'weak') {
+    const weakBase = formatTreasurePctText(def.weakBase || 0.12);
+    const weakPerStage = formatTreasurePctText(def.weakPerStage || 0);
+    const sec = formatTreasureNumberText((Number(def.durationMs || 2000) || 2000) / 1000);
+    return `${chanceText}，目标降伤${weakBase}${weakPerStage ? `（每段+${weakPerStage}）` : ''}，持续${sec}秒`;
+  }
+  if (def.type === 'armorBreak') {
+    const defMulBase = Math.max(0, Number(def.defMulBase || 0.85));
+    const breakBase = formatTreasurePctText(1 - defMulBase);
+    const breakPerStage = formatTreasurePctText(def.defMulPerStage || 0);
+    const sec = formatTreasureNumberText((Number(def.durationMs || 2500) || 2500) / 1000);
+    return `${chanceText}，目标降防${breakBase}${breakPerStage ? `（每段+${breakPerStage}）` : ''}，持续${sec}秒`;
+  }
+  if (def.type === 'burst') {
+    const powerBase = formatTreasurePctText(def.powerBase || 1);
+    const powerPerLevel = formatTreasurePctText(def.powerPerLevel || 0);
+    const powerPerStage = formatTreasurePctText(def.powerPerStage || 0);
+    return `${chanceText}，追加伤害倍率${powerBase}${powerPerLevel ? `（每级+${powerPerLevel}` : ''}${powerPerStage ? `${powerPerLevel ? '，' : '（'}每段+${powerPerStage}` : ''}${(powerPerLevel || powerPerStage) ? '）' : ''}`;
+  }
+  return '';
+}
+
+function decorateTreasureSetEffectText(entry) {
+  if (!entry?.id) return entry;
+  const perLevelText = buildTreasurePerLevelEffectText(entry.id);
+  const autoPassiveText = buildTreasureAutoPassiveText(entry.id);
+  if (!perLevelText) return entry;
+  const raw = String(entry.effect || '').trim();
+  if (!raw || raw.includes('每级：')) return entry;
+  const detailParts = [`每级：${perLevelText}`];
+  if (autoPassiveText) detailParts.push(`自动触发：${autoPassiveText}`);
+  return {
+    ...entry,
+    effect: raw.includes('（自动生效）')
+      ? raw.replace('（自动生效）', `（${detailParts.join('；')}；自动生效）`)
+      : `${raw}（${detailParts.join('；')}）`
+  };
+}
+
 const TREASURE_SETS = [
   {
     id: 'fentian',
@@ -6256,6 +6357,11 @@ const TREASURE_SETS = [
     ]
   }
 ];
+
+TREASURE_SETS.forEach((setEntry) => {
+  if (!Array.isArray(setEntry?.treasures)) return;
+  setEntry.treasures = setEntry.treasures.map((entry) => decorateTreasureSetEffectText(entry));
+});
 
 function getAutoDailyKey(now = Date.now()) {
   const date = new Date(now);
