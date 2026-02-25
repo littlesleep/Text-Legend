@@ -663,6 +663,18 @@
                   </div>
                   <div id="invite-reward-msg" class="msg"></div>
                 </div>
+
+                <div style="border-top: 1px solid #ddd; margin-top: 14px; padding-top: 12px;">
+                  <h4 style="margin: 0 0 10px;">角色迁移（转移账号）</h4>
+                  <div class="row" style="gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <input id="char-migrate-char" type="text" placeholder="角色名" style="min-width: 160px;">
+                    <input id="char-migrate-realm" type="number" min="1" value="1" placeholder="区服" style="width: 90px;">
+                    <input id="char-migrate-target-user" type="text" placeholder="目标账号(用户名)" style="min-width: 180px;">
+                    <button id="char-migrate-btn" class="btn-small">迁移角色</button>
+                  </div>
+                  <p class="muted" style="margin-top: 6px;">要求角色离线；会同步迁移该角色关联的行会成员、行会申请、邮件归属等账号字段。</p>
+                  <div id="char-migrate-msg" class="msg"></div>
+                </div>
               </div>
             </div>
           </div>

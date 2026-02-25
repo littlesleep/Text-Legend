@@ -1290,6 +1290,34 @@ app.post('/admin/characters/cleanup', async (req, res) => {
   res.json({ ok: true, ...result });
 });
 
+app.post('/admin/characters/migrate', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  const charName = String(req.body?.charName || '').trim();
+  const realmId = Math.max(1, Math.floor(Number(req.body?.realmId || 1) || 1));
+  const targetUsername = String(req.body?.targetUsername || '').trim();
+  if (!charName) return res.status(400).json({ error: '缺少角色名。' });
+  if (!targetUsername) return res.status(400).json({ error: '缺少目标账号。' });
+
+  const targetUser = await getUserByName(targetUsername);
+  if (!targetUser) return res.status(404).json({ error: '目标账号不存在。' });
+
+  try {
+    const result = await migrateCharacterToUser({
+      realmId,
+      charName,
+      targetUserId: targetUser.id
+    });
+    return res.json({
+      ok: true,
+      ...result,
+      targetUsername: targetUser.username || targetUsername
+    });
+  } catch (err) {
+    return res.status(400).json({ error: String(err?.message || err || '迁移失败') });
+  }
+});
+
 app.get('/admin/worldboss-settings', async (req, res) => {
   const admin = await requireAdmin(req);
   if (!admin) return res.status(401).json({ error: '无管理员权限。' });
@@ -6077,6 +6105,87 @@ async function renameCharacterEverywhere({ userId, realmId = 1, oldName, newName
   });
 
   return true;
+}
+
+async function migrateCharacterToUser({ realmId = 1, charName, targetUserId }) {
+  const rid = Math.max(1, Math.floor(Number(realmId || 1) || 1));
+  const name = String(charName || '').trim();
+  const toUserId = Math.max(0, Math.floor(Number(targetUserId) || 0));
+  if (!name || !toUserId) {
+    throw new Error('参数无效。');
+  }
+
+  const online = playersByName(name, rid);
+  if (online) {
+    throw new Error('角色在线中，无法迁移，请先下线。');
+  }
+
+  return knex.transaction(async (trx) => {
+    const row = await trx('characters')
+      .where({ name, realm_id: rid })
+      .first();
+    if (!row) {
+      throw new Error('角色不存在。');
+    }
+    const fromUserId = Number(row.user_id || 0);
+    if (!fromUserId) {
+      throw new Error('角色账号信息异常。');
+    }
+    if (fromUserId === toUserId) {
+      throw new Error('角色已在该账号下，无需迁移。');
+    }
+
+    const targetUser = await trx('users')
+      .where({ id: toUserId })
+      .first();
+    if (!targetUser) {
+      throw new Error('目标账号不存在。');
+    }
+
+    const sourceApp = await trx('guild_applications')
+      .where({ user_id: fromUserId, realm_id: rid, char_name: name })
+      .first();
+    if (sourceApp) {
+      const targetApp = await trx('guild_applications')
+        .where({ user_id: toUserId, realm_id: rid })
+        .first();
+      if (targetApp) {
+        throw new Error('目标账号该区已有行会申请记录，请先处理后再迁移。');
+      }
+    }
+
+    const updated = await trx('characters')
+      .where({ user_id: fromUserId, realm_id: rid, name })
+      .update({ user_id: toUserId, updated_at: trx.fn.now() });
+    if (!updated) {
+      throw new Error('角色迁移失败，角色数据已变更。');
+    }
+
+    await trx('guild_members')
+      .where({ user_id: fromUserId, realm_id: rid, char_name: name })
+      .update({ user_id: toUserId });
+    await trx('guilds')
+      .where({ leader_user_id: fromUserId, realm_id: rid, leader_char_name: name })
+      .update({ leader_user_id: toUserId, updated_at: trx.fn.now() });
+    await trx('guild_applications')
+      .where({ user_id: fromUserId, realm_id: rid, char_name: name })
+      .update({ user_id: toUserId, applied_at: trx.fn.now() });
+
+    await trx('mails')
+      .where({ realm_id: rid, to_user_id: fromUserId, to_name: name })
+      .update({ to_user_id: toUserId });
+    await trx('mails')
+      .where({ realm_id: rid, from_user_id: fromUserId, from_name: name })
+      .update({ from_user_id: toUserId });
+
+    allCharactersCache.delete(rid);
+    return {
+      realmId: rid,
+      charName: name,
+      fromUserId,
+      toUserId
+    };
+  });
 }
 
 async function applyOnlineCharacterRename(player, newName) {

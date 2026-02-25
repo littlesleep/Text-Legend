@@ -49,6 +49,11 @@ const inviteRewardRateInput = document.getElementById('invite-reward-rate');
 const inviteRewardLoadBtn = document.getElementById('invite-reward-load-btn');
 const inviteRewardSaveBtn = document.getElementById('invite-reward-save-btn');
 const inviteRewardMsg = document.getElementById('invite-reward-msg');
+const charMigrateCharInput = document.getElementById('char-migrate-char');
+const charMigrateRealmInput = document.getElementById('char-migrate-realm');
+const charMigrateTargetUserInput = document.getElementById('char-migrate-target-user');
+const charMigrateBtn = document.getElementById('char-migrate-btn');
+const charMigrateMsg = document.getElementById('char-migrate-msg');
 const vipSelfClaimStatus = document.getElementById('vip-self-claim-status');
 const vipSelfClaimMsg = document.getElementById('vip-self-claim-msg');
 const vipSelfClaimToggle = document.getElementById('vip-self-claim-toggle');
@@ -3017,6 +3022,40 @@ function setInviteRewardMsg(text, color = '') {
   if (!inviteRewardMsg) return;
   inviteRewardMsg.textContent = text || '';
   if (color) inviteRewardMsg.style.color = color;
+}
+
+function setCharMigrateMsg(text, color = '') {
+  if (!charMigrateMsg) return;
+  charMigrateMsg.textContent = text || '';
+  if (color) charMigrateMsg.style.color = color;
+}
+
+async function migrateCharacterToAnotherAccount() {
+  if (!charMigrateMsg) return;
+  const charName = String(charMigrateCharInput?.value || '').trim();
+  const targetUsername = String(charMigrateTargetUserInput?.value || '').trim();
+  const realmId = Math.max(1, Math.floor(Number(charMigrateRealmInput?.value || 1) || 1));
+  if (!charName) {
+    setCharMigrateMsg('请输入角色名', 'red');
+    return;
+  }
+  if (!targetUsername) {
+    setCharMigrateMsg('请输入目标账号(用户名)', 'red');
+    return;
+  }
+  if (!window.confirm(`确认将角色【${charName}】(区服${realmId}) 迁移到账号【${targetUsername}】吗？角色必须离线。`)) {
+    return;
+  }
+  setCharMigrateMsg('迁移中...');
+  try {
+    const data = await api('/admin/characters/migrate', 'POST', { charName, realmId, targetUsername });
+    const fromUserId = Number(data?.fromUserId || 0);
+    const toUserId = Number(data?.toUserId || 0);
+    setCharMigrateMsg(`迁移成功：${charName}（区服${realmId}） ${fromUserId} -> ${toUserId}（${data?.targetUsername || targetUsername}）`, 'green');
+    setTimeout(() => setCharMigrateMsg(''), 3000);
+  } catch (err) {
+    setCharMigrateMsg(`迁移失败: ${err.message}`, 'red');
+  }
 }
 
 function applyInviteRewardConfigToForm(config) {
@@ -6607,6 +6646,7 @@ if (firstRechargeReissueDivineBeastAllBtn) firstRechargeReissueDivineBeastAllBtn
 if (firstRechargeReissueAllBtn) firstRechargeReissueAllBtn.addEventListener('click', reissueAllRechargeUsersFirstRechargeWelfare);
 if (inviteRewardLoadBtn) inviteRewardLoadBtn.addEventListener('click', loadInviteRewardSettings);
 if (inviteRewardSaveBtn) inviteRewardSaveBtn.addEventListener('click', saveInviteRewardSettings);
+if (charMigrateBtn) charMigrateBtn.addEventListener('click', migrateCharacterToAnotherAccount);
 if (vipCodesPrev) {
   vipCodesPrev.addEventListener('click', () => {
     vipCodesPageIndex = Math.max(0, vipCodesPageIndex - 1);
