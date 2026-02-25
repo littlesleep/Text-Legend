@@ -17,7 +17,7 @@ import { addGuildMember, createGuild, getGuildByName, getGuildByNameInRealm, get
 import { createAdminSession, listUsers, verifyAdminSession, deleteUser } from './db/admin.js';
 import { sendMail, listMail, listSentMail, markMailRead, markMailClaimed, deleteMail } from './db/mail.js';
 import { createVipCodes, listVipCodes, countVipCodes, useVipCode } from './db/vip.js';
-import { createRechargeCards, listRechargeCards, countRechargeCards, useRechargeCard, countUsedRechargeCardsByUser, listUsedRechargeCharacters } from './db/recharge.js';
+import { createRechargeCards, listRechargeCards, countRechargeCards, useRechargeCard, listUsedRechargeCharacters } from './db/recharge.js';
 import { getSetting, setSetting, getVipSelfClaimEnabled, setVipSelfClaimEnabled, getSvipPrices, setSvipPrices, getLootLogEnabled, setLootLogEnabled, getCrossWorldBossRespawnAt, setCrossWorldBossRespawnAt, getStateThrottleEnabled, setStateThrottleEnabled, getStateThrottleIntervalSec, setStateThrottleIntervalSec, getStateThrottleOverrideServerAllowed, setStateThrottleOverrideServerAllowed, getConsignExpireHours, setConsignExpireHours, getRoomVariantCount, setRoomVariantCount, getSabakStartHour, setSabakStartHour, getSabakStartMinute, setSabakStartMinute, getSabakDurationMinutes, setSabakDurationMinutes, getSabakSiegeMinutes, setSabakSiegeMinutes, getCrossRankStartHour, setCrossRankStartHour, getCrossRankStartMinute, setCrossRankStartMinute, getCrossRankDurationMinutes, setCrossRankDurationMinutes, canUserClaimVip, incrementCharacterVipClaimCount, getWorldBossKillCount, setWorldBossKillCount, getSpecialBossKillCount, setSpecialBossKillCount, getCultivationBossKillCount, setCultivationBossKillCount, getWorldBossDropBonus, setWorldBossDropBonus, getWorldBossBaseHp, setWorldBossBaseHp, getWorldBossBaseAtk, setWorldBossBaseAtk, getWorldBossBaseDef, setWorldBossBaseDef, getWorldBossBaseMdef, setWorldBossBaseMdef, getWorldBossBaseExp, setWorldBossBaseExp, getWorldBossBaseGold, setWorldBossBaseGold, getWorldBossRespawnMinutes, setWorldBossRespawnMinutes, getWorldBossPlayerBonusConfig, setWorldBossPlayerBonusConfig, getClassLevelBonusConfig, setClassLevelBonusConfig, getSpecialBossDropBonus, setSpecialBossDropBonus, getSpecialBossBaseHp, setSpecialBossBaseHp, getSpecialBossBaseAtk, setSpecialBossBaseAtk, getSpecialBossBaseDef, setSpecialBossBaseDef, getSpecialBossBaseMdef, setSpecialBossBaseMdef, getSpecialBossBaseExp, setSpecialBossBaseExp, getSpecialBossBaseGold, setSpecialBossBaseGold, getSpecialBossRespawnMinutes, setSpecialBossRespawnMinutes, getSpecialBossPlayerBonusConfig, setSpecialBossPlayerBonusConfig, getCultivationBossDropBonus, setCultivationBossDropBonus, getCultivationBossPlayerBonusConfig, setCultivationBossPlayerBonusConfig, getCultivationBossBaseHp, setCultivationBossBaseHp, getCultivationBossBaseAtk, setCultivationBossBaseAtk, getCultivationBossBaseDef, setCultivationBossBaseDef, getCultivationBossBaseMdef, setCultivationBossBaseMdef, getCultivationBossBaseExp, setCultivationBossBaseExp, getCultivationBossBaseGold, setCultivationBossBaseGold, getCultivationBossRespawnMinutes, setCultivationBossRespawnMinutes, getTrainingFruitCoefficient as getTrainingFruitCoefficientDb, setTrainingFruitCoefficient as setTrainingFruitCoefficientDb, getTrainingFruitDropRate as getTrainingFruitDropRateDb, setTrainingFruitDropRate as setTrainingFruitDropRateDb, getPetTrainingFruitDropRate as getPetTrainingFruitDropRateDb, setPetTrainingFruitDropRate as setPetTrainingFruitDropRateDb, getTrainingPerLevelConfig as getTrainingPerLevelConfigDb, setTrainingPerLevelConfig as setTrainingPerLevelConfigDb, getRefineBaseSuccessRate as getRefineBaseSuccessRateDb, setRefineBaseSuccessRate as setRefineBaseSuccessRateDb, getRefineDecayRate as getRefineDecayRateDb, setRefineDecayRate as setRefineDecayRateDb, getRefineMaterialCount as getRefineMaterialCountDb, setRefineMaterialCount as setRefineMaterialCountDb, getRefineBonusPerLevel as getRefineBonusPerLevelDb, setRefineBonusPerLevel as setRefineBonusPerLevelDb, getEffectResetSuccessRate as getEffectResetSuccessRateDb, setEffectResetSuccessRate as setEffectResetSuccessRateDb, getEffectResetDoubleRate as getEffectResetDoubleRateDb, setEffectResetDoubleRate as setEffectResetDoubleRateDb, getEffectResetTripleRate as getEffectResetTripleRateDb, setEffectResetTripleRate as setEffectResetTripleRateDb, getEffectResetQuadrupleRate as getEffectResetQuadrupleRateDb, setEffectResetQuadrupleRate as setEffectResetQuadrupleRateDb, getEffectResetQuintupleRate as getEffectResetQuintupleRateDb, setEffectResetQuintupleRate as setEffectResetQuintupleRateDb, getPetSettings, setPetSettings, getEffectDropSingleChance as getEffectDropSingleChanceDb, setEffectDropSingleChance as setEffectDropSingleChanceDb, getEffectDropDoubleChance as getEffectDropDoubleChanceDb, setEffectDropDoubleChance as setEffectDropDoubleChanceDb, getEquipSkillDropChance as getEquipSkillDropChanceDb, setEquipSkillDropChance as setEquipSkillDropChanceDb, getTreasureSlotCount as getTreasureSlotCountDb, setTreasureSlotCount as setTreasureSlotCountDb, getTreasureMaxLevel as getTreasureMaxLevelDb, setTreasureMaxLevel as setTreasureMaxLevelDb, getTreasureUpgradeConsume as getTreasureUpgradeConsumeDb, setTreasureUpgradeConsume as setTreasureUpgradeConsumeDb, getTreasureAdvanceConsume as getTreasureAdvanceConsumeDb, setTreasureAdvanceConsume as setTreasureAdvanceConsumeDb, getTreasureAdvancePerStage as getTreasureAdvancePerStageDb, setTreasureAdvancePerStage as setTreasureAdvancePerStageDb, getTreasureAdvanceEffectBonusPerStack as getTreasureAdvanceEffectBonusPerStackDb, setTreasureAdvanceEffectBonusPerStack as setTreasureAdvanceEffectBonusPerStackDb, getTreasureWorldBossDropMultiplier as getTreasureWorldBossDropMultiplierDb, setTreasureWorldBossDropMultiplier as setTreasureWorldBossDropMultiplierDb, getTreasureCrossWorldBossDropMultiplier as getTreasureCrossWorldBossDropMultiplierDb, setTreasureCrossWorldBossDropMultiplier as setTreasureCrossWorldBossDropMultiplierDb, getTreasureTowerXuanmingDropChance as getTreasureTowerXuanmingDropChanceDb, setTreasureTowerXuanmingDropChance as setTreasureTowerXuanmingDropChanceDb, getCmdRateLimits, setCmdRateLimits, getCmdCooldowns, setCmdCooldowns } from './db/settings.js';
 import { listRealms, getRealmById, updateRealmName, createRealm } from './db/realms.js';
 import {
@@ -247,6 +247,12 @@ function firstRechargeRewardMarkerKey(userId) {
   return `first_recharge_reward_marked_user_${Math.max(0, Math.floor(Number(userId) || 0))}`;
 }
 
+function firstRechargeRewardRealmMarkerKey(userId, realmId = 1) {
+  const uid = Math.max(0, Math.floor(Number(userId) || 0));
+  const rid = Math.max(1, Math.floor(Number(realmId || 1) || 1));
+  return `first_recharge_reward_marked_user_${uid}_realm_${rid}`;
+}
+
 function firstRechargeReissueCharacterMarkerKey(userId, charName, realmId = 1) {
   const uid = Math.max(0, Math.floor(Number(userId) || 0));
   const rid = Math.max(1, Math.floor(Number(realmId || 1) || 1));
@@ -278,6 +284,29 @@ async function markFirstRechargeRewardIssued(userId, payload = {}) {
     charName: String(payload?.charName || '')
   };
   await setSetting(firstRechargeRewardMarkerKey(uid), JSON.stringify(data));
+  return true;
+}
+
+async function hasFirstRechargeRewardMarkerByRealm(userId, realmId = 1) {
+  const uid = Math.max(0, Math.floor(Number(userId) || 0));
+  const rid = Math.max(1, Math.floor(Number(realmId || 1) || 1));
+  if (!uid) return false;
+  const value = await getSetting(firstRechargeRewardRealmMarkerKey(uid, rid), '');
+  return Boolean(String(value || '').trim());
+}
+
+async function markFirstRechargeRewardIssuedByRealm(userId, realmId = 1, payload = {}) {
+  const uid = Math.max(0, Math.floor(Number(userId) || 0));
+  const rid = Math.max(1, Math.floor(Number(realmId || 1) || 1));
+  if (!uid) return false;
+  const data = {
+    at: Date.now(),
+    source: String(payload?.source || 'unknown'),
+    operator: String(payload?.operator || ''),
+    charName: String(payload?.charName || ''),
+    realmId: rid
+  };
+  await setSetting(firstRechargeRewardRealmMarkerKey(uid, rid), JSON.stringify(data));
   return true;
 }
 
@@ -1317,6 +1346,7 @@ app.post('/admin/first-recharge-settings/reissue', async (req, res) => {
   const operator = String(admin?.user?.username || admin?.user?.name || admin?.user?.id || '').trim();
   await markFirstRechargeReissueCharacterIssued(userId, targetName, targetRealmId, { source: 'admin_reissue', operator });
   await markFirstRechargeRewardIssued(userId, { source: 'admin_reissue', operator, charName: targetName });
+  await markFirstRechargeRewardIssuedByRealm(userId, targetRealmId, { source: 'admin_reissue', operator, charName: targetName });
   res.json({
     ok: true,
     charName: targetName,
@@ -1604,6 +1634,7 @@ app.post('/admin/first-recharge-settings/reissue-all', async (req, res) => {
       const operator = String(admin?.user?.username || admin?.user?.name || admin?.user?.id || '').trim();
       await markFirstRechargeReissueCharacterIssued(userId, targetName, player.realmId || rowRealmId, { source: 'admin_reissue_all', operator });
       await markFirstRechargeRewardIssued(userId, { source: 'admin_reissue_all', operator, charName: targetName });
+      await markFirstRechargeRewardIssuedByRealm(userId, player.realmId || rowRealmId, { source: 'admin_reissue_all', operator, charName: targetName });
       stats.success += 1;
     } catch (err) {
       stats.failed += 1;
@@ -6034,15 +6065,16 @@ const rechargeApi = {
     const amount = Math.max(0, Math.floor(Number(used.amount || 0)));
     if (!amount) return { ok: false, msg: '卡密金额异常。' };
     const firstRechargeCfg = getFirstRechargeWelfareConfigSnapshot();
-    const redeemedCount = await countUsedRechargeCardsByUser(player.userId);
-    const rewardMarked = await hasFirstRechargeRewardMarker(player.userId);
-    const isFirstRecharge = firstRechargeCfg.enabled !== false && redeemedCount === 1 && !rewardMarked;
+    const playerRealmId = Math.max(1, Math.floor(Number(player?.realmId || 1) || 1));
+    const rewardMarkedInRealm = await hasFirstRechargeRewardMarkerByRealm(player.userId, playerRealmId);
+    const isFirstRecharge = firstRechargeCfg.enabled !== false && !rewardMarkedInRealm;
     player.yuanbao = (player.yuanbao || 0) + amount;
     let firstRechargeMsg = '';
     if (isFirstRecharge) {
       const grant = grantFirstRechargeWelfareToPlayer(player, firstRechargeCfg);
       const rewardText = Array.isArray(grant.rewardText) ? grant.rewardText : [];
       await markFirstRechargeRewardIssued(player.userId, { source: 'auto_recharge', charName: player.name });
+      await markFirstRechargeRewardIssuedByRealm(player.userId, playerRealmId, { source: 'auto_recharge', charName: player.name });
       if (rewardText.length) {
         firstRechargeMsg = `\n首充福利已发放：${rewardText.join('、')}。`;
       }
