@@ -1867,6 +1867,19 @@ function promptModal({ title, text, placeholder, value, extra, allowEmpty, type 
       if (promptUi.extra) {
         promptUi.extra.removeEventListener('click', onExtra);
         promptUi.extra.classList.add('hidden');
+        promptUi.extra.textContent = '';
+      }
+      if (promptUi.options) {
+        promptUi.options.classList.add('hidden');
+        promptUi.options.innerHTML = '';
+      }
+      if (promptUi.ok) {
+        promptUi.ok.classList.remove('hidden');
+        promptUi.ok.disabled = false;
+        promptUi.ok.textContent = '确定';
+      }
+      if (promptUi.cancel) {
+        promptUi.cancel.textContent = '取消';
       }
     };
 
@@ -1896,6 +1909,18 @@ function promptModal({ title, text, placeholder, value, extra, allowEmpty, type 
         promptUi.extra.classList.add('hidden');
         promptUi.extra.textContent = '';
       }
+    }
+    if (promptUi.options) {
+      promptUi.options.classList.add('hidden');
+      promptUi.options.innerHTML = '';
+    }
+    if (promptUi.ok) {
+      promptUi.ok.classList.remove('hidden');
+      promptUi.ok.disabled = false;
+      promptUi.ok.textContent = '确定';
+    }
+    if (promptUi.cancel) {
+      promptUi.cancel.textContent = '取消';
     }
     promptUi.ok.addEventListener('click', onOk);
     promptUi.cancel.addEventListener('click', onCancel);
@@ -6946,13 +6971,14 @@ function renderState(state) {
     }
   });
 
-  const mobs = (state.mobs || []).map((m) => ({ id: m.id, label: `${m.name}(${m.hp})`, raw: m }));
+  const aliveMobsState = (state.mobs || []).filter((m) => Number(m?.hp || 0) > 0);
+  const mobs = aliveMobsState.map((m) => ({ id: m.id, label: `${m.name}(${m.hp})`, raw: m }));
   renderChips(ui.mobs, mobs, (m) => {
     selectedMob = m.raw;
     socket.emit('cmd', { text: `attack ${m.raw.name}` });
   }, selectedMob ? selectedMob.id : null);
 
-  const battleMobs = (state.mobs || []).map((m) => ({
+  const battleMobs = aliveMobsState.map((m) => ({
     type: 'mob',
     id: m.id,
     name: m.name,
@@ -6960,13 +6986,13 @@ function renderState(state) {
     hp: m.hp || 0,
     maxHp: m.max_hp || 0
   }));
-  (state.mobs || []).forEach((m) => {
+  aliveMobsState.forEach((m) => {
     setLocalHpCache('mobs', m.name, m.hp || 0, m.max_hp || 0);
   });
   renderBattleList(battleUi.mobs, battleMobs, (m) => {
     if (!m || !m.name) return;
-    const mob = (state.mobs || []).find((entry) => entry.name === m.name && entry.id === m.id) ||
-      (state.mobs || []).find((entry) => entry.name === m.name);
+    const mob = aliveMobsState.find((entry) => entry.name === m.name && entry.id === m.id) ||
+      aliveMobsState.find((entry) => entry.name === m.name);
     if (mob && socket) {
       selectedMob = mob;
       socket.emit('cmd', { text: `attack ${mob.name}` });

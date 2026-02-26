@@ -12367,11 +12367,12 @@ async function sendRoomState(zoneId, roomId, realmId = 1) {
   // 使用Promise.all并行发送
   const roomState = buildRoomStatePayload(zoneId, roomId, effectiveRealmId);
   if (!roomState) return;
+  const hasMobSnapshot = Object.prototype.hasOwnProperty.call(roomState, 'mobs');
   const hasBossRespawnTimer =
     Number(roomState?.bossRespawn || 0) > 0 ||
     Number(roomState?.worldBossNextRespawn || 0) > 0;
   players.forEach((p) => {
-    if (hasBossRespawnTimer) {
+    if (hasBossRespawnTimer || hasMobSnapshot) {
       p.socket.emit('room_state', roomState);
     } else {
       p.socket.volatile.emit('room_state', roomState);

@@ -559,10 +559,8 @@ function activityPointShopEmptyItem() {
 }
 
 function getActivityPointShopItemDisplayText(item) {
-  const id = String(item?.id || '');
   const name = String(item?.name || item?.id || '');
-  const type = String(item?.type || '').trim();
-  return `${name}${type ? ` [${type}]` : ''} (${id})`;
+  return name;
 }
 
 function buildActivityPointShopItemSelectHtml(selectedId = '', keyword = '') {
