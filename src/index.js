@@ -17557,10 +17557,14 @@ async function start() {
   });
   const respawnRows = [];
   const crossRealmRows = await listMobRespawns(CROSS_REALM_REALM_ID);
-  respawnRows.push(...crossRealmRows);
+  for (const row of crossRealmRows) {
+    respawnRows.push(row);
+  }
   for (const realm of realmCache) {
     const rows = await listMobRespawns(realm.id);
-    respawnRows.push(...rows);
+    for (const row of rows) {
+      respawnRows.push(row);
+    }
   }
   const now = Date.now();
   if (!crossRealmRows.some((row) => row.zone_id === 'crb' && row.room_id === 'arena')) {
