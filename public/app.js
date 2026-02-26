@@ -2831,6 +2831,12 @@ function renderPetModal() {
         nameSpan.textContent = formatItemName(item);
         applyRarityClass(nameSpan, item);
         row.appendChild(nameSpan);
+        const tooltip = formatItemTooltip(item);
+        if (tooltip) {
+          row.addEventListener('mouseenter', (evt) => showItemTooltip(tooltip, evt));
+          row.addEventListener('mousemove', (evt) => positionTooltip(evt.clientX, evt.clientY));
+          row.addEventListener('mouseleave', hideItemTooltip);
+        }
         row.style.cursor = 'pointer';
         row.addEventListener('click', () => {
           if (!selected?.id || !item.slot) return;
@@ -2865,6 +2871,12 @@ function renderPetModal() {
         nameSpan.textContent = `${formatItemName(item)} x${Number(item.qty || 1)}`;
         applyRarityClass(nameSpan, item);
         row.appendChild(nameSpan);
+        const tooltip = formatItemTooltip(item);
+        if (tooltip) {
+          row.addEventListener('mouseenter', (evt) => showItemTooltip(tooltip, evt));
+          row.addEventListener('mousemove', (evt) => positionTooltip(evt.clientX, evt.clientY));
+          row.addEventListener('mouseleave', hideItemTooltip);
+        }
         row.style.cursor = 'pointer';
         row.addEventListener('click', () => {
           if (!selected?.id) return;
