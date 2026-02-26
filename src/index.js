@@ -7545,12 +7545,12 @@ function hasHealBlockEffect(player) {
 }
 
 function getTreasureAutoProcData(player, treasureId) {
-  const level = Math.max(1, Math.floor(Number(getTreasureLevel(player, treasureId) || 1)));
   const advance = Math.max(0, Math.floor(Number(getTreasureAdvanceCount(player, treasureId) || 0)));
   const stage = getTreasureStageByAdvanceCount(advance);
   const def = getTreasureAutoPassiveDef(treasureId) || {};
   const chance = Math.min(0.25, Math.max(0, Number(def.chanceBase || 0.04) + stage * Number(def.chancePerStage || 0.005)));
-  const power = Math.min(3, Math.max(0.5, Number(def.powerBase || 1) + Math.min(200, level) * Number(def.powerPerLevel || 0.002) + stage * Number(def.powerPerStage || 0.03)));
+  const stageScale = Math.max(1, stage);
+  const power = Math.min(3, Math.max(0.5, Number(def.powerBase || 1) + stageScale * Number(def.powerPerLevel || 0.002) + stage * Number(def.powerPerStage || 0.03)));
   return { stage, chance, power, def };
 }
 
@@ -7770,13 +7770,13 @@ function buildTreasurePerLevelEffectText(treasureId) {
   const pushPct = (label, key) => {
     const pctText = formatTreasurePctText(effects[key]);
     if (!pctText) return;
-    parts.push(`${label}+${pctText}/级`);
+    parts.push(`${label}+${pctText}/阶`);
   };
   const pushFlat = (label, key) => {
     const value = Number(effects[key] || 0);
     if (!Number.isFinite(value) || value <= 0) return;
     const rounded = Math.round(value * 1000) / 1000;
-    parts.push(`${label}+${Number.isInteger(rounded) ? rounded : rounded}/级`);
+    parts.push(`${label}+${Number.isInteger(rounded) ? rounded : rounded}/阶`);
   };
   pushPct('攻/魔/道', 'atkPctPerLevel');
   pushPct('防御', 'defPctPerLevel');
@@ -7828,7 +7828,7 @@ function buildTreasureAutoPassiveText(treasureId) {
     const powerBase = formatTreasurePctText(def.powerBase || 1);
     const powerPerLevel = formatTreasurePctText(def.powerPerLevel || 0);
     const powerPerStage = formatTreasurePctText(def.powerPerStage || 0);
-    return `${chanceText}，追加伤害倍率${powerBase}${powerPerLevel ? `（每级+${powerPerLevel}` : ''}${powerPerStage ? `${powerPerLevel ? '，' : '（'}每段+${powerPerStage}` : ''}${(powerPerLevel || powerPerStage) ? '）' : ''}`;
+    return `${chanceText}，追加伤害倍率${powerBase}${powerPerLevel ? `（每阶+${powerPerLevel}` : ''}${powerPerStage ? `${powerPerLevel ? '，' : '（'}每段+${powerPerStage}` : ''}${(powerPerLevel || powerPerStage) ? '）' : ''}`;
   }
   return '';
 }
@@ -7839,8 +7839,8 @@ function decorateTreasureSetEffectText(entry) {
   const autoPassiveText = buildTreasureAutoPassiveText(entry.id);
   if (!perLevelText) return entry;
   const raw = String(entry.effect || '').trim();
-  if (!raw || raw.includes('每级：')) return entry;
-  const detailParts = [`每级：${perLevelText}`];
+  if (!raw || raw.includes('每级：') || raw.includes('每阶：')) return entry;
+  const detailParts = [`每阶：${perLevelText}`];
   if (autoPassiveText) detailParts.push(`自动触发：${autoPassiveText}`);
   return {
     ...entry,
