@@ -10762,7 +10762,7 @@ function applyPetAssistAttackToMob(player, mob, roomRealmId, allMobs = null) {
   if (assist.typeMods.lifestealRatio > 0) {
     const heal = Math.max(1, Math.floor(dealt * assist.typeMods.lifestealRatio));
     player.hp = clamp(player.hp + heal, 1, player.max_hp);
-    player.send(`${petName} siphon heal ${heal}`);
+    player.send(`${petName} 吸血恢复 ${heal} 点生命。`);
   }
   if (assist.typeMods.breakDefChance > 0 && Math.random() <= assist.typeMods.breakDefChance) {
     const debuffs = ensureTargetDebuffs(mob);
@@ -10782,7 +10782,7 @@ function applyPetAssistAttackToMob(player, mob, roomRealmId, allMobs = null) {
     const debuffs = ensureTargetDebuffs(mob);
     debuffs.armorBreak = { expiresAt: Date.now() + 3500, defMultiplier: Math.min(Number(debuffs.armorBreak?.defMultiplier || 1), assist.typeMods.sunderDefMultiplier || 0.9) };
     debuffs.petMagicBreak = { expiresAt: Date.now() + 3500, mdefMultiplier: Math.min(Number(debuffs.petMagicBreak?.mdefMultiplier || 1), assist.typeMods.sunderMdefMultiplier || 0.9) };
-    player.send(`${petName} sunder ${mob.name}`);
+    player.send(`${petName} 对 ${mob.name} 触发撕裂压制。`);
   }
   if (assist.typeMods.divineGuardChance > 0 && Math.random() <= assist.typeMods.divineGuardChance) {
     const buffs = ensureTargetBuffs(player);
@@ -11070,7 +11070,7 @@ function applyPetAssistAttackToPlayer(attacker, target) {
   if (assist.typeMods.lifestealRatio > 0) {
     const heal = Math.max(1, Math.floor(dealt * assist.typeMods.lifestealRatio));
     attacker.hp = clamp(attacker.hp + heal, 1, attacker.max_hp);
-    attacker.send(`${petName} siphon heal ${heal}`);
+    attacker.send(`${petName} 吸血恢复 ${heal} 点生命。`);
   }
   if (assist.typeMods.breakDefChance > 0 && Math.random() <= assist.typeMods.breakDefChance) {
     const debuffs = ensureTargetDebuffs(target);
@@ -11093,7 +11093,7 @@ function applyPetAssistAttackToPlayer(attacker, target) {
     const debuffs = ensureTargetDebuffs(target);
     debuffs.armorBreak = { expiresAt: Date.now() + 2500, defMultiplier: Math.min(Number(debuffs.armorBreak?.defMultiplier || 1), assist.typeMods.sunderDefMultiplier || 0.93) };
     debuffs.petMagicBreak = { expiresAt: Date.now() + 2500, mdefMultiplier: Math.min(Number(debuffs.petMagicBreak?.mdefMultiplier || 1), assist.typeMods.sunderMdefMultiplier || 0.93) };
-    attacker.send(`${petName} sunder ${target.name}`);
+    attacker.send(`${petName} 对 ${target.name} 触发撕裂压制。`);
     target.send('你受到宠物撕裂压制。');
   }
   if (assist.typeMods.divineGuardChance > 0 && Math.random() <= assist.typeMods.divineGuardChance) {
@@ -13744,9 +13744,9 @@ io.on('connection', (socket) => {
     let dirty = false;
     const petRarityIndex = (rarity) => PET_RARITY_ORDER.indexOf(String(rarity || ''));
     const synthesizePetPair = (mainPet, subPet) => {
-      if (!mainPet || !subPet) return { ok: false, msg: 'pet not found' };
-      if (mainPet.id === subPet.id) return { ok: false, msg: 'main and sub cannot be same' };
-      if (player.gold < PET_SYNTHESIS_COST_GOLD) return { ok: false, msg: 'gold not enough' };
+      if (!mainPet || !subPet) return { ok: false, msg: '宠物不存在' };
+      if (mainPet.id === subPet.id) return { ok: false, msg: '主宠和副宠不能相同' };
+      if (player.gold < PET_SYNTHESIS_COST_GOLD) return { ok: false, msg: '金币不足' };
 
       const beforeMain = JSON.parse(JSON.stringify(mainPet));
       const beforeSub = JSON.parse(JSON.stringify(subPet));
@@ -13852,61 +13852,61 @@ io.on('connection', (socket) => {
       return { ok: true, pet: basePet, slotText };
     };
 
-    if (!action) return fail('invalid action');
+    if (!action) return fail('无效宠物操作');
 
     if (action === 'set_active') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       petState.activePetId = pet.id;
       dirty = true;
-      emitResult(true, `active pet: ${pet.name}`);
+      emitResult(true, `已设为出战宠物：${pet.name}`);
     } else if (action === 'set_rest') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       if (petState.activePetId === pet.id) {
         petState.activePetId = null;
         dirty = true;
       }
-      emitResult(true, `${pet.name} is now resting`);
+      emitResult(true, `${pet.name} 已休息`);
     } else if (action === 'release') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       pet.equipment = normalizePetEquipmentState(pet.equipment);
-      if (Object.values(pet.equipment).some(Boolean)) return fail('pet has equipped items');
+      if (Object.values(pet.equipment).some(Boolean)) return fail('宠物已穿戴装备，无法放生');
       petState.pets = petState.pets.filter((entry) => entry.id !== pet.id);
       if (petState.activePetId === pet.id) {
         petState.activePetId = null;
       }
       dirty = true;
-      emitResult(true, `pet released: ${pet.name}`);
+      emitResult(true, `已放生宠物：${pet.name}`);
     } else if (action === 'rename') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       const name = String(clean?.name || '').trim();
       const len = [...name].length;
-      if (len < 2 || len > 12) return fail('name must be 2-12 chars');
+      if (len < 2 || len > 12) return fail('宠物名称长度需为2-12个字符');
       pet.name = name;
       dirty = true;
-      emitResult(true, `rename success: ${pet.name}`);
+      emitResult(true, `宠物改名成功：${pet.name}`);
     } else if (action === 'equip_item') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       pet.equipment = normalizePetEquipmentState(pet.equipment);
       const itemKey = String(clean?.itemKey || '').trim();
-      if (!itemKey) return fail('item not selected');
+      if (!itemKey) return fail('请选择装备');
       normalizeInventory(player);
       const invIndex = Array.isArray(player.inventory)
         ? player.inventory.findIndex((entry) => entry && getItemKey(entry) === itemKey)
         : -1;
-      if (invIndex < 0) return fail('item not found in bag');
+      if (invIndex < 0) return fail('背包中未找到该物品');
       const inv = player.inventory[invIndex];
       const itemTpl = ITEM_TEMPLATES[inv?.id];
-      if (!itemTpl || !itemTpl.slot) return fail('only equipment can be equipped');
+      if (!itemTpl || !itemTpl.slot) return fail('只有装备可以给宠物穿戴');
       const slotKey = resolvePetEquipSlotForItem(pet, itemTpl);
       if (!slotKey) {
-        if (String(itemTpl.slot) === 'ring') return fail('pet ring slots are full');
-        if (String(itemTpl.slot) === 'bracelet') return fail('pet bracelet slots are full');
-        return fail('unsupported or occupied pet equip slot');
+        if (String(itemTpl.slot) === 'ring') return fail('宠物戒指栏已满');
+        if (String(itemTpl.slot) === 'bracelet') return fail('宠物手镯栏已满');
+        return fail('宠物装备栏不支持或已被占用');
       }
 
       const equipEntry = {
@@ -13940,15 +13940,15 @@ io.on('connection', (socket) => {
       pet.equipment[slotKey] = equipEntry;
       normalizeInventory(player);
       dirty = true;
-      emitResult(true, replaced ? `pet equipped: ${itemTpl.name} -> ${slotKey} (replaced)` : `pet equipped: ${itemTpl.name} -> ${slotKey}`);
+      emitResult(true, replaced ? `宠物装备成功：${itemTpl.name}（已替换${slotKey}位装备）` : `宠物装备成功：${itemTpl.name} -> ${slotKey}`);
     } else if (action === 'unequip_item') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       pet.equipment = normalizePetEquipmentState(pet.equipment);
       const slotKey = String(clean?.slot || '').trim();
-      if (!PET_EQUIP_SLOT_KEYS.includes(slotKey)) return fail('invalid slot');
+      if (!PET_EQUIP_SLOT_KEYS.includes(slotKey)) return fail('无效装备栏位');
       const equipped = pet.equipment[slotKey];
-      if (!equipped || !equipped.id) return fail('slot is empty');
+      if (!equipped || !equipped.id) return fail('该栏位没有装备');
       const itemTpl = ITEM_TEMPLATES[equipped.id];
       addItem(
         player,
@@ -13963,21 +13963,21 @@ io.on('connection', (socket) => {
       pet.equipment[slotKey] = null;
       normalizeInventory(player);
       dirty = true;
-      emitResult(true, `pet unequipped: ${itemTpl?.name || equipped.id}`);
+      emitResult(true, `宠物卸下装备：${itemTpl?.name || equipped.id}`);
     } else if (action === 'comprehend') {
-      return fail('comprehend is automatic on pet level up');
+      return fail('宠物领悟为升级自动触发，无需手动操作');
     } else if (action === 'buy_book') {
-      return fail('pet books are boss drops only');
+      return fail('宠物技能书仅能通过BOSS掉落获得');
     } else if (action === 'use_book') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       const book = getPetBookDef(String(clean?.bookId || '').trim());
-      if (!book) return fail('book not found');
+      if (!book) return fail('未找到该技能书');
       const owned = Math.max(0, Math.floor(Number(petState.books[book.id] || 0)));
-      if (owned <= 0) return fail('book not enough');
-      if ((pet.skills || []).includes(book.skillId)) return fail('skill already learned');
+      if (owned <= 0) return fail('宠物技能书数量不足');
+      if ((pet.skills || []).includes(book.skillId)) return fail('该宠物已学会此技能');
       const learned = learnPetSkill(pet, book.skillId, true);
-      if (!learned.ok) return fail('learn failed');
+      if (!learned.ok) return fail('学习技能失败');
       petState.books[book.id] = owned - 1;
       if (petState.books[book.id] <= 0) delete petState.books[book.id];
       let unlocked = false;
@@ -13986,14 +13986,14 @@ io.on('connection', (socket) => {
         unlocked = true;
       }
       dirty = true;
-      const replacedText = learned.replaced ? ` (replaced ${learned.replaced})` : '';
-      const unlockText = unlocked ? ' | slot unlocked' : '';
+      const replacedText = learned.replaced ? `（替换 ${learned.replaced}）` : '';
+      const unlockText = unlocked ? '｜技能格已解锁' : '';
       const activityMsgs = recordTreasurePetFestivalActivity(player, { petBookUses: 1 });
       activityMsgs.forEach((msg) => player.send?.(msg));
-      emitResult(true, `book used: ${book.skillName}${replacedText}${unlockText}`);
+      emitResult(true, `打书成功：${book.skillName}${replacedText}${unlockText}`);
     } else if (action === 'train') {
       const pet = getPetById(clean?.petId);
-      if (!pet) return fail('pet not found');
+      if (!pet) return fail('宠物不存在');
       const attrAliases = {
         hp: 'hp',
         mp: 'mp',
@@ -14013,7 +14013,7 @@ io.on('connection', (socket) => {
       const validKeys = ['hp', 'mp', 'atk', 'def', 'mag', 'mdef', 'dex'];
       const attrRaw = String(clean?.attr || clean?.slot || '').trim();
       const key = attrAliases[attrRaw] || attrAliases[attrRaw.toLowerCase?.() ? attrRaw.toLowerCase() : attrRaw];
-      if (!key || !validKeys.includes(key)) return fail('invalid train attr');
+      if (!key || !validKeys.includes(key)) return fail('无效修炼属性');
       const reqCount = Math.max(1, Math.floor(Number(clean?.count ?? clean?.qty ?? 1)));
       pet.training = normalizePetTrainingRecord(pet.training);
       const curLv = Math.max(0, Math.floor(Number(pet.training[key] || 0)));
@@ -14024,7 +14024,7 @@ io.on('connection', (socket) => {
       const ownedFruit = Math.max(0, Math.floor(Number((player.inventory || []).find((i) => i?.id === 'pet_training_fruit')?.qty || 0)));
       if (ownedFruit < reqCount) return fail(`宠物修炼果不足，需要${reqCount}个`);
       if (player.gold < totalCost) return fail(`金币不足，需要${totalCost}`);
-      if (!removeItem(player, 'pet_training_fruit', reqCount)) return fail('pet training fruit remove failed');
+      if (!removeItem(player, 'pet_training_fruit', reqCount)) return fail('扣除宠物修炼果失败');
       player.gold -= totalCost;
       pet.training[key] = curLv + reqCount;
       dirty = true;
@@ -14032,12 +14032,12 @@ io.on('connection', (socket) => {
     } else if (action === 'synthesize' || action === 'synthesis') {
       const mainPet = getPetById(clean?.mainPetId);
       const subPet = getPetById(clean?.subPetId);
-      if (!mainPet || !subPet) return fail('pet not found');
+      if (!mainPet || !subPet) return fail('宠物不存在');
       mainPet.equipment = normalizePetEquipmentState(mainPet.equipment);
       subPet.equipment = normalizePetEquipmentState(subPet.equipment);
-      if (Object.values(subPet.equipment).some(Boolean)) return fail('sub pet has equipped items');
-      if (mainPet.id === subPet.id) return fail('main and sub cannot be same');
-      if (player.gold < PET_SYNTHESIS_COST_GOLD) return fail('gold not enough');
+      if (Object.values(subPet.equipment).some(Boolean)) return fail('副宠已穿戴装备，无法合成');
+      if (mainPet.id === subPet.id) return fail('主宠和副宠不能相同');
+      if (player.gold < PET_SYNTHESIS_COST_GOLD) return fail('金币不足');
       const beforeMain = JSON.parse(JSON.stringify(mainPet));
       const beforeSub = JSON.parse(JSON.stringify(subPet));
       player.gold -= PET_SYNTHESIS_COST_GOLD;
@@ -14141,12 +14141,12 @@ io.on('connection', (socket) => {
       }
       const activityMsgs = recordTreasurePetFestivalActivity(player, { petSyntheses: 1 });
       activityMsgs.forEach((msg) => player.send?.(msg));
-      emitResult(true, `synthesis success: ${basePet.name} | growth ${basePet.growth.toFixed(3)} | skills ${basePet.skills.length}/${basePet.skillSlots}${slotText}`);
+      emitResult(true, `合宠成功：${basePet.name}｜成长 ${basePet.growth.toFixed(3)}｜技能 ${basePet.skills.length}/${basePet.skillSlots}${slotText}`);
     } else if (action === 'synthesize_below_epic') {
       const epicIndex = PET_RARITY_ORDER.indexOf('epic');
-      if (epicIndex < 0) return fail('epic rarity not configured');
+      if (epicIndex < 0) return fail('未配置史诗稀有度');
       let synthCount = 0;
-      let stopReason = 'not enough pets';
+      let stopReason = '宠物数量不足';
       for (let i = 0; i < 1000; i += 1) {
         const candidates = (Array.isArray(petState.pets) ? petState.pets : [])
           .filter((pet) => pet && pet.id !== petState.activePetId)
@@ -14166,16 +14166,16 @@ io.on('connection', (socket) => {
             return String(a.id || '').localeCompare(String(b.id || ''));
           });
         if (candidates.length < 2) {
-          stopReason = 'not enough pets';
+          stopReason = '宠物数量不足';
           break;
         }
         if (player.gold < PET_SYNTHESIS_COST_GOLD) {
-          stopReason = 'gold not enough';
+          stopReason = '金币不足';
           break;
         }
         const result = synthesizePetPair(candidates[0], candidates[1]);
         if (!result.ok) {
-          stopReason = result.msg || 'synthesis failed';
+          stopReason = result.msg || '合宠失败';
           break;
         }
         synthCount += 1;
@@ -14189,9 +14189,9 @@ io.on('connection', (socket) => {
         }).length;
       const activityMsgs = recordTreasurePetFestivalActivity(player, { petSyntheses: synthCount });
       activityMsgs.forEach((msg) => player.send?.(msg));
-      emitResult(true, `batch synthesis done: ${synthCount} times | cost ${synthCount * PET_SYNTHESIS_COST_GOLD} gold | remain <epic ${remainCount} | stop: ${stopReason}`);
+      emitResult(true, `批量合宠完成：${synthCount}次｜消耗金币 ${synthCount * PET_SYNTHESIS_COST_GOLD}｜剩余史诗以下 ${remainCount}｜停止原因：${stopReason}`);
     } else {
-      return fail('unknown action');
+      return fail('未知宠物操作');
     }
 
     if (!dirty) return;
