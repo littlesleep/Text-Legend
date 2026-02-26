@@ -261,7 +261,7 @@ export function getMobRewardActivityBonus(member, mobTemplate, now = Date.now(),
     if (neverCultivated && lv < 100) {
       expMult *= 5;
       notes.push('新手追赶');
-    } else if (neverCultivated && lv >= 100) {
+    } else if (neverCultivated && lv >= 100 && lv <= 200) {
       expMult *= 2.5;
       notes.push('新手追赶');
     }
