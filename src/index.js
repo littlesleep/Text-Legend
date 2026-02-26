@@ -12140,6 +12140,23 @@ async function sendState(player) {
     delete state.refine_config;
     delete state.effect_reset_config;
   }
+  const diffableObjects = ['player', 'stats', 'room'];
+  if (!player._stateObjectSnapshots) player._stateObjectSnapshots = {};
+  const objectSnapshots = player._stateObjectSnapshots;
+  diffableObjects.forEach((field) => {
+    if (!(field in state) || !state[field] || typeof state[field] !== 'object') return;
+    if (forceSend || !objectSnapshots[field]) {
+      objectSnapshots[field] = state[field];
+      return;
+    }
+    const diff = buildShallowStateObjectDiff(objectSnapshots[field], state[field]);
+    objectSnapshots[field] = state[field];
+    if (!diff) {
+      delete state[field];
+      return;
+    }
+    state[field] = diff;
+  });
   const dedupeFields = ['items', 'warehouse', 'equipment', 'skills', 'treasure', 'pet', 'trade'];
   if (!player._stateFieldHashes) player._stateFieldHashes = {};
   const fieldHashes = player._stateFieldHashes;
@@ -12221,6 +12238,32 @@ function buildRoomStatePayload(zoneId, roomId, realmId = 1) {
     payload.worldBossNextRespawn = cached.bossNextRespawn;
   }
   return payload;
+}
+
+function buildShallowStateObjectDiff(prevObj, nextObj) {
+  const prev = (prevObj && typeof prevObj === 'object') ? prevObj : {};
+  const next = (nextObj && typeof nextObj === 'object') ? nextObj : {};
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  const diff = {};
+  let changed = false;
+  keys.forEach((key) => {
+    const hasNext = Object.prototype.hasOwnProperty.call(next, key);
+    if (!hasNext) {
+      diff[key] = null;
+      changed = true;
+      return;
+    }
+    const prevVal = prev[key];
+    const nextVal = next[key];
+    const same =
+      (prevVal === nextVal) ||
+      (typeof prevVal === 'object' && typeof nextVal === 'object' && JSON.stringify(prevVal) === JSON.stringify(nextVal));
+    if (!same) {
+      diff[key] = nextVal;
+      changed = true;
+    }
+  });
+  return changed ? diff : null;
 }
 
 async function sendRoomState(zoneId, roomId, realmId = 1) {
