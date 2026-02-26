@@ -8984,6 +8984,7 @@ const ROOM_STATE_TTL = 100; // 100ms缓存时间
 const ROOM_STATE_MOBS_TTL = 250;
 const ROOM_STATE_PLAYERS_TTL = 1000;
 const ROOM_STATE_RANK_TTL = 1000;
+const ROOM_STATE_SERVER_TIME_TTL = 1000;
 const STATE_DYNAMIC_AUX_TTL = 5000;
 const STATE_STATIC_AUX_TTL = 30000;
 const VIP_SELF_CLAIM_CACHE_TTL = 10000; // VIP自领缓存10秒
@@ -12232,6 +12233,7 @@ function buildRoomStatePayload(zoneId, roomId, realmId = 1) {
     lastMobsAt: 0,
     playersHash: null,
     rankHash: null,
+    lastServerTimeAt: 0,
     lastPlayersAt: 0,
     lastRankAt: 0
   };
@@ -12267,7 +12269,15 @@ function buildRoomStatePayload(zoneId, roomId, realmId = 1) {
     meta.rankHash = rankHash;
     meta.lastRankAt = now;
   }
+  const includeServerTime = now - Number(meta.lastServerTimeAt || 0) >= ROOM_STATE_SERVER_TIME_TTL;
+  if (includeServerTime) {
+    meta.lastServerTimeAt = now;
+  }
   roomStatePatchMetaCache.set(cacheKey, meta);
+
+  if (!includeMobs && !includePlayers && !includeRank && !includeServerTime) {
+    return null;
+  }
 
   const payload = {
     room: {
@@ -12275,9 +12285,11 @@ function buildRoomStatePayload(zoneId, roomId, realmId = 1) {
       name: room?.name || roomId,
       zoneId,
       roomId
-    },
-    server_time: now
+    }
   };
+  if (includeServerTime) {
+    payload.server_time = now;
+  }
   if (includeMobs) {
     payload.mobs = cached.mobs;
     payload.bossRespawn = cached.nextRespawn;
@@ -12347,6 +12359,7 @@ async function sendRoomState(zoneId, roomId, realmId = 1) {
   
   // 使用Promise.all并行发送
   const roomState = buildRoomStatePayload(zoneId, roomId, effectiveRealmId);
+  if (!roomState) return;
   const hasBossRespawnTimer =
     Number(roomState?.bossRespawn || 0) > 0 ||
     Number(roomState?.worldBossNextRespawn || 0) > 0;
