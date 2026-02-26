@@ -4545,6 +4545,13 @@ function isManagedHostedPlayer(player) {
   return Boolean(player && !player.socket && (player.flags?.offlineManagedAuto || player.flags?.offlineManagedPending));
 }
 
+function makeManagedPlayerKey(player) {
+  const realmId = Math.max(1, Math.floor(Number(player?.realmId || 1) || 1));
+  const userId = Math.max(0, Math.floor(Number(player?.userId || 0) || 0));
+  const name = String(player?.name || '').trim();
+  return `managed:${realmId}:${userId}:${name}`;
+}
+
 function listSabakMembersOnline(realmId) {
   const state = getRealmState(realmId);
   if (!state.sabakState.ownerGuildId) return [];
@@ -5946,6 +5953,72 @@ function dropLoot(mobTemplate, bonus = 1) {
 async function savePlayer(player) {
   if (!player.userId) return;
   await saveCharacter(player.userId, player, player.realmId || 1);
+}
+
+async function recoverManagedHostedPlayersOnStartup() {
+  let recovered = 0;
+  let skipped = 0;
+  const rows = await knex('characters')
+    .select('user_id', 'name', 'realm_id', 'flags_json')
+    .orderBy('id', 'asc');
+  for (const row of rows) {
+    let flags = {};
+    try {
+      flags = JSON.parse(row?.flags_json || '{}') || {};
+    } catch {
+      flags = {};
+    }
+    const isManaged = Boolean(flags?.offlineManagedAuto || flags?.offlineManagedPending);
+    if (!isManaged) continue;
+
+    const userId = Math.max(0, Math.floor(Number(row?.user_id || 0) || 0));
+    const realmId = Math.max(1, Math.floor(Number(row?.realm_id || 1) || 1));
+    const charName = String(row?.name || '').trim();
+    if (!userId || !charName) {
+      skipped += 1;
+      continue;
+    }
+    if (playersByName(charName, realmId)) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      const loaded = await loadCharacter(userId, charName, realmId);
+      if (!loaded) {
+        skipped += 1;
+        continue;
+      }
+      computeDerived(loaded);
+      loaded.userId = userId;
+      loaded.realmId = realmId;
+      loaded.socket = null;
+      loaded.deviceKey = null;
+      loaded.send = () => {};
+      loaded.combat = null;
+      loaded.guild = null;
+      loaded.stateThrottleOverride = false;
+      if (!loaded.flags) loaded.flags = {};
+      normalizeZhuxianTowerProgress(loaded);
+      normalizePetState(loaded);
+      ensureZhuxianTowerPosition(loaded);
+      ensurePersonalBossPosition(loaded);
+      const member = await getGuildMember(userId, charName, realmId);
+      if (member && member.guild) {
+        loaded.guild = { id: member.guild.id, name: member.guild.name, role: member.role };
+      }
+      if (loaded.rankTitle) {
+        onlinePlayerRankTitles.set(loaded.name, loaded.rankTitle);
+      }
+      players.set(makeManagedPlayerKey(loaded), loaded);
+      spawnMobs(loaded.position.zone, loaded.position.room, loaded.realmId || 1);
+      recovered += 1;
+    } catch (err) {
+      skipped += 1;
+      console.warn(`[managed-recover] failed to restore ${charName}@${realmId}:`, err?.message || err);
+    }
+  }
+  return { recovered, skipped };
 }
 
 function createParty(leaderName, realmId) {
@@ -13176,20 +13249,26 @@ io.on('connection', (socket) => {
     if (existingSocketId) {
       const existingPlayer = players.get(existingSocketId);
       if (existingPlayer) {
-        // 通知旧连接被踢下线
-        existingPlayer.send('您的账号在别处登录，您已被强制下线。');
-        // 保存并移除之前的会话
-        await savePlayer(existingPlayer);
-        // 断开旧连接
-        existingPlayer.socket?.disconnect?.();
-        // 移除旧的玩家数据
-        players.delete(existingSocketId);
-        // 从队伍中移除
-        const party = getPartyByMember(name, existingPlayer.realmId || realmInfo.realmId);
-        if (party) {
-          party.members = party.members.filter(m => m !== name);
-          if (party.members.length === 0) {
-            getRealmState(existingPlayer.realmId || realmInfo.realmId).parties.delete(party.id);
+        const existingIsManaged = isManagedHostedPlayer(existingPlayer);
+        if (existingIsManaged) {
+          await savePlayer(existingPlayer);
+          players.delete(existingSocketId);
+        } else {
+          // 通知旧连接被踢下线
+          existingPlayer.send('您的账号在别处登录，您已被强制下线。');
+          // 保存并移除之前的会话
+          await savePlayer(existingPlayer);
+          // 断开旧连接
+          existingPlayer.socket?.disconnect?.();
+          // 移除旧的玩家数据
+          players.delete(existingSocketId);
+          // 从队伍中移除
+          const party = getPartyByMember(name, existingPlayer.realmId || realmInfo.realmId);
+          if (party) {
+            party.members = party.members.filter(m => m !== name);
+            if (party.members.length === 0) {
+              getRealmState(existingPlayer.realmId || realmInfo.realmId).parties.delete(party.id);
+            }
           }
         }
       }
@@ -17297,6 +17376,13 @@ async function start() {
     taoist: await getClassLevelBonusConfig('taoist')
   };
   setAllClassLevelBonusConfigs(classLevelConfigs);
+
+  try {
+    const managedRecovery = await recoverManagedHostedPlayersOnStartup();
+    console.log(`[managed-recover] recovered=${managedRecovery.recovered}, skipped=${managedRecovery.skipped}`);
+  } catch (err) {
+    console.warn('[managed-recover] startup restore failed:', err?.message || err);
+  }
 
   // 加载锻造系统配置
   const refineBaseSuccessRate = await getRefineBaseSuccessRateDb();
