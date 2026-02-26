@@ -19,7 +19,7 @@ const ACTIVITY_DEFS = [
   { id: 'pet_carnival_day', name: '宠物狂欢日', type: 'weekly', desc: '宠物打书/合宠活跃加成' },
   { id: 'treasure_sprint_day', name: '法宝冲刺日', type: 'weekly', desc: '法宝升级/升段活跃加成' },
   { id: 'world_boss_bounty', name: '世界BOSS悬赏', type: 'daily', desc: '每日指定悬赏BOSS，击杀得悬赏积分' },
-  { id: 'newbie_catchup', name: '新手追赶计划', type: 'always', desc: '低等级角色额外经验/金币加成' },
+  { id: 'newbie_catchup', name: '新手追赶计划', type: 'always', desc: '未修真玩家打怪经验加成' },
   { id: 'lucky_drop_day', name: '幸运掉落日', type: 'weekly', desc: '指定时段BOSS活动积分额外加成' }
 ];
 function getChinaDate(now = Date.now()) {
@@ -256,13 +256,13 @@ export function getMobRewardActivityBonus(member, mobTemplate, now = Date.now(),
   const notes = [];
   if (isActivityActive('newbie_catchup', now)) {
     const lv = Math.max(1, Number(member?.level || 1));
-    if (lv < 100) {
-      expMult *= 1.6;
-      goldMult *= 1.3;
+    const cultivationLevel = Math.floor(Number(member?.flags?.cultivationLevel ?? -1));
+    const neverCultivated = cultivationLevel < 0;
+    if (neverCultivated && lv < 100) {
+      expMult *= 5;
       notes.push('新手追赶');
-    } else if (lv < 200) {
-      expMult *= 1.3;
-      goldMult *= 1.15;
+    } else if (neverCultivated && lv >= 100) {
+      expMult *= 2.5;
       notes.push('新手追赶');
     }
   }
