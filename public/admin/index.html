@@ -971,6 +971,112 @@
 
         <div class="block" data-collapsible>
           <div class="block-title">
+            <h2>装备成长配置</h2>
+            <button class="btn-small block-toggle">折叠</button>
+          </div>
+          <div class="block-body">
+            <p style="color: #666; margin-bottom: 12px; font-size: 13px;">
+              配置终极装备成长参数（立即生效）。<br>
+              成长材料与突破材料仅允许选择“不可掉落(noDrop)”道具。
+            </p>
+            <div class="table-container">
+              <table style="font-size: 12px;">
+                <thead>
+                  <tr>
+                    <th style="padding: 6px 8px;">属性</th>
+                    <th style="padding: 6px 8px;">值</th>
+                    <th style="padding: 6px 8px;">说明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>启用成长</td>
+                    <td><input id="ug-enabled" type="checkbox" checked></td>
+                    <td>关闭后不再提供成长属性加成</td>
+                  </tr>
+                  <tr>
+                    <td>成长上限等级</td>
+                    <td><input id="ug-max-level" type="number" min="0" step="1" style="width: 100px;"></td>
+                    <td>0 表示无上限</td>
+                  </tr>
+                  <tr>
+                    <td>每级成长比例</td>
+                    <td><input id="ug-per-level-pct" type="number" min="0" step="0.0001" style="width: 100px;"></td>
+                    <td>如 0.006 = 每级 0.6%</td>
+                  </tr>
+                  <tr>
+                    <td>每阶等级间隔</td>
+                    <td><input id="ug-tier-every" type="number" min="1" step="1" style="width: 100px;"></td>
+                    <td>达到该等级间隔额外加一段阶加成</td>
+                  </tr>
+                  <tr>
+                    <td>每阶额外比例</td>
+                    <td><input id="ug-tier-bonus-pct" type="number" min="0" step="0.0001" style="width: 100px;"></td>
+                    <td>如 0.03 = 每阶额外 3%</td>
+                  </tr>
+                  <tr>
+                    <td>成长材料</td>
+                    <td><select id="ug-material-id" style="min-width: 220px;"></select></td>
+                    <td>每次成长固定消耗 1 个</td>
+                  </tr>
+                  <tr>
+                    <td>突破等级间隔</td>
+                    <td><input id="ug-breakthrough-every" type="number" min="1" step="1" style="width: 100px;"></td>
+                    <td>达到该等级需要突破材料</td>
+                  </tr>
+                  <tr>
+                    <td>突破材料</td>
+                    <td><select id="ug-breakthrough-material-id" style="min-width: 220px;"></select></td>
+                    <td>突破时消耗</td>
+                  </tr>
+                  <tr>
+                    <td>突破材料数量</td>
+                    <td><input id="ug-breakthrough-material-cost" type="number" min="1" step="1" style="width: 100px;"></td>
+                    <td>每次突破所需数量</td>
+                  </tr>
+                  <tr>
+                    <td>金币消耗</td>
+                    <td><input id="ug-gold-cost" type="number" min="0" step="1" style="width: 100px;"></td>
+                    <td>每次成长金币消耗</td>
+                  </tr>
+                  <tr>
+                    <td>前期成功率(%)</td>
+                    <td><input id="ug-success-rate-early" type="number" min="0" max="100" step="0.1" style="width: 100px;"></td>
+                    <td>1-60 级成长成功率</td>
+                  </tr>
+                  <tr>
+                    <td>中期成功率(%)</td>
+                    <td><input id="ug-success-rate-mid" type="number" min="0" max="100" step="0.1" style="width: 100px;"></td>
+                    <td>61-80 级成长成功率</td>
+                  </tr>
+                  <tr>
+                    <td>后期成功率(%)</td>
+                    <td><input id="ug-success-rate-late" type="number" min="0" max="100" step="0.1" style="width: 100px;"></td>
+                    <td>81 级及以上成长成功率</td>
+                  </tr>
+                  <tr>
+                    <td>失败保底增幅</td>
+                    <td><input id="ug-fail-stack-bonus-pct" type="number" min="0" step="0.0001" style="width: 100px;"></td>
+                    <td>失败后下次成功率增加比例</td>
+                  </tr>
+                  <tr>
+                    <td>失败保底上限</td>
+                    <td><input id="ug-fail-stack-cap-pct" type="number" min="0" step="0.0001" style="width: 100px;"></td>
+                    <td>保底成功率增加比例上限</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="row" style="margin-top: 8px;">
+              <button id="ug-load-btn" class="btn-small">加载</button>
+              <button id="ug-save-btn" class="btn-small">保存设置</button>
+            </div>
+            <div id="ug-msg" class="msg"></div>
+          </div>
+        </div>
+
+        <div class="block" data-collapsible>
+          <div class="block-title">
             <h2>法宝配置</h2>
             <button class="btn-small block-toggle">折叠</button>
           </div>

@@ -2509,26 +2509,29 @@ body.dark .chat-name-btn.sponsor-player-name:hover {
   min-width: 90px;
 }
 
-#growth-modal .growth-count-row {
-  margin-top: 8px;
-  display: flex;
-  justify-content: center;
-}
-
-#growth-modal #growth-count {
-  width: 120px;
-  max-width: 120px;
-  text-align: center;
-}
-
 #growth-modal .modal-actions {
   justify-content: center;
   flex-wrap: nowrap;
+  align-items: center;
+}
+
+#growth-modal #growth-count {
+  width: 88px;
+  min-width: 88px;
+  max-width: 88px;
+  text-align: center;
+  padding-inline: 8px;
 }
 
 #growth-modal .modal-actions button {
   flex: 0 0 auto;
-  min-width: 108px;
+  min-width: 96px;
+}
+
+@media (max-width: 420px) {
+  #growth-modal .modal-actions {
+    flex-wrap: wrap;
+  }
 }
 
 #player-modal .modal-actions {

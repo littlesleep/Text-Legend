@@ -137,6 +137,26 @@ const refineMaterialCountInput = document.getElementById('refine-material-count'
 const refineBonusPerLevelInput = document.getElementById('refine-bonus-per-level');
 const refineSaveBtn = document.getElementById('refine-save-btn');
 
+// 装备成长配置相关
+const ultimateGrowthMsg = document.getElementById('ug-msg');
+const ultimateGrowthEnabledInput = document.getElementById('ug-enabled');
+const ultimateGrowthMaxLevelInput = document.getElementById('ug-max-level');
+const ultimateGrowthPerLevelPctInput = document.getElementById('ug-per-level-pct');
+const ultimateGrowthTierEveryInput = document.getElementById('ug-tier-every');
+const ultimateGrowthTierBonusPctInput = document.getElementById('ug-tier-bonus-pct');
+const ultimateGrowthMaterialIdInput = document.getElementById('ug-material-id');
+const ultimateGrowthBreakthroughEveryInput = document.getElementById('ug-breakthrough-every');
+const ultimateGrowthBreakthroughMaterialIdInput = document.getElementById('ug-breakthrough-material-id');
+const ultimateGrowthBreakthroughMaterialCostInput = document.getElementById('ug-breakthrough-material-cost');
+const ultimateGrowthGoldCostInput = document.getElementById('ug-gold-cost');
+const ultimateGrowthSuccessRateEarlyInput = document.getElementById('ug-success-rate-early');
+const ultimateGrowthSuccessRateMidInput = document.getElementById('ug-success-rate-mid');
+const ultimateGrowthSuccessRateLateInput = document.getElementById('ug-success-rate-late');
+const ultimateGrowthFailStackBonusPctInput = document.getElementById('ug-fail-stack-bonus-pct');
+const ultimateGrowthFailStackCapPctInput = document.getElementById('ug-fail-stack-cap-pct');
+const ultimateGrowthLoadBtn = document.getElementById('ug-load-btn');
+const ultimateGrowthSaveBtn = document.getElementById('ug-save-btn');
+
 // 特效重置配置相关
 const effectResetMsg = document.getElementById('effect-reset-msg');
 const effectResetSuccessRateInput = document.getElementById('effect-reset-success-rate');
@@ -371,6 +391,7 @@ const petAptitudeInputs = {
   }
 };
 let petSettingsCache = null;
+let ultimateGrowthMaterialTemplates = [];
 
 // 法宝配置相关
 const treasureMsg = document.getElementById('treasure-msg');
@@ -1159,6 +1180,128 @@ async function saveRefineSettings() {
   } catch (err) {
     refineMsg.textContent = `保存失败: ${err.message}`;
     refineMsg.style.color = 'red';
+  }
+}
+
+function setUltimateGrowthMsg(text, color = 'green', clearDelay = 1800) {
+  if (!ultimateGrowthMsg) return;
+  ultimateGrowthMsg.textContent = text || '';
+  ultimateGrowthMsg.style.color = color;
+  if (text && clearDelay > 0) {
+    setTimeout(() => {
+      if (ultimateGrowthMsg) ultimateGrowthMsg.textContent = '';
+    }, clearDelay);
+  }
+}
+
+async function loadUltimateGrowthMaterialOptions(selectedMaterialId = '', selectedBreakMaterialId = '') {
+  if (!ultimateGrowthMaterialIdInput || !ultimateGrowthBreakthroughMaterialIdInput) return;
+  if (!Array.isArray(ultimateGrowthMaterialTemplates) || ultimateGrowthMaterialTemplates.length === 0) {
+    const res = await api('/admin/items/templates', 'GET');
+    const templates = Array.isArray(res?.templates) ? res.templates : [];
+    ultimateGrowthMaterialTemplates = templates.filter((tpl) => {
+      if (!tpl || typeof tpl !== 'object') return false;
+      const noDrop = tpl.noDrop === true || tpl.no_drop === true || Number(tpl.no_drop) === 1;
+      return noDrop;
+    });
+  }
+  const options = ultimateGrowthMaterialTemplates
+    .map((tpl) => ({
+      id: String(tpl.item_id || '').trim(),
+      name: String(tpl.name || tpl.item_id || '').trim()
+    }))
+    .filter((entry) => entry.id)
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+
+  const renderSelect = (selectEl, selectedId, placeholderText) => {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = placeholderText;
+    selectEl.appendChild(placeholder);
+    options.forEach((entry) => {
+      const option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = `${entry.name} (${entry.id})`;
+      selectEl.appendChild(option);
+    });
+    if (selectedId && !options.some((entry) => entry.id === selectedId)) {
+      const custom = document.createElement('option');
+      custom.value = selectedId;
+      custom.textContent = `${selectedId} (当前配置)`;
+      selectEl.appendChild(custom);
+    }
+    selectEl.value = selectedId || '';
+  };
+  renderSelect(ultimateGrowthMaterialIdInput, String(selectedMaterialId || '').trim(), '请选择成长材料');
+  renderSelect(ultimateGrowthBreakthroughMaterialIdInput, String(selectedBreakMaterialId || '').trim(), '请选择突破材料');
+}
+
+async function loadUltimateGrowthSettings() {
+  if (!ultimateGrowthMsg) return;
+  setUltimateGrowthMsg('');
+  try {
+    const data = await api('/admin/ultimate-growth-settings', 'GET');
+    const cfg = data?.settings || {};
+    await loadUltimateGrowthMaterialOptions(cfg.materialId, cfg.breakthroughMaterialId);
+    if (ultimateGrowthEnabledInput) ultimateGrowthEnabledInput.checked = cfg.enabled !== false;
+    if (ultimateGrowthMaxLevelInput) ultimateGrowthMaxLevelInput.value = Number(cfg.maxLevel ?? 0);
+    if (ultimateGrowthPerLevelPctInput) ultimateGrowthPerLevelPctInput.value = Number(cfg.perLevelPct ?? 0.006);
+    if (ultimateGrowthTierEveryInput) ultimateGrowthTierEveryInput.value = Number(cfg.tierEvery ?? 20);
+    if (ultimateGrowthTierBonusPctInput) ultimateGrowthTierBonusPctInput.value = Number(cfg.tierBonusPct ?? 0.03);
+    if (ultimateGrowthMaterialIdInput) ultimateGrowthMaterialIdInput.value = String(cfg.materialId || '');
+    if (ultimateGrowthBreakthroughEveryInput) ultimateGrowthBreakthroughEveryInput.value = Number(cfg.breakthroughEvery ?? 20);
+    if (ultimateGrowthBreakthroughMaterialIdInput) ultimateGrowthBreakthroughMaterialIdInput.value = String(cfg.breakthroughMaterialId || '');
+    if (ultimateGrowthBreakthroughMaterialCostInput) ultimateGrowthBreakthroughMaterialCostInput.value = Number(cfg.breakthroughMaterialCost ?? 1);
+    if (ultimateGrowthGoldCostInput) ultimateGrowthGoldCostInput.value = Number(cfg.goldCost ?? 50000);
+    if (ultimateGrowthSuccessRateEarlyInput) ultimateGrowthSuccessRateEarlyInput.value = Number(cfg.successRateEarly ?? 100);
+    if (ultimateGrowthSuccessRateMidInput) ultimateGrowthSuccessRateMidInput.value = Number(cfg.successRateMid ?? 70);
+    if (ultimateGrowthSuccessRateLateInput) ultimateGrowthSuccessRateLateInput.value = Number(cfg.successRateLate ?? 45);
+    if (ultimateGrowthFailStackBonusPctInput) ultimateGrowthFailStackBonusPctInput.value = Number(cfg.failStackBonusPct ?? 0.03);
+    if (ultimateGrowthFailStackCapPctInput) ultimateGrowthFailStackCapPctInput.value = Number(cfg.failStackCapPct ?? 0.45);
+    setUltimateGrowthMsg('加载成功');
+  } catch (err) {
+    setUltimateGrowthMsg(`加载失败: ${err.message}`, 'red', 0);
+  }
+}
+
+async function saveUltimateGrowthSettings() {
+  if (!ultimateGrowthMsg) return;
+  setUltimateGrowthMsg('');
+  try {
+    const payload = {
+      enabled: ultimateGrowthEnabledInput ? Boolean(ultimateGrowthEnabledInput.checked) : true,
+      maxLevel: Math.max(0, Math.floor(Number(ultimateGrowthMaxLevelInput?.value || 0))),
+      perLevelPct: Number(ultimateGrowthPerLevelPctInput?.value),
+      tierEvery: Math.max(1, Math.floor(Number(ultimateGrowthTierEveryInput?.value || 1))),
+      tierBonusPct: Number(ultimateGrowthTierBonusPctInput?.value),
+      materialId: String(ultimateGrowthMaterialIdInput?.value || '').trim(),
+      breakthroughEvery: Math.max(1, Math.floor(Number(ultimateGrowthBreakthroughEveryInput?.value || 1))),
+      breakthroughMaterialId: String(ultimateGrowthBreakthroughMaterialIdInput?.value || '').trim(),
+      breakthroughMaterialCost: Math.max(1, Math.floor(Number(ultimateGrowthBreakthroughMaterialCostInput?.value || 1))),
+      goldCost: Math.max(0, Math.floor(Number(ultimateGrowthGoldCostInput?.value || 0))),
+      successRateEarly: Number(ultimateGrowthSuccessRateEarlyInput?.value),
+      successRateMid: Number(ultimateGrowthSuccessRateMidInput?.value),
+      successRateLate: Number(ultimateGrowthSuccessRateLateInput?.value),
+      failStackBonusPct: Number(ultimateGrowthFailStackBonusPctInput?.value),
+      failStackCapPct: Number(ultimateGrowthFailStackCapPctInput?.value)
+    };
+    if (!Number.isFinite(payload.perLevelPct) || payload.perLevelPct < 0) throw new Error('每级成长比例必须大于等于0');
+    if (!Number.isFinite(payload.tierBonusPct) || payload.tierBonusPct < 0) throw new Error('每阶额外比例必须大于等于0');
+    if (!payload.materialId) throw new Error('请选择成长材料');
+    if (!payload.breakthroughMaterialId) throw new Error('请选择突破材料');
+    if (!Number.isFinite(payload.successRateEarly) || payload.successRateEarly < 0 || payload.successRateEarly > 100) throw new Error('前期成功率必须在0-100之间');
+    if (!Number.isFinite(payload.successRateMid) || payload.successRateMid < 0 || payload.successRateMid > 100) throw new Error('中期成功率必须在0-100之间');
+    if (!Number.isFinite(payload.successRateLate) || payload.successRateLate < 0 || payload.successRateLate > 100) throw new Error('后期成功率必须在0-100之间');
+    if (!Number.isFinite(payload.failStackBonusPct) || payload.failStackBonusPct < 0) throw new Error('失败保底增幅必须大于等于0');
+    if (!Number.isFinite(payload.failStackCapPct) || payload.failStackCapPct < 0) throw new Error('失败保底上限必须大于等于0');
+
+    await api('/admin/ultimate-growth-settings/update', 'POST', { settings: payload });
+    setUltimateGrowthMsg('保存成功，立即生效');
+    await loadUltimateGrowthSettings();
+  } catch (err) {
+    setUltimateGrowthMsg(`保存失败: ${err.message}`, 'red', 0);
   }
 }
 
@@ -6473,6 +6616,7 @@ async function initDashboard() {
     loadTrainingFruitSettings();
     loadTrainingSettings();
     loadRefineSettings();
+    loadUltimateGrowthSettings();
     loadTreasureSettings();
     loadEffectResetSettings();
     loadPetSettings();
@@ -6903,6 +7047,14 @@ if (trainingSaveBtn) {
 // 锻造系统配置事件
 if (refineSaveBtn) {
   refineSaveBtn.addEventListener('click', saveRefineSettings);
+}
+
+// 装备成长配置事件
+if (ultimateGrowthLoadBtn) {
+  ultimateGrowthLoadBtn.addEventListener('click', loadUltimateGrowthSettings);
+}
+if (ultimateGrowthSaveBtn) {
+  ultimateGrowthSaveBtn.addEventListener('click', saveUltimateGrowthSettings);
 }
 
 // 法宝配置事件

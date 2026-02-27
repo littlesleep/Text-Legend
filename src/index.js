@@ -1116,9 +1116,19 @@ function validateActivityPointShopConfig(config) {
 
 function getDivineBeastSpeciesOptions() {
   const list = Array.isArray(PET_SPECIES_BY_RARITY?.ultimate) ? PET_SPECIES_BY_RARITY.ultimate : [];
-  return list
-    .map((name, index) => ({ id: String(name || '').trim(), name: String(name || '').trim(), sort: index }))
-    .filter((it) => it.id && isDivineBeastSpeciesName(it.name));
+  const seen = new Set();
+  const rows = [];
+  const pushSpecies = (name, sortBase = 0) => {
+    const species = String(name || '').trim();
+    if (!species || seen.has(species) || !isDivineBeastSpeciesName(species)) return;
+    seen.add(species);
+    rows.push({ id: species, name: species, sort: sortBase + rows.length });
+  };
+  // 优先加入不可掉落神兽，避免运营误改稀有度池后下拉变空
+  Array.from(PET_NON_DROPPABLE_SPECIES || []).forEach((name) => pushSpecies(name, 0));
+  // 再加入终极池里符合神兽规则的物种
+  list.forEach((name, index) => pushSpecies(name, 100 + index));
+  return rows.sort((a, b) => (a.sort - b.sort) || a.id.localeCompare(b.id));
 }
 
 function isDivineBeastSpeciesName(name) {
