@@ -9764,6 +9764,10 @@ function getDivineBeastConfigBySpecies(species) {
   return ZODIAC_DIVINE_BEAST_CONFIG[key] || null;
 }
 
+function isDivineBeastSpecies(species) {
+  return Boolean(getDivineBeastConfigBySpecies(species));
+}
+
 function getDivineBeastExclusiveSkillBySpecies(species) {
   return getDivineBeastConfigBySpecies(species)?.skillId || null;
 }
@@ -11801,20 +11805,36 @@ function normalizePetState(player) {
         name = `${PET_SPECIES_NAME_MAP[roleRaw]}${suffix}`;
       }
     }
+      const divineCfg = getDivineBeastConfigBySpecies(mappedRole);
+      const divineAdvanceCount = Math.max(0, Math.floor(Number(pet.divineAdvanceCount || 0)));
       const growthRange = PET_RARITY_GROWTH_RANGE[rarity] || PET_RARITY_GROWTH_RANGE.normal;
       const growthRaw = Number(pet.growth || growthRange[0]);
-      const growth = Math.max(growthRange[0], Math.min(growthRange[1], Number(growthRaw.toFixed(3))));
+      const growth = divineCfg
+        ? Math.max(growthRange[0], Number(growthRaw.toFixed(3)))
+        : Math.max(growthRange[0], Math.min(growthRange[1], Number(growthRaw.toFixed(3))));
       const aptitudeRaw = pet.aptitude && typeof pet.aptitude === 'object' ? pet.aptitude : {};
       const aptRange = PET_RARITY_APTITUDE_RANGE[rarity] || PET_RARITY_APTITUDE_RANGE.normal;
       const aptitude = {
-        hp: Math.max(aptRange.hp[0], Math.min(aptRange.hp[1], Math.floor(Number(aptitudeRaw.hp || aptRange.hp[0])))),
-        atk: Math.max(aptRange.atk[0], Math.min(aptRange.atk[1], Math.floor(Number(aptitudeRaw.atk || aptRange.atk[0])))),
-        def: Math.max(aptRange.def[0], Math.min(aptRange.def[1], Math.floor(Number(aptitudeRaw.def || aptRange.def[0])))),
-        mag: Math.max(aptRange.mag[0], Math.min(aptRange.mag[1], Math.floor(Number(aptitudeRaw.mag || aptRange.mag[0])))),
-        agility: Math.max(aptRange.agility[0], Math.min(aptRange.agility[1], Math.floor(Number(aptitudeRaw.agility || aptRange.agility[0]))))
+        hp: divineCfg
+          ? Math.max(aptRange.hp[0], Math.floor(Number(aptitudeRaw.hp || aptRange.hp[0])))
+          : Math.max(aptRange.hp[0], Math.min(aptRange.hp[1], Math.floor(Number(aptitudeRaw.hp || aptRange.hp[0])))),
+        atk: divineCfg
+          ? Math.max(aptRange.atk[0], Math.floor(Number(aptitudeRaw.atk || aptRange.atk[0])))
+          : Math.max(aptRange.atk[0], Math.min(aptRange.atk[1], Math.floor(Number(aptitudeRaw.atk || aptRange.atk[0])))),
+        def: divineCfg
+          ? Math.max(aptRange.def[0], Math.floor(Number(aptitudeRaw.def || aptRange.def[0])))
+          : Math.max(aptRange.def[0], Math.min(aptRange.def[1], Math.floor(Number(aptitudeRaw.def || aptRange.def[0])))),
+        mag: divineCfg
+          ? Math.max(aptRange.mag[0], Math.floor(Number(aptitudeRaw.mag || aptRange.mag[0])))
+          : Math.max(aptRange.mag[0], Math.min(aptRange.mag[1], Math.floor(Number(aptitudeRaw.mag || aptRange.mag[0])))),
+        agility: divineCfg
+          ? Math.max(aptRange.agility[0], Math.floor(Number(aptitudeRaw.agility || aptRange.agility[0])))
+          : Math.max(aptRange.agility[0], Math.min(aptRange.agility[1], Math.floor(Number(aptitudeRaw.agility || aptRange.agility[0]))))
       };
       const battleType = normalizePetBattleType(pet, aptitude);
-      const skillSlots = Math.max(PET_BASE_SKILL_SLOTS, Math.min(PET_MAX_SKILL_SLOTS, Math.floor(Number(pet.skillSlots || PET_BASE_SKILL_SLOTS))));
+      const skillSlots = divineCfg
+        ? Math.max(PET_BASE_SKILL_SLOTS, Math.floor(Number(pet.skillSlots || PET_BASE_SKILL_SLOTS)))
+        : Math.max(PET_BASE_SKILL_SLOTS, Math.min(PET_MAX_SKILL_SLOTS, Math.floor(Number(pet.skillSlots || PET_BASE_SKILL_SLOTS))));
       const rawSkills = Array.isArray(pet.skills) ? pet.skills : [];
       let skills = Array.from(new Set(rawSkills.map((idValue) => String(idValue || '').trim()).filter(Boolean)))
         .filter((skillId) => Boolean(getPetSkillDef(skillId)))
@@ -11852,6 +11872,7 @@ function normalizePetState(player) {
         growth,
         aptitude,
         skillSlots,
+        divineAdvanceCount,
         skills,
         training,
         equipment,
@@ -12145,6 +12166,8 @@ function buildPetStatePayload(player) {
     growth: pet.growth,
     aptitude: pet.aptitude,
     skillSlots: pet.skillSlots,
+    divineAdvanceCount: Math.max(0, Math.floor(Number(pet.divineAdvanceCount || 0))),
+    isDivineBeast: isDivineBeastSpecies(pet.role),
     skills: pet.skills,
     skillTiers: (pet.skills || []).map((skillId) => getPetSkillTier(skillId)),
     skillNames: (pet.skills || []).map((skillId) => getPetSkillDef(skillId)?.name || skillId),
@@ -14178,6 +14201,7 @@ io.on('connection', (socket) => {
     const emitResult = (ok, msg) => socket.emit('pet_result', { ok, msg });
     const fail = (msg) => emitResult(false, msg);
     let dirty = false;
+    const divineAdvanceCost = 500;
     const petRarityIndex = (rarity) => PET_RARITY_ORDER.indexOf(String(rarity || ''));
     const synthesizePetPair = (mainPet, subPet) => {
       if (!mainPet || !subPet) return { ok: false, msg: '宠物不存在' };
@@ -14477,6 +14501,35 @@ io.on('connection', (socket) => {
       pet.training[key] = curLv + reqCount;
       dirty = true;
       emitResult(true, reqCount > 1 ? `宠物修炼成功：${key} Lv${curLv}->Lv${pet.training[key]}` : `宠物修炼成功：${key} Lv${pet.training[key]}`);
+    } else if (action === 'divine_advance') {
+      const pet = getPetById(clean?.petId);
+      if (!pet) return fail('宠物不存在');
+      if (!isDivineBeastSpecies(pet.role)) return fail('仅生肖神兽可进阶');
+      const owned = Math.max(0, Math.floor(Number((player.inventory || []).find((i) => i?.id === 'divine_beast_fragment')?.qty || 0)));
+      if (owned < divineAdvanceCost) return fail(`神兽碎片不足，需要${divineAdvanceCost}个`);
+      if (!removeItem(player, 'divine_beast_fragment', divineAdvanceCost)) return fail('扣除神兽碎片失败');
+      if (!pet.aptitude || typeof pet.aptitude !== 'object') pet.aptitude = {};
+      ['hp', 'atk', 'def', 'mag', 'agility'].forEach((key) => {
+        const current = Math.max(1, Math.floor(Number(pet.aptitude?.[key] || 0)));
+        pet.aptitude[key] = Math.max(current + 1, Math.floor(current * 1.1));
+      });
+      pet.growth = Number((Math.max(0.1, Number(pet.growth || 1)) * 1.1).toFixed(3));
+      pet.skillSlots = Math.max(
+        Math.floor(Number(pet.skillSlots || PET_BASE_SKILL_SLOTS)) + 1,
+        Array.isArray(pet.skills) ? pet.skills.length : 0
+      );
+      pet.divineAdvanceCount = Math.max(0, Math.floor(Number(pet.divineAdvanceCount || 0))) + 1;
+      dirty = true;
+      if (logLoot) {
+        logLoot(
+          `[pet][divine_advance] ${player.name} pet=${pet.name}/${pet.id} tier=${pet.divineAdvanceCount} ` +
+          `growth=${Number(pet.growth || 0).toFixed(3)} slots=${Number(pet.skillSlots || 0)}`
+        );
+      }
+      emitResult(
+        true,
+        `神兽进阶成功：${pet.name} 已进阶 ${pet.divineAdvanceCount} 次｜成长 ${Number(pet.growth || 0).toFixed(3)}｜技能格 ${Number(pet.skillSlots || 0)}`
+      );
     } else if (action === 'synthesize' || action === 'synthesis') {
       const mainPet = getPetById(clean?.mainPetId);
       const subPet = getPetById(clean?.subPetId);

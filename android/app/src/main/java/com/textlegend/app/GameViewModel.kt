@@ -361,6 +361,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun petSynthesizeBelowEpic() = socket.petSynthesizeBelowEpic()
     fun petEquipItem(petId: String, itemKey: String) = socket.petEquipItem(petId, itemKey)
     fun petUnequipItem(petId: String, slot: String) = socket.petUnequipItem(petId, slot)
+    fun petDivineAdvance(petId: String) = socket.petDivineAdvance(petId)
     fun requestActivityPointShop() = sendCmd("活动 shop")
     fun requestActivityDivineBeastExchange() = sendCmd("活动 神兽兑换")
     fun redeemActivityPointShop(itemId: String, qty: Int) = sendCmd("活动 redeem $itemId ${qty.coerceAtLeast(1)}")

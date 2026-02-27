@@ -389,66 +389,116 @@
     <div class="modal-card pet-card">
       <div class="modal-title">宠物系统</div>
       <div class="modal-list-wrapper">
-        <div id="pet-summary" class="modal-text">加载中...</div>
+        <div class="pet-summary-wrap">
+          <div id="pet-summary" class="modal-text pet-summary-text">加载中...</div>
+        </div>
         <div class="pet-grid">
-          <div>
-            <div class="modal-text">我的宠物</div>
-            <div id="pet-list" class="pet-list"></div>
-            <div class="pet-inline-actions">
-              <button id="pet-set-active">设为出战</button>
-              <button id="pet-set-rest">休息</button>
-              <button id="pet-rename">改名</button>
-              <button id="pet-release">放生</button>
-              <button id="pet-synth-below-epic-btn">一键合成</button>
-            </div>
-            <div class="modal-text">宠物装备</div>
-            <div id="pet-equip-list" class="pet-book-list"></div>
-            <div class="modal-text">背包装备</div>
-            <div id="pet-bag-equip-list" class="pet-book-list"></div>
-            <div class="pet-inline-actions" style="display:none;">
-              <select id="pet-equip-item"></select>
-              <button id="pet-equip-btn">穿戴</button>
-            </div>
-            <div class="pet-inline-actions" style="display:none;">
-              <select id="pet-unequip-slot"></select>
-              <button id="pet-unequip-btn">卸下</button>
+          <div class="pet-column pet-column-left">
+            <div class="pet-section">
+              <div class="pet-section-title">我的宠物</div>
+              <div id="pet-list" class="pet-list"></div>
+              <div class="pet-inline-actions pet-action-grid">
+                <button id="pet-set-active">设为出战</button>
+                <button id="pet-set-rest">休息</button>
+                <button id="pet-rename">改名</button>
+                <button id="pet-release">放生</button>
+                <button id="pet-divine-advance-btn">神兽进阶</button>
+                <button id="pet-synth-below-epic-btn">一键合成</button>
+              </div>
             </div>
           </div>
-          <div>
-            <div class="modal-text">宠物详情</div>
-            <div id="pet-detail" class="modal-text">请选择一只宠物</div>
-            <div class="modal-text">技能书仓库</div>
-            <div id="pet-book-list" class="pet-book-list"></div>
-            <div class="pet-inline-actions">
-              <select id="pet-use-book"></select>
-              <button id="pet-use-book-btn">打书</button>
+          <div class="pet-column pet-column-right">
+            <div class="pet-section pet-detail-section">
+              <div class="pet-section-title">宠物详情</div>
+              <div id="pet-detail" class="modal-text pet-detail-panel">请选择一只宠物</div>
             </div>
-            <div class="modal-text">宠物修炼</div>
-            <div class="pet-inline-actions">
-              <select id="pet-train-attr">
-                <option value="hp">生命</option>
-                <option value="mp">魔法值</option>
-                <option value="atk">攻击</option>
-                <option value="def">防御</option>
-                <option value="mag">魔法</option>
-                <option value="mdef">魔御</option>
-                <option value="dex">敏捷</option>
-              </select>
-              <input id="pet-train-count" type="number" min="1" max="999" value="1" style="width:80px;" />
-              <button id="pet-train-btn">修炼</button>
+            <div class="pet-section">
+              <div class="pet-section-title">快捷操作</div>
+              <div class="pet-quick-grid">
+                <button id="pet-open-equip-modal-btn" class="pet-quick-action" type="button">
+                  <span class="pet-quick-icon">装</span>
+                  <span class="pet-quick-label">宠物装备</span>
+                </button>
+                <button id="pet-open-book-modal-btn" class="pet-quick-action" type="button">
+                  <span class="pet-quick-icon">书</span>
+                  <span class="pet-quick-label">打书</span>
+                </button>
+                <button id="pet-open-train-modal-btn" class="pet-quick-action" type="button">
+                  <span class="pet-quick-icon">修</span>
+                  <span class="pet-quick-label">修炼</span>
+                </button>
+                <button id="pet-open-synth-modal-btn" class="pet-quick-action" type="button">
+                  <span class="pet-quick-icon">合</span>
+                  <span class="pet-quick-label">合成</span>
+                </button>
+              </div>
             </div>
-            <div id="pet-train-info" class="modal-text" style="color:#aaa;">请选择宠物后进行修炼</div>
-            <div class="modal-text">宠物合成</div>
-            <div class="pet-inline-actions">
-              <select id="pet-synth-main"></select>
-              <select id="pet-synth-sub"></select>
-              <button id="pet-synth-btn">合成</button>
+            <div class="pet-section">
+              <div class="pet-section-title">技能书仓库</div>
+              <div id="pet-book-list" class="pet-book-list"></div>
+            </div>
+            <div class="pet-section hidden">
+              <div class="pet-section-title">宠物修炼</div>
+              <div class="pet-inline-actions pet-inline-tight">
+                <select id="pet-use-book"></select>
+                <button id="pet-use-book-btn">打书</button>
+                <select id="pet-train-attr">
+                  <option value="hp">生命</option>
+                  <option value="mp">魔法值</option>
+                  <option value="atk">攻击</option>
+                  <option value="def">防御</option>
+                  <option value="mag">魔法</option>
+                  <option value="mdef">魔御</option>
+                  <option value="dex">敏捷</option>
+                </select>
+                <input id="pet-train-count" class="pet-count-input" type="number" min="1" max="999" value="1" />
+                <button id="pet-train-btn">修炼</button>
+              </div>
+              <div id="pet-train-info" class="modal-text pet-tip-text">请选择宠物后进行修炼</div>
+              <div class="pet-inline-actions pet-inline-tight">
+                <select id="pet-synth-main"></select>
+                <select id="pet-synth-sub"></select>
+                <button id="pet-synth-btn">合成</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-actions">
         <button id="pet-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pet-equip-modal" class="modal hidden">
+    <div class="modal-card pet-card pet-equip-card">
+      <div id="pet-equip-modal-title" class="modal-title">宠物装备</div>
+      <div class="modal-list-wrapper">
+        <div class="pet-grid pet-equip-grid">
+          <div class="pet-column">
+            <div class="pet-section">
+              <div class="pet-section-title">已穿戴</div>
+              <div id="pet-equip-list" class="pet-book-list"></div>
+            </div>
+          </div>
+          <div class="pet-column">
+            <div class="pet-section">
+              <div class="pet-section-title">背包装备</div>
+              <div id="pet-bag-equip-list" class="pet-book-list"></div>
+              <div class="pet-inline-actions hidden">
+                <select id="pet-equip-item"></select>
+                <button id="pet-equip-btn">穿戴</button>
+              </div>
+              <div class="pet-inline-actions hidden">
+                <select id="pet-unequip-slot"></select>
+                <button id="pet-unequip-btn">卸下</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="pet-equip-close">关闭</button>
       </div>
     </div>
   </div>

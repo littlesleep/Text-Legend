@@ -596,6 +596,9 @@ const repairUi = {
 };
 const petUi = {
   modal: document.getElementById('pet-modal'),
+  equipModal: document.getElementById('pet-equip-modal'),
+  equipModalTitle: document.getElementById('pet-equip-modal-title'),
+  equipModalClose: document.getElementById('pet-equip-close'),
   summary: document.getElementById('pet-summary'),
   list: document.getElementById('pet-list'),
   detail: document.getElementById('pet-detail'),
@@ -609,6 +612,11 @@ const petUi = {
   setRest: document.getElementById('pet-set-rest'),
   rename: document.getElementById('pet-rename'),
   release: document.getElementById('pet-release'),
+  divineAdvanceBtn: document.getElementById('pet-divine-advance-btn'),
+  openEquipModalBtn: document.getElementById('pet-open-equip-modal-btn'),
+  openBookModalBtn: document.getElementById('pet-open-book-modal-btn'),
+  openTrainModalBtn: document.getElementById('pet-open-train-modal-btn'),
+  openSynthModalBtn: document.getElementById('pet-open-synth-modal-btn'),
   bookList: document.getElementById('pet-book-list'),
   useBook: document.getElementById('pet-use-book'),
   useBookBtn: document.getElementById('pet-use-book-btn'),
@@ -918,6 +926,7 @@ function buildPetModalRenderSignature(state = lastState) {
       Number(pet?.exp || 0),
       Number(pet?.power || 0),
       Number(pet?.skillSlots || 0),
+      Number(pet?.divineAdvanceCount || 0),
       (Array.isArray(pet?.skills) ? pet.skills : []).join('.'),
       Number(t.hp || 0), Number(t.mp || 0), Number(t.atk || 0), Number(t.def || 0), Number(t.mag || 0), Number(t.mdef || 0), Number(t.dex || 0),
       eqSig
@@ -2677,6 +2686,7 @@ function showRepairModal() {
 function renderPetModal() {
   if (!petUi.modal || !petUi.list || !petUi.detail) return;
   petUi.detail.style.whiteSpace = 'pre-line';
+  const isDivineBeastPet = (pet) => Boolean(pet?.isDivineBeast);
   const getPetBattleTypeText = (pet) => {
     if (!pet) return '-';
     if (pet.battleTypeLabel) return pet.battleTypeLabel;
@@ -2715,6 +2725,16 @@ function renderPetModal() {
   if (petUi.rename) petUi.rename.disabled = !selected;
   if (petUi.release) petUi.release.disabled = !selected;
   if (petUi.trainBtn) petUi.trainBtn.disabled = !selected;
+  if (petUi.openEquipModalBtn) petUi.openEquipModalBtn.disabled = !selected;
+  if (petUi.openBookModalBtn) petUi.openBookModalBtn.disabled = !selected;
+  if (petUi.openTrainModalBtn) petUi.openTrainModalBtn.disabled = !selected;
+  if (petUi.openSynthModalBtn) petUi.openSynthModalBtn.disabled = pets.length < 2;
+  if (petUi.divineAdvanceBtn) {
+    const canAdvance = isDivineBeastPet(selected);
+    petUi.divineAdvanceBtn.disabled = !canAdvance;
+    petUi.divineAdvanceBtn.style.display = canAdvance ? '' : 'none';
+    petUi.divineAdvanceBtn.textContent = canAdvance ? '神兽进阶' : '神兽进阶';
+  }
 
   petUi.list.innerHTML = '';
   if (!pets.length) {
@@ -2726,18 +2746,59 @@ function renderPetModal() {
     pets.forEach((pet) => {
       const row = document.createElement('div');
       row.className = `pet-entry${selectedPetId === pet.id ? ' active' : ''}`;
-      const activeMark = petState?.activePetId === pet.id ? ' [出战]' : '';
       const rarityKey = normalizeRarityKey(pet.rarity);
-      const nameSpan = document.createElement('span');
-      nameSpan.textContent = `[${pet.rarityLabel || '-'}] ${pet.name}${activeMark}`;
-      if (rarityKey) {
-        nameSpan.classList.add(`rarity-${rarityKey}`);
-        if (rarityKey === 'ultimate') nameSpan.classList.add('ultimate-text');
+      const isActivePet = petState?.activePetId === pet.id;
+      const head = document.createElement('div');
+      head.className = 'pet-entry-head';
+      const nameWrap = document.createElement('div');
+      nameWrap.className = 'pet-entry-name';
+      const nameStrong = document.createElement('strong');
+      nameStrong.textContent = pet.name;
+      const subLine = document.createElement('span');
+      subLine.textContent = `${pet.role || '-'} | ${getPetBattleTypeText(pet)}`;
+      const badgeWrap = document.createElement('div');
+      badgeWrap.className = 'pet-entry-badges';
+      const rarityChip = document.createElement('span');
+      rarityChip.className = 'pet-mini-chip';
+      rarityChip.textContent = pet.rarityLabel || '-';
+      badgeWrap.appendChild(rarityChip);
+      if (isActivePet) {
+        const activeChip = document.createElement('span');
+        activeChip.className = 'pet-mini-chip active';
+        activeChip.textContent = '出战';
+        badgeWrap.appendChild(activeChip);
       }
-      row.appendChild(nameSpan);
-      row.appendChild(document.createTextNode(
-        ` | ${getPetBattleTypeText(pet)} | 等级:${Number(pet.level || 1)}/${Number(pet.levelCap || 1)} EXP:${Number(pet.exp || 0)}/${Number(pet.expNeed || 0)} | 成长:${Number(pet.growth || 1).toFixed(3)} | 战力:${pet.power || 0}`
-      ));
+      if (pet.isDivineBeast) {
+        const divineChip = document.createElement('span');
+        divineChip.className = 'pet-mini-chip divine';
+        divineChip.textContent = `进阶${Math.max(0, Math.floor(Number(pet.divineAdvanceCount || 0)))}`;
+        badgeWrap.appendChild(divineChip);
+      }
+      nameWrap.appendChild(nameStrong);
+      nameWrap.appendChild(subLine);
+      head.appendChild(nameWrap);
+      head.appendChild(badgeWrap);
+      const meta = document.createElement('div');
+      meta.className = 'pet-entry-meta';
+      const leftMeta = document.createElement('span');
+      leftMeta.textContent = `等级 ${Number(pet.level || 1)}/${Number(pet.levelCap || 1)} | EXP ${Number(pet.exp || 0)}/${Number(pet.expNeed || 0)}`;
+      const rightMeta = document.createElement('span');
+      rightMeta.textContent = `成长 ${Number(pet.growth || 1).toFixed(3)}`;
+      meta.appendChild(leftMeta);
+      meta.appendChild(rightMeta);
+      const foot = document.createElement('div');
+      foot.className = 'pet-entry-foot';
+      const footLeft = document.createElement('span');
+      footLeft.textContent = `资质 攻${Number(pet?.aptitude?.atk || 0)} / 防${Number(pet?.aptitude?.def || 0)} / 法${Number(pet?.aptitude?.mag || 0)}`;
+      const footRight = document.createElement('span');
+      footRight.innerHTML = `技能 <strong>${Array.isArray(pet?.skills) ? pet.skills.length : 0}</strong> / 战力 <strong>${Number(pet?.power || 0)}</strong>`;
+      row.appendChild(head);
+      row.appendChild(meta);
+      row.appendChild(foot);
+      if (rarityKey) {
+        nameStrong.classList.add(`rarity-${rarityKey}`);
+      }
+      if (rarityKey === 'ultimate') nameStrong.classList.add('ultimate-text');
       const listEffects = Array.isArray(pet.skillEffects) ? pet.skillEffects.filter((text) => String(text || '').trim()) : [];
       if (listEffects.length) {
         const tooltipText = listEffects.join('\n');
@@ -2755,6 +2816,7 @@ function renderPetModal() {
 
   if (!selected) {
     petUi.detail.textContent = '请选择一只宠物';
+    if (petUi.equipModalTitle) petUi.equipModalTitle.textContent = '宠物装备';
   } else {
     petUi.detail.innerHTML = '';
     const nameLine = document.createElement('div');
@@ -2778,6 +2840,12 @@ function renderPetModal() {
       `成长: ${Number(selected.growth || 1).toFixed(3)}`,
       `资质: HP ${selected.aptitude?.hp || 0} / 攻 ${selected.aptitude?.atk || 0} / 防 ${selected.aptitude?.def || 0} / 法 ${selected.aptitude?.mag || 0} / 速 ${selected.aptitude?.agility || 0}`
     ];
+    if (isDivineBeastPet(selected)) {
+      const fragQty = Math.max(0, Math.floor(Number((Array.isArray(lastState?.items) ? lastState.items : []).find((item) => String(item?.id || '') === 'divine_beast_fragment')?.qty || 0)));
+      lines.push(`神兽进阶: ${Math.max(0, Math.floor(Number(selected.divineAdvanceCount || 0)))}次`);
+      lines.push(`进阶效果: 每次资质+10% / 成长+10% / 技能格+1`);
+      lines.push(`进阶消耗: 神兽碎片 x500（当前 ${fragQty}）`);
+    }
     const t = selected.training || {};
     lines.push(`修炼: 生${Number(t.hp || 0)} 魔${Number(t.mp || 0)} 攻${Number(t.atk || 0)} 防${Number(t.def || 0)} 法${Number(t.mag || 0)} 魔御${Number(t.mdef || 0)} 敏${Number(t.dex || 0)}`);
     lines.forEach((text) => {
@@ -2809,6 +2877,7 @@ function renderPetModal() {
       });
     }
     petUi.detail.appendChild(skillLine);
+    if (petUi.equipModalTitle) petUi.equipModalTitle.textContent = `宠物装备：${selected.name}`;
   }
 
   if (petUi.trainCount) {
@@ -3053,6 +3122,130 @@ function showPetModal() {
 function sendPetAction(action, extra = {}) {
   if (!socket) return;
   socket.emit('pet_action', { action, ...extra });
+}
+
+function showPetEquipModal() {
+  if (!petUi.equipModal) return;
+  const pet = getPetByStateId(selectedPetId);
+  if (!pet) {
+    showToast('请先选择宠物');
+    return;
+  }
+  if (petUi.equipModalTitle) petUi.equipModalTitle.textContent = `宠物装备：${pet.name}`;
+  petUi.equipModal.classList.remove('hidden');
+}
+
+function hidePetEquipModal() {
+  hideItemTooltip();
+  petUi.equipModal?.classList.add('hidden');
+}
+
+async function openPetUseBookDialog() {
+  if (!selectedPetId) {
+    showToast('请先选择宠物');
+    return;
+  }
+  const books = Array.isArray(lastState?.pet?.books) ? lastState.pet.books : [];
+  const ownedBooks = books.filter((book) => Number(book?.qty || 0) > 0);
+  if (!ownedBooks.length) {
+    showToast('暂无技能书');
+    return;
+  }
+  const picked = await promptMultiSelectModal({
+    title: '选择技能书',
+    text: '请选择要给当前宠物使用的技能书',
+    options: ownedBooks.map((book) => ({
+      value: String(book.id || ''),
+      label: `${book.name || book.id} x${Number(book.qty || 0)}`
+    })),
+    selectedValues: [],
+    singleSelect: true
+  });
+  const bookId = Array.isArray(picked) ? String(picked[0] || '').trim() : '';
+  if (!bookId) return;
+  sendPetAction('use_book', { petId: selectedPetId, bookId });
+}
+
+async function openPetTrainDialog() {
+  if (!selectedPetId) {
+    showToast('请先选择宠物');
+    return;
+  }
+  const attrOptions = [
+    { value: 'hp', label: '生命' },
+    { value: 'mp', label: '魔法值' },
+    { value: 'atk', label: '攻击' },
+    { value: 'def', label: '防御' },
+    { value: 'mag', label: '魔法' },
+    { value: 'mdef', label: '魔御' },
+    { value: 'dex', label: '敏捷' }
+  ];
+  const selectedAttr = await promptMultiSelectModal({
+    title: '选择修炼属性',
+    text: '请选择本次宠物修炼属性',
+    options: attrOptions.map((item) => ({ value: item.value, label: item.label })),
+    selectedValues: [String(petUi.trainAttr?.value || 'atk')],
+    singleSelect: true
+  });
+  const attr = Array.isArray(selectedAttr) ? String(selectedAttr[0] || '').trim() : '';
+  if (!attr) return;
+  const count = await promptModal({
+    title: '宠物修炼',
+    text: '请输入修炼次数（1-999）',
+    placeholder: '次数',
+    value: String(petUi.trainCount?.value || '1'),
+    type: 'number'
+  });
+  if (!count) return;
+  const safeCount = Math.max(1, Math.min(999, Math.floor(Number(count) || 1)));
+  if (petUi.trainAttr) petUi.trainAttr.value = attr;
+  if (petUi.trainCount) petUi.trainCount.value = String(safeCount);
+  scheduleRenderPetModal();
+  sendPetAction('train', { petId: selectedPetId, attr, count: safeCount });
+}
+
+async function openPetSynthesizeDialog() {
+  const petState = lastState?.pet || {};
+  const pets = Array.isArray(petState.pets) ? petState.pets : [];
+  if (pets.length < 2) {
+    showToast('至少需要两只宠物');
+    return;
+  }
+  const mainPicked = await promptMultiSelectModal({
+    title: '选择主宠',
+    text: '请选择保留外形的主宠',
+    options: pets.map((pet) => ({ value: String(pet.id || ''), label: `${pet.name} (${pet.rarityLabel || pet.rarity || '-'})` })),
+    selectedValues: [String(selectedPetId || petState.activePetId || pets[0]?.id || '')],
+    singleSelect: true
+  });
+  const mainPetId = Array.isArray(mainPicked) ? String(mainPicked[0] || '').trim() : '';
+  if (!mainPetId) return;
+  const subCandidates = pets.filter((pet) => String(pet.id || '') !== mainPetId);
+  if (!subCandidates.length) {
+    showToast('没有可作为副宠的宠物');
+    return;
+  }
+  const subPicked = await promptMultiSelectModal({
+    title: '选择副宠',
+    text: '请选择被消耗的副宠',
+    options: subCandidates.map((pet) => ({ value: String(pet.id || ''), label: `${pet.name} (${pet.rarityLabel || pet.rarity || '-'})` })),
+    selectedValues: [],
+    singleSelect: true
+  });
+  const subPetId = Array.isArray(subPicked) ? String(subPicked[0] || '').trim() : '';
+  if (!subPetId) return;
+  const mainPet = getPetByStateId(mainPetId);
+  const subPet = getPetByStateId(subPetId);
+  const confirmed = await confirmModal({
+    title: '炼妖预览',
+    text: buildPetSynthesisPreviewText(mainPet, subPet)
+  });
+  if (!confirmed) return;
+  if (petUi.synthMain) petUi.synthMain.value = mainPetId;
+  if (petUi.synthSub) petUi.synthSub.value = subPetId;
+  selectedPetId = mainPetId;
+  scheduleRenderPetModal();
+  sendPetAction('synthesize', { mainPetId, subPetId });
 }
 
 function getPetByStateId(petId) {
@@ -10186,6 +10379,16 @@ if (petUi.unequipBtn) {
     sendPetAction('unequip_item', { petId, slot });
   });
 }
+if (petUi.openEquipModalBtn) {
+  petUi.openEquipModalBtn.addEventListener('click', () => {
+    showPetEquipModal();
+  });
+}
+if (petUi.openBookModalBtn) {
+  petUi.openBookModalBtn.addEventListener('click', () => {
+    openPetUseBookDialog();
+  });
+}
 if (petUi.useBookBtn) {
   petUi.useBookBtn.addEventListener('click', () => {
     if (!selectedPetId) return showToast('请先选择宠物');
@@ -10206,6 +10409,11 @@ if (petUi.trainCount) {
     scheduleRenderPetModal();
   });
 }
+if (petUi.openTrainModalBtn) {
+  petUi.openTrainModalBtn.addEventListener('click', () => {
+    openPetTrainDialog();
+  });
+}
 if (petUi.trainBtn) {
   petUi.trainBtn.addEventListener('click', () => {
     if (!selectedPetId) return showToast('请先选择宠物');
@@ -10213,6 +10421,20 @@ if (petUi.trainBtn) {
     const count = Math.max(1, Math.min(999, Math.floor(Number(petUi.trainCount?.value || 1)) || 1));
     if (!attr) return showToast('请选择修炼属性');
     sendPetAction('train', { petId: selectedPetId, attr, count });
+  });
+}
+if (petUi.divineAdvanceBtn) {
+  petUi.divineAdvanceBtn.addEventListener('click', () => {
+    const petId = String(selectedPetId || '').trim();
+    const pet = getPetByStateId(petId);
+    if (!petId || !pet?.isDivineBeast) return;
+    if (!window.confirm(`${pet.name} 进阶一次将提升资质10%、成长10%、技能格+1，消耗神兽碎片x500。是否继续？`)) return;
+    sendPetAction('divine_advance', { petId });
+  });
+}
+if (petUi.openSynthModalBtn) {
+  petUi.openSynthModalBtn.addEventListener('click', () => {
+    openPetSynthesizeDialog();
   });
 }
 if (petUi.synthBtn) {
@@ -10268,6 +10490,7 @@ if (petUi.close) {
   petUi.close.addEventListener('click', () => {
     petModalLastRenderRefs = null;
     petModalLastRenderSignature = '';
+    hidePetEquipModal();
     petUi.modal?.classList.add('hidden');
   });
 }
@@ -10276,7 +10499,20 @@ if (petUi.modal) {
     if (e.target === petUi.modal) {
       petModalLastRenderRefs = null;
       petModalLastRenderSignature = '';
+      hidePetEquipModal();
       petUi.modal.classList.add('hidden');
+    }
+  });
+}
+if (petUi.equipModalClose) {
+  petUi.equipModalClose.addEventListener('click', () => {
+    hidePetEquipModal();
+  });
+}
+if (petUi.equipModal) {
+  petUi.equipModal.addEventListener('click', (e) => {
+    if (e.target === petUi.equipModal) {
+      hidePetEquipModal();
     }
   });
 }

@@ -47,9 +47,10 @@ fun PetDialog(
     var selectedTab by remember { mutableStateOf(0) }
     var backLocked by remember { mutableStateOf(false) }
     val tabs = listOf("我的宠物", "技能书库")
+    val petCount = pets.size
+    val activeName = activePet?.name ?: "无"
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // 标题和返回按钮
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -69,9 +70,33 @@ fun PetDialog(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Tab选择
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("宠物数量 $petCount", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text("当前出战 $activeName", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    text = tabs.getOrNull(selectedTab) ?: "宠物系统",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             tabs.forEachIndexed { index, tab ->
                 Button(
@@ -87,13 +112,17 @@ fun PetDialog(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         when (selectedTab) {
             0 -> PetListTab(vm, pets, activePet, state?.items ?: emptyList())
             1 -> PetBooksTab(vm, books, pets)
         }
     }
+}
+
+private fun isDivineBeastPet(pet: PetInfo): Boolean {
+    return pet.isDivineBeast || pet.role.contains("神兽")
 }
 
 // 宠物列表 Tab
@@ -110,8 +139,12 @@ private fun PetListTab(
     var showSynthesizeDialog by remember { mutableStateOf(false) }
     var showBatchSynthesizeConfirm by remember { mutableStateOf(false) }
     var showDetailDialog by remember { mutableStateOf(false) }
+    var showDivineAdvanceDialog by remember { mutableStateOf(false) }
     var selectedPetId by remember { mutableStateOf<String?>(null) }
     val selectedPet = pets.find { it.id == selectedPetId }
+    val divineFragmentQty = remember(bagItems) {
+        bagItems.find { it.id == "divine_beast_fragment" }?.qty ?: 0
+    }
 
     if (pets.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -120,51 +153,81 @@ private fun PetListTab(
         return
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(pets) { pet ->
-            PetCard(
-                pet = pet,
-                isActive = pet.id == activePet?.id,
-                onActivate = { vm.sendCmd("pet activate ${pet.id}") },
-                onRelease = { vm.sendCmd("pet release") },
-                onReset = {
-                    selectedPetId = pet.id
-                    showResetDialog = true
-                },
-                onTrain = {
-                    selectedPetId = pet.id
-                    showTrainDialog = true
-                },
-                onEquip = {
-                    selectedPetId = pet.id
-                    showEquipDialog = true
-                },
-                onViewDetails = {
-                    selectedPetId = pet.id
-                    showDetailDialog = true
-                }
-            )
+    Column(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("宠物总数：${pets.size}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(
+                    "出战宠物：${activePet?.name ?: "无"}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "神兽碎片：$divineFragmentQty",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { showSynthesizeDialog = true },
-                    modifier = Modifier.weight(1f)
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(pets) { pet ->
+                PetCard(
+                    pet = pet,
+                    isActive = pet.id == activePet?.id,
+                    onActivate = { vm.sendCmd("pet activate ${pet.id}") },
+                    onRelease = { vm.sendCmd("pet release") },
+                    onReset = {
+                        selectedPetId = pet.id
+                        showResetDialog = true
+                    },
+                    onTrain = {
+                        selectedPetId = pet.id
+                        showTrainDialog = true
+                    },
+                    onEquip = {
+                        selectedPetId = pet.id
+                        showEquipDialog = true
+                    },
+                    onDivineAdvance = {
+                        selectedPetId = pet.id
+                        showDivineAdvanceDialog = true
+                    },
+                    showDivineAdvance = isDivineBeastPet(pet),
+                    onViewDetails = {
+                        selectedPetId = pet.id
+                        showDetailDialog = true
+                    }
+                )
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("宠物合成")
-                }
-                Button(
-                    onClick = { showBatchSynthesizeConfirm = true },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA))
-                ) {
-                    Text("一键合成")
+                    OutlinedButton(
+                        onClick = { showSynthesizeDialog = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("宠物合成")
+                    }
+                    Button(
+                        onClick = { showBatchSynthesizeConfirm = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA))
+                    ) {
+                        Text("一键合成")
+                    }
                 }
             }
         }
@@ -243,6 +306,21 @@ private fun PetListTab(
             }
         )
     }
+    if (showDivineAdvanceDialog && selectedPet != null) {
+        PetDivineAdvanceDialog(
+            pet = selectedPet!!,
+            ownedFragments = divineFragmentQty,
+            onConfirm = {
+                vm.petDivineAdvance(selectedPet!!.id)
+                showDivineAdvanceDialog = false
+                selectedPetId = null
+            },
+            onDismiss = {
+                showDivineAdvanceDialog = false
+                selectedPetId = null
+            }
+        )
+    }
     if (showDetailDialog && selectedPet != null) {
         PetDetailDialog(
             pet = selectedPet!!,
@@ -314,6 +392,8 @@ private fun PetCard(
     onReset: () -> Unit,
     onTrain: () -> Unit,
     onEquip: () -> Unit,
+    onDivineAdvance: () -> Unit,
+    showDivineAdvance: Boolean,
     onViewDetails: () -> Unit
 ) {
     var skillDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -338,9 +418,16 @@ private fun PetCard(
                 } else {
                     Modifier
                 }
-            )
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
+            } else {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+            }
+        )
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -381,35 +468,46 @@ private fun PetCard(
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "${pet.role} Lv.${pet.level}", fontSize = 14.sp, color = Color.Gray)
-                    Text(text = "成长: ${String.format("%.2f", pet.growth)}", fontSize = 12.sp)
+                    Text(text = "${pet.role} Lv.${pet.level}", fontSize = 13.sp, color = Color.Gray)
+                    Text(
+                        text = "成长 ${String.format("%.3f", pet.growth)}  ·  技能 ${pet.skills.size}/${pet.skillSlots}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (showDivineAdvance) {
+                        Text(
+                            text = "神兽进阶 ${pet.divineAdvanceCount} 次",
+                            fontSize = 11.sp,
+                            color = Color(0xFFFFC857)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 资质
-            Row(
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
             ) {
-                PetStatColumn("生命", pet.aptitude.hp)
-                PetStatColumn("攻击", pet.aptitude.atk)
-                PetStatColumn("防御", pet.aptitude.def)
-                PetStatColumn("魔法", pet.aptitude.mag)
-                PetStatColumn("敏捷", pet.aptitude.agility)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    PetStatColumn("生命", pet.aptitude.hp)
+                    PetStatColumn("攻击", pet.aptitude.atk)
+                    PetStatColumn("防御", pet.aptitude.def)
+                    PetStatColumn("魔法", pet.aptitude.mag)
+                    PetStatColumn("敏捷", pet.aptitude.agility)
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 技能槽和技能
-            Text(text = "技能", fontSize = 12.sp)
+            Text(text = "技能", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (pet.skills.isEmpty()) {
                 Text(text = "暂无技能", fontSize = 12.sp, color = Color.Gray)
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    modifier = Modifier.height(60.dp),
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.heightIn(min = 32.dp, max = 92.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -424,6 +522,7 @@ private fun PetCard(
                             pet.skillEffects.getOrNull(idx)
                         )
                         Surface(
+                            shape = RoundedCornerShape(8.dp),
                             color = Color(0xFFE0E0E0),
                             modifier = Modifier.clickable {
                                 skillDialog = skillName to effectText
@@ -452,9 +551,6 @@ private fun PetCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 操作按钮
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!isActive) {
                     Button(
@@ -471,27 +567,11 @@ private fun PetCard(
                         Text("收回")
                     }
                 }
-                Button(
-                    onClick = onReset,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("洗练")
-                }
                 OutlinedButton(
                     onClick = onTrain,
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("修炼")
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onEquip,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("装备")
                 }
                 OutlinedButton(
                     onClick = onViewDetails,
@@ -499,8 +579,31 @@ private fun PetCard(
                 ) {
                     Text("详情")
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.weight(1f))
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onEquip,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("装备")
+                }
+                if (showDivineAdvance) {
+                    OutlinedButton(
+                        onClick = onDivineAdvance,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("进阶")
+                    }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+                Button(
+                    onClick = onReset,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("洗练")
+                }
             }
         }
     }
@@ -812,50 +915,128 @@ private fun PetBooksTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PetDetailDialog(
     pet: PetInfo,
     isActive: Boolean,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("宠物详情") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp)
+                .heightIn(max = 560.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("宠物详情", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             ) {
-                Text("名称：${pet.name}${if (isActive) "（出战）" else ""}", fontWeight = FontWeight.SemiBold)
-                Text("稀有度：${PetData.getRarityLabel(pet.rarity)}")
-                Text("等级：Lv${pet.level}")
-                Text("成长：${String.format("%.3f", pet.growth)}")
-                Text("定位：${pet.role}")
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("资质", fontWeight = FontWeight.SemiBold)
-                Text("生命 ${pet.aptitude.hp}  攻击 ${pet.aptitude.atk}  防御 ${pet.aptitude.def}")
-                Text("魔法 ${pet.aptitude.mag}  敏捷 ${pet.aptitude.agility}")
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("技能", fontWeight = FontWeight.SemiBold)
-                if (pet.skills.isEmpty()) {
-                    Text("暂无技能", color = Color.Gray)
-                } else {
-                    pet.skills.forEachIndexed { idx, skillId ->
-                        val skillName = petSkillDisplayName(skillId, pet.skillNames.getOrNull(idx))
-                        val effect = petSkillEffectDisplay(skillId, pet.skillEffects.getOrNull(idx))
-                        Text("• $skillName")
-                        if (effect.isNotBlank()) {
-                            Text(effect, fontSize = 12.sp, color = Color(0xFF616161))
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("名称：${pet.name}${if (isActive) "（出战）" else ""}", fontWeight = FontWeight.SemiBold)
+                    Text("稀有度：${PetData.getRarityLabel(pet.rarity)}")
+                    Text("等级：Lv${pet.level}")
+                    Text("成长：${String.format("%.3f", pet.growth)}")
+                    Text("定位：${pet.role}")
+                    if (isDivineBeastPet(pet)) {
+                        Text("神兽进阶：${pet.divineAdvanceCount}次")
+                        Text("每次效果：资质+10% / 成长+10% / 技能格+1", fontSize = 12.sp, color = Color(0xFF616161))
+                    }
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("资质", fontWeight = FontWeight.SemiBold)
+                    Text("生命 ${pet.aptitude.hp}  攻击 ${pet.aptitude.atk}  防御 ${pet.aptitude.def}")
+                    Text("魔法 ${pet.aptitude.mag}  敏捷 ${pet.aptitude.agility}")
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("技能", fontWeight = FontWeight.SemiBold)
+                    if (pet.skills.isEmpty()) {
+                        Text("暂无技能", color = Color.Gray)
+                    } else {
+                        pet.skills.forEachIndexed { idx, skillId ->
+                            val skillName = petSkillDisplayName(skillId, pet.skillNames.getOrNull(idx))
+                            val effect = petSkillEffectDisplay(skillId, pet.skillEffects.getOrNull(idx))
+                            Text("• $skillName")
+                            if (effect.isNotBlank()) {
+                                Text(effect, fontSize = 12.sp, color = Color(0xFF616161))
+                            }
                         }
                     }
                 }
             }
+
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("关闭")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PetDivineAdvanceDialog(
+    pet: PetInfo,
+    ownedFragments: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val cost = 500
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("神兽进阶") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("神兽：${pet.name}")
+                Text("当前进阶：${pet.divineAdvanceCount}次")
+                Text("本次效果：资质+10%、成长+10%、技能格+1")
+                Text("消耗：神兽碎片 x$cost（当前 $ownedFragments）")
+            }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
-        dismissButton = {}
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = ownedFragments >= cost
+            ) { Text("确认进阶") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
     )
 }
 

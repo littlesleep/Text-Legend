@@ -640,6 +640,8 @@ data class PetInfo(
     val growth: Double = 1.0,
     val aptitude: PetAptitude = PetAptitude(),
     val skillSlots: Int = 3,
+    val divineAdvanceCount: Int = 0,
+    val isDivineBeast: Boolean = false,
     val skills: List<String> = emptyList(),
     val skillNames: List<String> = emptyList(),
     val skillEffects: List<String> = emptyList(),

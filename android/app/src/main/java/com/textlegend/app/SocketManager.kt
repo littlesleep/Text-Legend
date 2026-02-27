@@ -425,6 +425,13 @@ class SocketManager(private val json: Json) {
         })
     }
 
+    fun petDivineAdvance(petId: String) {
+        socket?.emit("pet_action", JSONObject().apply {
+            put("action", "divine_advance")
+            put("petId", petId)
+        })
+    }
+
     private fun extractPayloadObject(raw: Any): JSONObject? {
         return when (raw) {
             is JSONObject -> {
