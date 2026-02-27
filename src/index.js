@@ -13876,7 +13876,8 @@ io.on('connection', (socket) => {
       tradeApi,
       activityApi: {
         getPointShopConfig: () => getActivityPointShopConfigCached(false),
-        getDivineBeastFragmentExchangeConfig: () => getDivineBeastFragmentExchangeConfigCached(false),
+        // 神兽碎片兑换配置改为每次按后台最新值读取，避免缓存导致前台看到旧配置
+        getDivineBeastFragmentExchangeConfig: () => getDivineBeastFragmentExchangeConfigCached(true),
         grantFixedPet: (species) => grantFixedPetToPlayer(player, species, 'ultimate')
       },
       consignApi,

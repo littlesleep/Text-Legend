@@ -3298,6 +3298,23 @@ body.dark .mail-tab.active {
   width: 100%;
 }
 
+#mail-modal .modal-actions {
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+#mail-modal .modal-actions button {
+  flex: 0 0 auto;
+  min-width: 92px;
+}
+
+#mail-modal #mail-send {
+  min-width: 80px;
+}
+
 @media (max-width: 720px) {
   .mail-card {
     width: 96vw;
@@ -3333,10 +3350,12 @@ body.dark .mail-tab.active {
   }
   .mail-compose button,
   .mail-attach-row button,
-  #mail-send,
   #mail-refresh,
   #mail-close {
     width: 100%;
+  }
+  #mail-modal .modal-actions button {
+    width: auto;
   }
 }
 
