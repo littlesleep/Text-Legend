@@ -3305,6 +3305,11 @@ body.dark .mail-tab.active {
   z-index: 2;
 }
 
+body.dark #mail-modal .modal-actions {
+  background: #25201c;
+  border-top-color: #4a3a30;
+}
+
 #mail-modal .modal-actions button {
   flex: 0 0 auto;
   min-width: 92px;
