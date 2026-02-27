@@ -630,9 +630,15 @@ function grantFixedPetToPlayer(player, species, rarity = 'ultimate') {
   if (!player) return { ok: false, reason: 'player_not_found' };
   const petState = normalizePetState(player);
   if (!petState) return { ok: false, reason: 'pet_state_invalid' };
-  if (Array.isArray(petState.pets) && petState.pets.length >= PET_MAX_OWNED) return { ok: false, reason: 'pet_full' };
+  if (Array.isArray(petState.pets) && petState.pets.length >= PET_MAX_OWNED) {
+    return {
+      ok: false,
+      reason: 'pet_full',
+      msg: `宠物栏已满（${petState.pets.length}/${PET_MAX_OWNED}），请先放生或处理部分宠物后重试。`
+    };
+  }
   const fixedPet = createRandomPet(rarity, { fixedSpecies: String(species || '').trim() });
-  if (!fixedPet) return { ok: false, reason: 'create_failed' };
+  if (!fixedPet) return { ok: false, reason: 'create_failed', msg: '创建神兽数据失败。' };
   petState.pets.push(fixedPet);
   if (!petState.activePetId) petState.activePetId = fixedPet.id;
   player.forceStateRefresh = true;
@@ -2001,7 +2007,7 @@ app.post('/admin/first-recharge-settings/reissue-divine-beast', async (req, res)
   }
   const petGrant = grantDivineBeastPetToPlayer(player);
   if (!petGrant?.ok || !petGrant.pet) {
-    return res.status(400).json({ error: '马年神兽补发失败。' });
+    return res.status(400).json({ error: petGrant?.msg || `马年神兽补发失败（${petGrant?.reason || 'unknown'}）。` });
   }
   if (typeof saveOffline === 'function') {
     await saveOffline();
@@ -2109,7 +2115,7 @@ app.post('/admin/first-recharge-settings/reissue-divine-beast-all', async (req, 
       const petGrant = grantDivineBeastPetToPlayer(player);
       if (!petGrant?.ok || !petGrant.pet) {
         stats.failed += 1;
-        failures.push(`uid=${userId}:发神兽失败`);
+        failures.push(`uid=${userId}:${petGrant?.msg || `发神兽失败(${petGrant?.reason || 'unknown'})`}`);
         continue;
       }
       if (saveOffline) await saveOffline();
