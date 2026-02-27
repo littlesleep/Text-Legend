@@ -180,6 +180,26 @@ let effectDropSingleChance = 0.009; // 单特效掉落概率(%)
 let effectDropDoubleChance = 0.001; // 双特效掉落概率(%)
 let equipSkillDropChance = 0.5; // 装备附加技能掉落概率(%)
 
+// 终极装备成长配置
+let ultimateGrowthConfig = {
+  enabled: true,
+  maxLevel: 0, // 0 表示无上限
+  perLevelPct: 0.006,
+  tierEvery: 20,
+  tierBonusPct: 0.03,
+  materialId: 'ultimate_growth_stone',
+  materialCost: 2,
+  breakthroughEvery: 20,
+  breakthroughMaterialId: 'ultimate_growth_break_stone',
+  breakthroughMaterialCost: 1,
+  goldCost: 50000,
+  successRateEarly: 100, // 1-60
+  successRateMid: 70, // 61-80
+  successRateLate: 45, // 81-100
+  failStackBonusPct: 0.03,
+  failStackCapPct: 0.45
+};
+
 // 特效重置配置（可由后台动态配置）
 let effectResetSuccessRate = 0.1; // 成功率(%)
 let effectResetDoubleRate = 0.01; // 双特效概率(%)
@@ -401,6 +421,66 @@ export function setEquipSkillDropChance(rate) {
  */
 export function getEquipSkillDropChance() {
   return equipSkillDropChance;
+}
+
+function normalizeUltimateGrowthConfig(config = {}) {
+  const src = config && typeof config === 'object' ? config : {};
+  const rawMaterialId = String(src.materialId || 'ultimate_growth_stone').trim();
+  // 兼容旧配置：成长材料默认从 training_fruit 迁移为专用不可掉落材料
+  const materialId = rawMaterialId === 'training_fruit' || !rawMaterialId ? 'ultimate_growth_stone' : rawMaterialId;
+  const rawBreakthroughMaterialId = String(src.breakthroughMaterialId || src.advanceMaterialId || 'ultimate_growth_break_stone').trim();
+  // 兼容旧配置：20级突破材料不再使用神兽碎片
+  const breakthroughMaterialId =
+    !rawBreakthroughMaterialId || rawBreakthroughMaterialId === 'divine_beast_fragment'
+      ? 'ultimate_growth_break_stone'
+      : rawBreakthroughMaterialId;
+  return {
+    enabled: src.enabled !== false,
+    maxLevel: (() => {
+      const parsed = Number(src.maxLevel ?? 0);
+      if (!Number.isFinite(parsed)) return 0;
+      const normalized = Math.floor(parsed);
+      return normalized <= 0 ? 0 : normalized;
+    })(),
+    perLevelPct: Math.max(0, Number(src.perLevelPct ?? 0.006) || 0.006),
+    tierEvery: Math.max(1, Math.floor(Number(src.tierEvery ?? 20) || 20)),
+    tierBonusPct: Math.max(0, Number(src.tierBonusPct ?? 0.03) || 0.03),
+    materialId,
+    materialCost: Math.max(1, Math.floor(Number(src.materialCost ?? 2) || 2)),
+    breakthroughEvery: Math.max(1, Math.floor(Number(src.breakthroughEvery ?? 20) || 20)),
+    breakthroughMaterialId,
+    breakthroughMaterialCost: Math.max(1, Math.floor(Number(src.breakthroughMaterialCost ?? src.advanceMaterialCost ?? 1) || 1)),
+    goldCost: Math.max(0, Math.floor(Number(src.goldCost ?? 50000) || 50000)),
+    successRateEarly: Math.max(0, Math.min(100, Number(src.successRateEarly ?? 100) || 100)),
+    successRateMid: Math.max(0, Math.min(100, Number(src.successRateMid ?? 70) || 70)),
+    successRateLate: Math.max(0, Math.min(100, Number(src.successRateLate ?? 45) || 45)),
+    failStackBonusPct: Math.max(0, Number(src.failStackBonusPct ?? 0.03) || 0.03),
+    failStackCapPct: Math.max(0, Number(src.failStackCapPct ?? 0.45) || 0.45)
+  };
+}
+
+export function setUltimateGrowthConfig(config) {
+  ultimateGrowthConfig = normalizeUltimateGrowthConfig(config);
+}
+
+export function getUltimateGrowthConfig() {
+  return { ...ultimateGrowthConfig };
+}
+
+export function getUltimateGrowthRateByLevel(level) {
+  const cfg = getUltimateGrowthConfig();
+  const lv = Math.max(1, Math.floor(Number(level || 1)));
+  if (lv <= 60) return cfg.successRateEarly;
+  if (lv <= 80) return cfg.successRateMid;
+  return cfg.successRateLate;
+}
+
+export function calcUltimateGrowthBonusPct(level) {
+  const cfg = getUltimateGrowthConfig();
+  const lv = Math.max(0, Math.floor(Number(level || 0)));
+  if (!cfg.enabled || lv <= 0) return 0;
+  const tierCount = Math.floor(lv / cfg.tierEvery);
+  return lv * cfg.perLevelPct + tierCount * cfg.tierBonusPct;
 }
 
 

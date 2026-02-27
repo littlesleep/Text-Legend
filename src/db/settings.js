@@ -975,3 +975,19 @@ export async function setTreasureTowerXuanmingDropChance(chance) {
   await setSetting('treasure_tower_xuanming_drop_chance', String(normalized));
 }
 
+export async function getUltimateGrowthConfig() {
+  const raw = await getSetting('ultimate_growth_config', '');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setUltimateGrowthConfig(config) {
+  const payload = config && typeof config === 'object' ? config : {};
+  await setSetting('ultimate_growth_config', JSON.stringify(payload));
+}
+

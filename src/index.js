@@ -15,10 +15,10 @@ import { createUser, verifyUser, createSession, getSession, getUserByName, setAd
 import { listCharacters, loadCharacter, saveCharacter, findCharacterByName, findCharacterByNameInRealm, listAllCharacters, deleteCharacter } from './db/characters.js';
 import { addGuildMember, createGuild, getGuildByName, getGuildByNameInRealm, getGuildById, getGuildMember, getSabakOwner, isGuildLeader, isGuildLeaderOrVice, setGuildMemberRole, listGuildMembers, listSabakRegistrations, registerSabak, hasSabakRegistrationToday, hasAnySabakRegistrationToday, removeGuildMember, leaveGuild, setSabakOwner, clearSabakRegistrations, transferGuildLeader, ensureSabakState, applyToGuild, listGuildApplications, removeGuildApplication, approveGuildApplication, getApplicationByUser, listAllGuilds } from './db/guilds.js';
 import { createAdminSession, listUsers, verifyAdminSession, deleteUser } from './db/admin.js';
-import { sendMail, listMail, listSentMail, markMailRead, markMailClaimed, deleteMail } from './db/mail.js';
+import { sendMail, listMail, listSentMail, markMailRead, deleteMail } from './db/mail.js';
 import { createVipCodes, listVipCodes, countVipCodes, useVipCode } from './db/vip.js';
 import { createRechargeCards, listRechargeCards, countRechargeCards, useRechargeCard, listUsedRechargeCharacters } from './db/recharge.js';
-import { getSetting, setSetting, getVipSelfClaimEnabled, setVipSelfClaimEnabled, getSvipPrices, setSvipPrices, getLootLogEnabled, setLootLogEnabled, getCrossWorldBossRespawnAt, setCrossWorldBossRespawnAt, getStateThrottleEnabled, setStateThrottleEnabled, getStateThrottleIntervalSec, setStateThrottleIntervalSec, getStateThrottleOverrideServerAllowed, setStateThrottleOverrideServerAllowed, getRoomVariantCount, setRoomVariantCount, getSabakStartHour, setSabakStartHour, getSabakStartMinute, setSabakStartMinute, getSabakDurationMinutes, setSabakDurationMinutes, getSabakSiegeMinutes, setSabakSiegeMinutes, getCrossRankStartHour, setCrossRankStartHour, getCrossRankStartMinute, setCrossRankStartMinute, getCrossRankDurationMinutes, setCrossRankDurationMinutes, canUserClaimVip, incrementCharacterVipClaimCount, getWorldBossKillCount, setWorldBossKillCount, getSpecialBossKillCount, setSpecialBossKillCount, getCultivationBossKillCount, setCultivationBossKillCount, getWorldBossDropBonus, setWorldBossDropBonus, getWorldBossBaseHp, setWorldBossBaseHp, getWorldBossBaseAtk, setWorldBossBaseAtk, getWorldBossBaseDef, setWorldBossBaseDef, getWorldBossBaseMdef, setWorldBossBaseMdef, getWorldBossBaseExp, setWorldBossBaseExp, getWorldBossBaseGold, setWorldBossBaseGold, getWorldBossRespawnMinutes, setWorldBossRespawnMinutes, getWorldBossPlayerBonusConfig, setWorldBossPlayerBonusConfig, getClassLevelBonusConfig, setClassLevelBonusConfig, getSpecialBossDropBonus, setSpecialBossDropBonus, getSpecialBossBaseHp, setSpecialBossBaseHp, getSpecialBossBaseAtk, setSpecialBossBaseAtk, getSpecialBossBaseDef, setSpecialBossBaseDef, getSpecialBossBaseMdef, setSpecialBossBaseMdef, getSpecialBossBaseExp, setSpecialBossBaseExp, getSpecialBossBaseGold, setSpecialBossBaseGold, getSpecialBossRespawnMinutes, setSpecialBossRespawnMinutes, getSpecialBossPlayerBonusConfig, setSpecialBossPlayerBonusConfig, getCultivationBossDropBonus, setCultivationBossDropBonus, getCultivationBossPlayerBonusConfig, setCultivationBossPlayerBonusConfig, getCultivationBossBaseHp, setCultivationBossBaseHp, getCultivationBossBaseAtk, setCultivationBossBaseAtk, getCultivationBossBaseDef, setCultivationBossBaseDef, getCultivationBossBaseMdef, setCultivationBossBaseMdef, getCultivationBossBaseExp, setCultivationBossBaseExp, getCultivationBossBaseGold, setCultivationBossBaseGold, getCultivationBossRespawnMinutes, setCultivationBossRespawnMinutes, getTrainingFruitCoefficient as getTrainingFruitCoefficientDb, setTrainingFruitCoefficient as setTrainingFruitCoefficientDb, getTrainingFruitDropRate as getTrainingFruitDropRateDb, setTrainingFruitDropRate as setTrainingFruitDropRateDb, getPetTrainingFruitDropRate as getPetTrainingFruitDropRateDb, setPetTrainingFruitDropRate as setPetTrainingFruitDropRateDb, getTrainingPerLevelConfig as getTrainingPerLevelConfigDb, setTrainingPerLevelConfig as setTrainingPerLevelConfigDb, getRefineBaseSuccessRate as getRefineBaseSuccessRateDb, setRefineBaseSuccessRate as setRefineBaseSuccessRateDb, getRefineDecayRate as getRefineDecayRateDb, setRefineDecayRate as setRefineDecayRateDb, getRefineMaterialCount as getRefineMaterialCountDb, setRefineMaterialCount as setRefineMaterialCountDb, getRefineBonusPerLevel as getRefineBonusPerLevelDb, setRefineBonusPerLevel as setRefineBonusPerLevelDb, getEffectResetSuccessRate as getEffectResetSuccessRateDb, setEffectResetSuccessRate as setEffectResetSuccessRateDb, getEffectResetDoubleRate as getEffectResetDoubleRateDb, setEffectResetDoubleRate as setEffectResetDoubleRateDb, getEffectResetTripleRate as getEffectResetTripleRateDb, setEffectResetTripleRate as setEffectResetTripleRateDb, getEffectResetQuadrupleRate as getEffectResetQuadrupleRateDb, setEffectResetQuadrupleRate as setEffectResetQuadrupleRateDb, getEffectResetQuintupleRate as getEffectResetQuintupleRateDb, setEffectResetQuintupleRate as setEffectResetQuintupleRateDb, getPetSettings, setPetSettings, getEffectDropSingleChance as getEffectDropSingleChanceDb, setEffectDropSingleChance as setEffectDropSingleChanceDb, getEffectDropDoubleChance as getEffectDropDoubleChanceDb, setEffectDropDoubleChance as setEffectDropDoubleChanceDb, getEquipSkillDropChance as getEquipSkillDropChanceDb, setEquipSkillDropChance as setEquipSkillDropChanceDb, getTreasureSlotCount as getTreasureSlotCountDb, setTreasureSlotCount as setTreasureSlotCountDb, getTreasureMaxLevel as getTreasureMaxLevelDb, setTreasureMaxLevel as setTreasureMaxLevelDb, getTreasureUpgradeConsume as getTreasureUpgradeConsumeDb, setTreasureUpgradeConsume as setTreasureUpgradeConsumeDb, getTreasureAdvanceConsume as getTreasureAdvanceConsumeDb, setTreasureAdvanceConsume as setTreasureAdvanceConsumeDb, getTreasureAdvancePerStage as getTreasureAdvancePerStageDb, setTreasureAdvancePerStage as setTreasureAdvancePerStageDb, getTreasureAdvanceEffectBonusPerStack as getTreasureAdvanceEffectBonusPerStackDb, setTreasureAdvanceEffectBonusPerStack as setTreasureAdvanceEffectBonusPerStackDb, getTreasureWorldBossDropMultiplier as getTreasureWorldBossDropMultiplierDb, setTreasureWorldBossDropMultiplier as setTreasureWorldBossDropMultiplierDb, getTreasureCrossWorldBossDropMultiplier as getTreasureCrossWorldBossDropMultiplierDb, setTreasureCrossWorldBossDropMultiplier as setTreasureCrossWorldBossDropMultiplierDb, getTreasureTowerXuanmingDropChance as getTreasureTowerXuanmingDropChanceDb, setTreasureTowerXuanmingDropChance as setTreasureTowerXuanmingDropChanceDb, getCmdRateLimits, setCmdRateLimits, getCmdCooldowns, setCmdCooldowns } from './db/settings.js';
+import { getSetting, setSetting, getVipSelfClaimEnabled, setVipSelfClaimEnabled, getSvipPrices, setSvipPrices, getLootLogEnabled, setLootLogEnabled, getCrossWorldBossRespawnAt, setCrossWorldBossRespawnAt, getStateThrottleEnabled, setStateThrottleEnabled, getStateThrottleIntervalSec, setStateThrottleIntervalSec, getStateThrottleOverrideServerAllowed, setStateThrottleOverrideServerAllowed, getRoomVariantCount, setRoomVariantCount, getSabakStartHour, setSabakStartHour, getSabakStartMinute, setSabakStartMinute, getSabakDurationMinutes, setSabakDurationMinutes, getSabakSiegeMinutes, setSabakSiegeMinutes, getCrossRankStartHour, setCrossRankStartHour, getCrossRankStartMinute, setCrossRankStartMinute, getCrossRankDurationMinutes, setCrossRankDurationMinutes, canUserClaimVip, incrementCharacterVipClaimCount, getWorldBossKillCount, setWorldBossKillCount, getSpecialBossKillCount, setSpecialBossKillCount, getCultivationBossKillCount, setCultivationBossKillCount, getWorldBossDropBonus, setWorldBossDropBonus, getWorldBossBaseHp, setWorldBossBaseHp, getWorldBossBaseAtk, setWorldBossBaseAtk, getWorldBossBaseDef, setWorldBossBaseDef, getWorldBossBaseMdef, setWorldBossBaseMdef, getWorldBossBaseExp, setWorldBossBaseExp, getWorldBossBaseGold, setWorldBossBaseGold, getWorldBossRespawnMinutes, setWorldBossRespawnMinutes, getWorldBossPlayerBonusConfig, setWorldBossPlayerBonusConfig, getClassLevelBonusConfig, setClassLevelBonusConfig, getSpecialBossDropBonus, setSpecialBossDropBonus, getSpecialBossBaseHp, setSpecialBossBaseHp, getSpecialBossBaseAtk, setSpecialBossBaseAtk, getSpecialBossBaseDef, setSpecialBossBaseDef, getSpecialBossBaseMdef, setSpecialBossBaseMdef, getSpecialBossBaseExp, setSpecialBossBaseExp, getSpecialBossBaseGold, setSpecialBossBaseGold, getSpecialBossRespawnMinutes, setSpecialBossRespawnMinutes, getSpecialBossPlayerBonusConfig, setSpecialBossPlayerBonusConfig, getCultivationBossDropBonus, setCultivationBossDropBonus, getCultivationBossPlayerBonusConfig, setCultivationBossPlayerBonusConfig, getCultivationBossBaseHp, setCultivationBossBaseHp, getCultivationBossBaseAtk, setCultivationBossBaseAtk, getCultivationBossBaseDef, setCultivationBossBaseDef, getCultivationBossBaseMdef, setCultivationBossBaseMdef, getCultivationBossBaseExp, setCultivationBossBaseExp, getCultivationBossBaseGold, setCultivationBossBaseGold, getCultivationBossRespawnMinutes, setCultivationBossRespawnMinutes, getTrainingFruitCoefficient as getTrainingFruitCoefficientDb, setTrainingFruitCoefficient as setTrainingFruitCoefficientDb, getTrainingFruitDropRate as getTrainingFruitDropRateDb, setTrainingFruitDropRate as setTrainingFruitDropRateDb, getPetTrainingFruitDropRate as getPetTrainingFruitDropRateDb, setPetTrainingFruitDropRate as setPetTrainingFruitDropRateDb, getTrainingPerLevelConfig as getTrainingPerLevelConfigDb, setTrainingPerLevelConfig as setTrainingPerLevelConfigDb, getRefineBaseSuccessRate as getRefineBaseSuccessRateDb, setRefineBaseSuccessRate as setRefineBaseSuccessRateDb, getRefineDecayRate as getRefineDecayRateDb, setRefineDecayRate as setRefineDecayRateDb, getRefineMaterialCount as getRefineMaterialCountDb, setRefineMaterialCount as setRefineMaterialCountDb, getRefineBonusPerLevel as getRefineBonusPerLevelDb, setRefineBonusPerLevel as setRefineBonusPerLevelDb, getEffectResetSuccessRate as getEffectResetSuccessRateDb, setEffectResetSuccessRate as setEffectResetSuccessRateDb, getEffectResetDoubleRate as getEffectResetDoubleRateDb, setEffectResetDoubleRate as setEffectResetDoubleRateDb, getEffectResetTripleRate as getEffectResetTripleRateDb, setEffectResetTripleRate as setEffectResetTripleRateDb, getEffectResetQuadrupleRate as getEffectResetQuadrupleRateDb, setEffectResetQuadrupleRate as setEffectResetQuadrupleRateDb, getEffectResetQuintupleRate as getEffectResetQuintupleRateDb, setEffectResetQuintupleRate as setEffectResetQuintupleRateDb, getPetSettings, setPetSettings, getEffectDropSingleChance as getEffectDropSingleChanceDb, setEffectDropSingleChance as setEffectDropSingleChanceDb, getEffectDropDoubleChance as getEffectDropDoubleChanceDb, setEffectDropDoubleChance as setEffectDropDoubleChanceDb, getEquipSkillDropChance as getEquipSkillDropChanceDb, setEquipSkillDropChance as setEquipSkillDropChanceDb, getTreasureSlotCount as getTreasureSlotCountDb, setTreasureSlotCount as setTreasureSlotCountDb, getTreasureMaxLevel as getTreasureMaxLevelDb, setTreasureMaxLevel as setTreasureMaxLevelDb, getTreasureUpgradeConsume as getTreasureUpgradeConsumeDb, setTreasureUpgradeConsume as setTreasureUpgradeConsumeDb, getTreasureAdvanceConsume as getTreasureAdvanceConsumeDb, setTreasureAdvanceConsume as setTreasureAdvanceConsumeDb, getTreasureAdvancePerStage as getTreasureAdvancePerStageDb, setTreasureAdvancePerStage as setTreasureAdvancePerStageDb, getTreasureAdvanceEffectBonusPerStack as getTreasureAdvanceEffectBonusPerStackDb, setTreasureAdvanceEffectBonusPerStack as setTreasureAdvanceEffectBonusPerStackDb, getTreasureWorldBossDropMultiplier as getTreasureWorldBossDropMultiplierDb, setTreasureWorldBossDropMultiplier as setTreasureWorldBossDropMultiplierDb, getTreasureCrossWorldBossDropMultiplier as getTreasureCrossWorldBossDropMultiplierDb, setTreasureCrossWorldBossDropMultiplier as setTreasureCrossWorldBossDropMultiplierDb, getTreasureTowerXuanmingDropChance as getTreasureTowerXuanmingDropChanceDb, setTreasureTowerXuanmingDropChance as setTreasureTowerXuanmingDropChanceDb, getCmdRateLimits, setCmdRateLimits, getCmdCooldowns, setCmdCooldowns, getUltimateGrowthConfig as getUltimateGrowthConfigDb, setUltimateGrowthConfig as setUltimateGrowthConfigDb } from './db/settings.js';
 import { listRealms, getRealmById, updateRealmName, createRealm } from './db/realms.js';
 import {
   listMobRespawns,
@@ -143,7 +143,9 @@ import {
   setTrainingFruitCoefficient,
   setTrainingFruitDropRate as setTrainingFruitDropRateConfig,
   setPetTrainingFruitDropRate as setPetTrainingFruitDropRateConfig,
-  setTrainingPerLevelConfig as setTrainingPerLevelConfigMem
+  setTrainingPerLevelConfig as setTrainingPerLevelConfigMem,
+  getUltimateGrowthConfig as getUltimateGrowthConfigMem,
+  setUltimateGrowthConfig as setUltimateGrowthConfigMem
 } from './game/settings.js';
 import {
   isTreasureItemId,
@@ -2697,6 +2699,63 @@ app.post('/admin/refine-settings/update', async (req, res) => {
   res.json({ ok: true, baseSuccessRate: newBaseSuccessRate, decayRate: newDecayRate, materialCount: newMaterialCount, bonusPerLevel: newBonusPerLevel });
 });
 
+// 终极装备成长配置
+app.get('/admin/ultimate-growth-settings', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  const dbConfig = await getUltimateGrowthConfigDb();
+  if (dbConfig && typeof dbConfig === 'object') {
+    setUltimateGrowthConfigMem(dbConfig);
+    const normalized = getUltimateGrowthConfigMem();
+    const materialId = String(normalized.materialId || '').trim();
+    const materialTpl = ITEM_TEMPLATES[materialId];
+    if (!materialTpl?.noDrop) {
+      normalized.materialId = 'ultimate_growth_stone';
+    }
+    const breakthroughMaterialId = String(normalized.breakthroughMaterialId || '').trim();
+    const breakthroughTpl = ITEM_TEMPLATES[breakthroughMaterialId];
+    if (!breakthroughTpl?.noDrop) {
+      normalized.breakthroughMaterialId = 'ultimate_growth_break_stone';
+    }
+    if (!materialTpl?.noDrop || !breakthroughTpl?.noDrop) {
+      setUltimateGrowthConfigMem(normalized);
+      await setUltimateGrowthConfigDb(normalized);
+    }
+  }
+  res.json({ ok: true, settings: getUltimateGrowthConfigMem() });
+});
+
+app.post('/admin/ultimate-growth-settings/update', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  const incoming = req.body?.settings && typeof req.body.settings === 'object' ? req.body.settings : req.body;
+  const previous = getUltimateGrowthConfigMem();
+  setUltimateGrowthConfigMem(incoming || {});
+  const normalized = getUltimateGrowthConfigMem();
+  const materialId = String(normalized.materialId || '').trim();
+  const materialTpl = ITEM_TEMPLATES[materialId];
+  if (!materialId || !materialTpl) {
+    setUltimateGrowthConfigMem(previous);
+    return res.status(400).json({ error: '成长材料配置无效，请选择存在的物品。' });
+  }
+  if (!materialTpl.noDrop) {
+    setUltimateGrowthConfigMem(previous);
+    return res.status(400).json({ error: '成长材料必须是不可掉落(noDrop)道具。' });
+  }
+  const breakthroughMaterialId = String(normalized.breakthroughMaterialId || '').trim();
+  const breakthroughTpl = ITEM_TEMPLATES[breakthroughMaterialId];
+  if (!breakthroughMaterialId || !breakthroughTpl) {
+    setUltimateGrowthConfigMem(previous);
+    return res.status(400).json({ error: '突破材料配置无效，请选择存在的物品。' });
+  }
+  if (!breakthroughTpl.noDrop) {
+    setUltimateGrowthConfigMem(previous);
+    return res.status(400).json({ error: '突破材料必须是不可掉落(noDrop)道具。' });
+  }
+  await setUltimateGrowthConfigDb(normalized);
+  res.json({ ok: true, settings: normalized });
+});
+
 // 法宝系统配置
 app.get('/admin/treasure-settings', async (req, res) => {
   try {
@@ -4874,7 +4933,7 @@ function totalRewardMultiplier({ vipActive, svipActive = false, guildActive, cul
   return 1 + vipBonus + guildBonus + cultivationBonus + partyBonus + treasureBonus;
 }
 
-function buildItemView(itemId, effects = null, durability = null, max_durability = null, refine_level = 0, base_roll_pct = null) {
+function buildItemView(itemId, effects = null, durability = null, max_durability = null, refine_level = 0, base_roll_pct = null, growth_level = 0, growth_fail_stack = 0) {
   const item = ITEM_TEMPLATES[itemId] || { id: itemId, name: itemId, type: 'unknown' };
   const isEquipment = Boolean(item?.slot);
   const baseRollPct = isEquipment ? Math.max(50, Math.min(150, Math.floor(Number(base_roll_pct ?? 100) || 100))) : null;
@@ -4907,7 +4966,9 @@ function buildItemView(itemId, effects = null, durability = null, max_durability
     effects: effects || null,
     effectSkillName,
     refine_level: refine_level || 0,
-    base_roll_pct: baseRollPct
+    base_roll_pct: baseRollPct,
+    growth_level: Math.max(0, Math.floor(Number(growth_level || 0))),
+    growth_fail_stack: Math.max(0, Math.floor(Number(growth_fail_stack || 0)))
   };
 }
 
@@ -4947,6 +5008,8 @@ function buildInventoryItemPayload(slot) {
     durability: slot.durability ?? null,
     max_durability: slot.max_durability ?? null,
     refine_level: slot.refine_level || 0,
+    growth_level: Math.max(0, Math.floor(Number(slot.growth_level || 0))),
+    growth_fail_stack: Math.max(0, Math.floor(Number(slot.growth_fail_stack || 0))),
     base_roll_pct: baseRollPct,
     effects,
     effectSkillName,
@@ -4973,7 +5036,9 @@ function buildMailItemView(entry) {
     entry.durability,
     entry.max_durability,
     entry.refine_level ?? 0,
-    entry.base_roll_pct ?? null
+    entry.base_roll_pct ?? null,
+    entry.growth_level ?? 0,
+    entry.growth_fail_stack ?? 0
   );
   return {
     ...view,
@@ -6535,7 +6600,9 @@ function normalizeTradeItemInstanceAttrs(attrs = {}) {
     durability: attrs.durability == null ? null : Number(attrs.durability),
     max_durability: attrs.max_durability == null ? null : Number(attrs.max_durability),
     refine_level: attrs.refine_level == null ? 0 : Math.max(0, Math.floor(Number(attrs.refine_level || 0))),
-    base_roll_pct: attrs.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(attrs.base_roll_pct || 100) || 100)))
+    base_roll_pct: attrs.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(attrs.base_roll_pct || 100) || 100))),
+    growth_level: attrs.growth_level == null ? 0 : Math.max(0, Math.floor(Number(attrs.growth_level || 0))),
+    growth_fail_stack: attrs.growth_fail_stack == null ? 0 : Math.max(0, Math.floor(Number(attrs.growth_fail_stack || 0)))
   };
 }
 
@@ -6545,7 +6612,9 @@ function sameTradeItemInstanceAttrs(a = {}, b = {}) {
   return (na.durability ?? null) === (nb.durability ?? null)
     && (na.max_durability ?? null) === (nb.max_durability ?? null)
     && Number(na.refine_level || 0) === Number(nb.refine_level || 0)
-    && (na.base_roll_pct ?? null) === (nb.base_roll_pct ?? null);
+    && (na.base_roll_pct ?? null) === (nb.base_roll_pct ?? null)
+    && Number(na.growth_level || 0) === Number(nb.growth_level || 0)
+    && Number(na.growth_fail_stack || 0) === Number(nb.growth_fail_stack || 0);
 }
 
 function findInventorySlotForTrade(player, slot) {
@@ -6575,7 +6644,9 @@ function applyOfferItems(from, to, offer) {
       slot.durability ?? null,
       slot.max_durability ?? null,
       slot.refine_level ?? null,
-      slot.base_roll_pct ?? null
+      slot.base_roll_pct ?? null,
+      slot.growth_level ?? null,
+      slot.growth_fail_stack ?? null
     );
     addItem(
       to,
@@ -6585,7 +6656,9 @@ function applyOfferItems(from, to, offer) {
       slot.durability ?? null,
       slot.max_durability ?? null,
       slot.refine_level ?? null,
-      slot.base_roll_pct ?? null
+      slot.base_roll_pct ?? null,
+      slot.growth_level ?? null,
+      slot.growth_fail_stack ?? null
     );
   });
 }
@@ -6692,7 +6765,9 @@ const tradeApi = {
       durability: sourceSlot.durability ?? null,
       max_durability: sourceSlot.max_durability ?? null,
       refine_level: sourceSlot.refine_level ?? 0,
-      base_roll_pct: sourceSlot.base_roll_pct ?? null
+      base_roll_pct: sourceSlot.base_roll_pct ?? null,
+      growth_level: sourceSlot.growth_level ?? 0,
+      growth_fail_stack: sourceSlot.growth_fail_stack ?? 0
     };
     const existing = offer.items.find((i) =>
       i.id === itemId &&
@@ -6851,7 +6926,7 @@ const consignApi = {
         qty: row.qty,
         price: row.price,
         currency: row.currency || 'gold',
-        item: buildItemView(row.item_id, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? 0, row.base_roll_pct ?? null)
+        item: buildItemView(row.item_id, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? 0, row.base_roll_pct ?? null, row.growth_level ?? 0, row.growth_fail_stack ?? 0)
       }));
       player.socket?.emit?.('consign_list', { type: 'market', items });
       return items;
@@ -6865,7 +6940,7 @@ const consignApi = {
         qty: row.qty,
         price: row.price,
         currency: row.currency || 'gold',
-        item: buildItemView(row.item_id, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? 0, row.base_roll_pct ?? null)
+        item: buildItemView(row.item_id, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? 0, row.base_roll_pct ?? null, row.growth_level ?? 0, row.growth_fail_stack ?? 0)
       }));
       player.socket?.emit?.('consign_list', { type: 'mine', items });
       return items;
@@ -6901,8 +6976,10 @@ const consignApi = {
       const maxDurability = validateMaxDurability(invSlot.max_durability).value ?? null;
       const refineLevel = Number.isFinite(invSlot.refine_level) ? invSlot.refine_level : 0;
       const baseRollPct = invSlot.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(invSlot.base_roll_pct || 100) || 100)));
+      const growthLevel = Math.max(0, Math.floor(Number(invSlot.growth_level || 0)));
+      const growthFailStack = Math.max(0, Math.floor(Number(invSlot.growth_fail_stack || 0)));
 
-      if (!removeItem(player, itemId, qtyResult.value, effectsResult.value, durability, maxDurability, refineLevel, baseRollPct)) {
+      if (!removeItem(player, itemId, qtyResult.value, effectsResult.value, durability, maxDurability, refineLevel, baseRollPct, growthLevel, growthFailStack)) {
         return { ok: false, msg: '背包里没有足够数量。' };
       }
       const id = await createConsignment({
@@ -6916,6 +6993,8 @@ const consignApi = {
         maxDurability,
         refineLevel,
         baseRollPct,
+        growthLevel,
+        growthFailStack,
         realmId: player.realmId || 1
       });
       await consignApi.listMine(player);
@@ -6951,7 +7030,7 @@ const consignApi = {
     } else {
       player.gold -= serverTotal;
     }
-    addItem(player, row.item_id, qtyResult.value, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null);
+    addItem(player, row.item_id, qtyResult.value, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null, row.growth_level ?? null, row.growth_fail_stack ?? null);
 
     const remain = row.qty - qtyResult.value;
     if (remain > 0) {
@@ -6973,6 +7052,8 @@ const consignApi = {
       maxDurability: row.max_durability,
       refineLevel: row.refine_level ?? null,
       baseRollPct: row.base_roll_pct ?? null,
+      growthLevel: row.growth_level ?? null,
+      growthFailStack: row.growth_fail_stack ?? null,
       realmId: player.realmId || 1
     });
 
@@ -7016,7 +7097,7 @@ const consignApi = {
     const row = await getConsignment(idResult.value, player.realmId || 1);
     if (!row) return { ok: false, msg: '寄售不存在。' };
     if (row.seller_name !== player.name) return { ok: false, msg: '只能取消自己的寄售。' };
-    addItem(player, row.item_id, row.qty, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null);
+    addItem(player, row.item_id, row.qty, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null, row.growth_level ?? null, row.growth_fail_stack ?? null);
     await deleteConsignment(idResult.value, player.realmId || 1);
     await consignApi.listMine(player);
     await consignApi.listMarket(player);
@@ -7032,7 +7113,7 @@ const consignApi = {
       price: row.price,
       currency: row.currency || 'gold',
       total: row.price * row.qty,
-      item: buildItemView(row.item_id, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? 0, row.base_roll_pct ?? null),
+      item: buildItemView(row.item_id, parseJson(row.effects_json), row.durability, row.max_durability, row.refine_level ?? 0, row.base_roll_pct ?? null, row.growth_level ?? 0, row.growth_fail_stack ?? 0),
       soldAt: row.sold_at
     }));
     player.socket?.emit?.('consign_history', { items });
@@ -7173,7 +7254,7 @@ async function cleanupExpiredConsignments(realmId = 1) {
       const effects = parseJson(row.effects_json);
       const seller = playersByName(row.seller_name, realmId);
       if (seller) {
-        addItem(seller, row.item_id, qty, effects, row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null);
+        addItem(seller, row.item_id, qty, effects, row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null, row.growth_level ?? null, row.growth_fail_stack ?? null);
         seller.send(`寄售到期自动下架：${ITEM_TEMPLATES[row.item_id]?.name || row.item_id} x${qty} 已返还背包。`);
         seller.forceStateRefresh = true;
         refreshedSellers.add(seller);
@@ -7183,7 +7264,7 @@ async function cleanupExpiredConsignments(realmId = 1) {
         if (sellerRow) {
           const sellerPlayer = await loadCharacter(sellerRow.user_id, sellerRow.name, sellerRow.realm_id || 1);
           if (sellerPlayer) {
-            addItem(sellerPlayer, row.item_id, qty, effects, row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null);
+            addItem(sellerPlayer, row.item_id, qty, effects, row.durability, row.max_durability, row.refine_level ?? null, row.base_roll_pct ?? null, row.growth_level ?? null, row.growth_fail_stack ?? null);
             await saveCharacter(sellerRow.user_id, sellerPlayer, sellerRow.realm_id || 1);
           }
         }
@@ -11298,7 +11379,9 @@ function normalizePetEquipmentState(equipment) {
       durability: raw.durability == null ? null : Math.max(0, Math.floor(Number(raw.durability || 0))),
       max_durability: raw.max_durability == null ? null : Math.max(1, Math.floor(Number(raw.max_durability || 1))),
       refine_level: Math.max(0, Math.floor(Number(raw.refine_level || 0))),
-      base_roll_pct: raw.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(raw.base_roll_pct || 100))))
+      base_roll_pct: raw.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(raw.base_roll_pct || 100)))),
+      growth_level: Math.max(0, Math.floor(Number(raw.growth_level || 0))),
+      growth_fail_stack: Math.max(0, Math.floor(Number(raw.growth_fail_stack || 0)))
     };
   }
   return next;
@@ -11934,13 +12017,17 @@ async function buildState(player) {
       max_durability: equipped.max_durability ?? null,
       refine_level: equipped.refine_level || 0,
       base_roll_pct: equipped.base_roll_pct ?? null,
+      growth_level: Math.max(0, Math.floor(Number(equipped.growth_level || 0))),
+      growth_fail_stack: Math.max(0, Math.floor(Number(equipped.growth_fail_stack || 0))),
       item: buildItemView(
         equipped.id,
         equipped.effects || null,
         equipped.durability ?? null,
         equipped.max_durability ?? null,
         equipped.refine_level || 0,
-        equipped.base_roll_pct ?? null
+        equipped.base_roll_pct ?? null,
+        equipped.growth_level ?? 0,
+        equipped.growth_fail_stack ?? 0
       )
     }));
   const party = getPartyByMember(player.name, realmId);
@@ -12148,6 +12235,7 @@ async function buildState(player) {
     svip_settings: {
       prices: svipSettings.prices
     },
+    ultimate_growth_config: getUltimateGrowthConfigMem(),
     treasure_sets: TREASURE_SETS,
     auto_full_boss_list: AUTO_FULL_BOSS_LIST,
     state_throttle_enabled: stateThrottleEnabled,
@@ -12236,6 +12324,7 @@ async function sendState(player) {
     delete state.auto_full_boss_list;
     delete state.svip_settings;
     delete state.refine_config;
+    delete state.ultimate_growth_config;
     delete state.effect_reset_config;
   }
   if (!forceSend) {
@@ -13652,7 +13741,7 @@ io.on('connection', (socket) => {
     const inputText = typeof clean.text === 'string' ? clean.text : '';
     const inputSource = typeof clean.source === 'string' ? clean.source : '';
     const cmdName = inputText.trim().split(/\s+/)[0]?.toLowerCase();
-    const rateLimitExempt = new Set(['refine', 'forge', 'train', 'effect']);
+    const rateLimitExempt = new Set(['refine', 'forge', 'train', 'effect', 'growth']);
     const { rateLimits, cooldowns } = await getCmdRateSettingsCached();
     if (!rateLimitExempt.has(cmdName)) {
       if (hitRateLimit(player, 'cmd', rateLimits.global.limit, rateLimits.global.windowMs) ||
@@ -14002,7 +14091,9 @@ io.on('connection', (socket) => {
         durability: inv.durability == null ? null : Math.floor(Number(inv.durability || 0)),
         max_durability: inv.max_durability == null ? null : Math.floor(Number(inv.max_durability || 0)),
         refine_level: Math.max(0, Math.floor(Number(inv.refine_level || 0))),
-        base_roll_pct: inv.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(inv.base_roll_pct || 100))))
+        base_roll_pct: inv.base_roll_pct == null ? null : Math.max(50, Math.min(150, Math.floor(Number(inv.base_roll_pct || 100)))),
+        growth_level: Math.max(0, Math.floor(Number(inv.growth_level || 0))),
+        growth_fail_stack: Math.max(0, Math.floor(Number(inv.growth_fail_stack || 0)))
       };
       const replaced = pet.equipment[slotKey] && pet.equipment[slotKey].id ? { ...pet.equipment[slotKey] } : null;
       if (replaced) {
@@ -14014,7 +14105,9 @@ io.on('connection', (socket) => {
           replaced.durability ?? null,
           replaced.max_durability ?? null,
           replaced.refine_level ?? 0,
-          replaced.base_roll_pct ?? null
+          replaced.base_roll_pct ?? null,
+          replaced.growth_level ?? null,
+          replaced.growth_fail_stack ?? null
         );
       }
       if (Number(inv.qty || 1) > 1) {
@@ -14044,7 +14137,9 @@ io.on('connection', (socket) => {
         equipped.durability ?? null,
         equipped.max_durability ?? null,
         equipped.refine_level ?? 0,
-        equipped.base_roll_pct ?? null
+        equipped.base_roll_pct ?? null,
+        equipped.growth_level ?? null,
+        equipped.growth_fail_stack ?? null
       );
       pet.equipment[slotKey] = null;
       normalizeInventory(player);
@@ -14476,7 +14571,7 @@ io.on('connection', (socket) => {
           const slot = resolveInventorySlotByKey(player, key);
           if (!slot) continue;
           const qty = Math.max(1, Number(totalQty));
-          if (!removeItem(player, slot.id, qty, slot.effects, slot.durability ?? null, slot.max_durability ?? null, slot.refine_level ?? null, slot.base_roll_pct ?? null)) {
+          if (!removeItem(player, slot.id, qty, slot.effects, slot.durability ?? null, slot.max_durability ?? null, slot.refine_level ?? null, slot.base_roll_pct ?? null, slot.growth_level ?? null, slot.growth_fail_stack ?? null)) {
             return socket.emit('mail_send_result', { ok: false, msg: '附件数量超过背包数量。' });
           }
         items.push({
@@ -14486,7 +14581,9 @@ io.on('connection', (socket) => {
           durability: slot.durability ?? null,
           max_durability: slot.max_durability ?? null,
           refine_level: slot.refine_level ?? null,
-          base_roll_pct: slot.base_roll_pct ?? null
+          base_roll_pct: slot.base_roll_pct ?? null,
+          growth_level: slot.growth_level ?? null,
+          growth_fail_stack: slot.growth_fail_stack ?? null
         });
       }
     }
@@ -14501,7 +14598,10 @@ io.on('connection', (socket) => {
             entry.effects || null,
             entry.durability ?? null,
             entry.max_durability ?? null,
-            entry.refine_level ?? null
+            entry.refine_level ?? null,
+            entry.base_roll_pct ?? null,
+            entry.growth_level ?? null,
+            entry.growth_fail_stack ?? null
           );
         });
         return socket.emit('mail_send_result', { ok: false, msg: '金币不足。' });
@@ -14549,16 +14649,19 @@ io.on('connection', (socket) => {
           entry.durability ?? null,
           entry.max_durability ?? null,
           entry.refine_level ?? null,
-          entry.base_roll_pct ?? null
+          entry.base_roll_pct ?? null,
+          entry.growth_level ?? null,
+          entry.growth_fail_stack ?? null
         );
       });
     }
     if (gold > 0) {
       player.gold += gold;
     }
-    await markMailClaimed(player.userId, mailId, player.realmId || 1);
-    await markMailRead(player.userId, mailId, player.realmId || 1);
-    socket.emit('mail_claim_result', { ok: true, msg: '附件已领取。' });
+    await deleteMail(player.userId, mailId, player.realmId || 1, 'inbox');
+    socket.emit('mail_claim_result', { ok: true, msg: '附件已领取，邮件已自动删除。' });
+    const refreshedMails = await listMail(player.userId, player.realmId || 1);
+    socket.emit('mail_list', { ok: true, mails: refreshedMails.map(buildMailPayload) });
     await sendState(player);
     await savePlayer(player);
   });
@@ -17758,6 +17861,26 @@ async function start() {
   // 加载修炼系统配置
   const trainingPerLevelConfig = await getTrainingPerLevelConfigDb();
   setTrainingPerLevelConfigMem(trainingPerLevelConfig);
+  const ultimateGrowthConfig = await getUltimateGrowthConfigDb();
+  if (ultimateGrowthConfig && typeof ultimateGrowthConfig === 'object') {
+    setUltimateGrowthConfigMem(ultimateGrowthConfig);
+    const normalizedGrowth = getUltimateGrowthConfigMem();
+    const growthMaterialId = String(normalizedGrowth.materialId || '').trim();
+    const growthMaterialTpl = ITEM_TEMPLATES[growthMaterialId];
+    const growthBreakMaterialId = String(normalizedGrowth.breakthroughMaterialId || '').trim();
+    const growthBreakMaterialTpl = ITEM_TEMPLATES[growthBreakMaterialId];
+    if (!growthMaterialTpl?.noDrop) {
+      normalizedGrowth.materialId = 'ultimate_growth_stone';
+    }
+    if (!growthBreakMaterialTpl?.noDrop) {
+      normalizedGrowth.breakthroughMaterialId = 'ultimate_growth_break_stone';
+    }
+    if (!growthMaterialTpl?.noDrop || !growthBreakMaterialTpl?.noDrop) {
+      setUltimateGrowthConfigMem(normalizedGrowth);
+      await setUltimateGrowthConfigDb(getUltimateGrowthConfigMem());
+      console.log('[ultimate-growth] 已自动修正成长/突破材料为不可掉落道具');
+    }
+  }
   await loadFirstRechargeWelfareConfig();
   await loadInviteRewardConfig();
 

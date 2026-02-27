@@ -2,7 +2,11 @@
 import { ITEM_TEMPLATES } from './items.js';
 import { getInitialSkillsForClass } from './skills.js';
 import { clamp } from './utils.js';
-import { getClassLevelBonusConfig as getClassLevelBonusFromConfig, getRefineBonusPerLevel } from './settings.js';
+import {
+  getClassLevelBonusConfig as getClassLevelBonusFromConfig,
+  getRefineBonusPerLevel,
+  calcUltimateGrowthBonusPct
+} from './settings.js';
 import { getTreasureBonus, getTreasureRandomAttrBonus, normalizeTreasureState } from './treasure.js';
 
 const EQUIP_BASE_ROLL_MIN_PCT = 50;
@@ -27,6 +31,18 @@ function scaleEquipBaseStat(value, baseRollPct) {
   if (base <= 0) return 0;
   const pct = clamp(Math.floor(Number(baseRollPct || 100)), EQUIP_BASE_ROLL_MIN_PCT, EQUIP_BASE_ROLL_MAX_PCT);
   return Math.max(1, Math.floor(base * pct / 100));
+}
+
+function normalizeGrowthLevel(value) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.floor(raw));
+}
+
+function normalizeGrowthFailStack(value) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.floor(raw));
 }
 
 function getActivePetSkillSet(player) {
@@ -130,7 +146,9 @@ export function getItemKey(slot) {
     const maxDur = slot.max_durability ?? 100;
     const refineLevel = slot.refine_level ?? 0;
     const baseRollPct = normalizeEquipBaseRollPct(item, slot.base_roll_pct, 100);
-    baseKey += `@${dur}/${maxDur}/+${refineLevel}/r${baseRollPct}`;
+    const growthLevel = normalizeGrowthLevel(slot.growth_level);
+    const growthFailStack = normalizeGrowthFailStack(slot.growth_fail_stack);
+    baseKey += `@${dur}/${maxDur}/+${refineLevel}/r${baseRollPct}/g${growthLevel}/gf${growthFailStack}`;
   }
   return baseKey;
 }
@@ -147,6 +165,8 @@ function ensureDurability(equipped) {
   if (!item) return;
   if (item.slot) {
     equipped.base_roll_pct = normalizeEquipBaseRollPct(item, equipped.base_roll_pct, 100);
+    equipped.growth_level = normalizeGrowthLevel(equipped.growth_level);
+    equipped.growth_fail_stack = normalizeGrowthFailStack(equipped.growth_fail_stack);
   }
   if (!equipped.max_durability) {
     equipped.max_durability = 100;
@@ -502,7 +522,9 @@ export function computeDerived(player) {
       item: ITEM_TEMPLATES[equipped.id],
       effects: equipped.effects || null,
       refine_level: equipped.refine_level || 0,
-      base_roll_pct: normalizeEquipBaseRollPct(ITEM_TEMPLATES[equipped.id], equipped.base_roll_pct, 100)
+      base_roll_pct: normalizeEquipBaseRollPct(ITEM_TEMPLATES[equipped.id], equipped.base_roll_pct, 100),
+      growth_level: normalizeGrowthLevel(equipped.growth_level),
+      growth_fail_stack: normalizeGrowthFailStack(equipped.growth_fail_stack)
     }))
     .filter((entry) => entry.item);
 
@@ -531,6 +553,7 @@ export function computeDerived(player) {
   let comboEffectCount = 0;
   let healblockEffectCount = 0;
   const refineAttrBonus = { hp: 0, mp: 0, atk: 0, def: 0, mag: 0, mdef: 0, spirit: 0, dex: 0 };
+  const growthAttrBonus = { hp: 0, mp: 0, atk: 0, def: 0, mag: 0, mdef: 0, spirit: 0, dex: 0 };
   // 宠物大部分属性加成对人物关闭；仅保留少数明确设计的专属护主技能。
   const petSkills = new Set();
   const activePetSkills = getActivePetSkillSet(player);
@@ -751,6 +774,17 @@ export function computeDerived(player) {
     refineAttrBonus.hp += refineBonus;
     refineAttrBonus.mp += refineBonus;
     refineAttrBonus.dex += refineBonus;
+    const growthPct = calcUltimateGrowthBonusPct(entry.growth_level || 0);
+    if (growthPct > 0) {
+      growthAttrBonus.atk += Math.floor(baseAtk * growthPct);
+      growthAttrBonus.mag += Math.floor(baseMag * growthPct);
+      growthAttrBonus.spirit += Math.floor(baseSpirit * growthPct);
+      growthAttrBonus.def += Math.floor(baseDef * growthPct);
+      growthAttrBonus.mdef += Math.floor(baseMdef * growthPct);
+      growthAttrBonus.dex += Math.floor(baseDex * growthPct);
+      growthAttrBonus.hp += Math.floor(scaleEquipBaseStat(item.hp || 0, entry.base_roll_pct) * growthPct);
+      growthAttrBonus.mp += Math.floor(scaleEquipBaseStat(item.mp || 0, entry.base_roll_pct) * growthPct);
+    }
     if (entry.effects?.fury) {
       atk = Math.floor(atk * 1.25);
       mag = Math.floor(mag * 1.25);
@@ -952,6 +986,14 @@ export function computeDerived(player) {
   player.spirit += refineAttrBonus.spirit;
   player.mdef += refineAttrBonus.mdef;
   player.dex += refineAttrBonus.dex;
+  player.max_hp += growthAttrBonus.hp;
+  player.max_mp += growthAttrBonus.mp;
+  player.atk += growthAttrBonus.atk;
+  player.def += growthAttrBonus.def;
+  player.mag += growthAttrBonus.mag;
+  player.spirit += growthAttrBonus.spirit;
+  player.mdef += growthAttrBonus.mdef;
+  player.dex += growthAttrBonus.dex;
   player.max_hp += trainingBonus.hp + trainingFruitBonus.hp;
   player.max_mp += trainingBonus.mp + trainingFruitBonus.mp;
   player.atk += trainingBonus.atk + trainingFruitBonus.atk;
@@ -987,7 +1029,7 @@ export function bagLimit(player) {
   return maxBagSlots(player.level);
 }
 
-export function addItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
+export function addItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null, growth_level = null, growth_fail_stack = null) {
   if (!player.inventory) player.inventory = [];
   const normalized = normalizeEffects(effects);
   const itemTemplate = ITEM_TEMPLATES[itemId];
@@ -1000,6 +1042,8 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
     const finalMaxDur = max_durability !== null ? max_durability : maxDur;
     const finalRefineLevel = refine_level !== null ? refine_level : 0;
     const finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, randomEquipBaseRollPct());
+    const finalGrowthLevel = growth_level !== null ? normalizeGrowthLevel(growth_level) : 0;
+    const finalGrowthFailStack = growth_fail_stack !== null ? normalizeGrowthFailStack(growth_fail_stack) : 0;
     
     // 尝试找到耐久度和锻造等级完全相同的装备进行堆叠
     const slot = player.inventory.find((i) => 
@@ -1008,7 +1052,9 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
       i.durability === finalDur &&
       i.max_durability === finalMaxDur &&
       (i.refine_level ?? 0) === finalRefineLevel &&
-      normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) === finalBaseRollPct
+      normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) === finalBaseRollPct &&
+      normalizeGrowthLevel(i.growth_level) === finalGrowthLevel &&
+      normalizeGrowthFailStack(i.growth_fail_stack) === finalGrowthFailStack
     );
     
     if (slot) {
@@ -1021,7 +1067,9 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
         durability: finalDur,
         max_durability: finalMaxDur,
         refine_level: finalRefineLevel,
-        base_roll_pct: finalBaseRollPct
+        base_roll_pct: finalBaseRollPct,
+        growth_level: finalGrowthLevel,
+        growth_fail_stack: finalGrowthFailStack
       });
     }
   } else {
@@ -1034,13 +1082,15 @@ export function addItem(player, itemId, qty = 1, effects = null, durability = nu
       if (durability !== null) item.durability = durability;
       if (max_durability !== null) item.max_durability = max_durability;
       if (refine_level !== null) item.refine_level = refine_level;
+      if (growth_level !== null) item.growth_level = normalizeGrowthLevel(growth_level);
+      if (growth_fail_stack !== null) item.growth_fail_stack = normalizeGrowthFailStack(growth_fail_stack);
       player.inventory.push(item);
     }
   }
 }
 
 
-export function addItemToList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
+export function addItemToList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null, growth_level = null, growth_fail_stack = null) {
   const target = Array.isArray(list) ? list : [];
   const normalized = normalizeEffects(effects);
   const itemTemplate = ITEM_TEMPLATES[itemId];
@@ -1052,6 +1102,8 @@ export function addItemToList(list, itemId, qty = 1, effects = null, durability 
     const finalMaxDur = max_durability !== null ? max_durability : maxDur;
     const finalRefineLevel = refine_level !== null ? refine_level : 0;
     const finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, randomEquipBaseRollPct());
+    const finalGrowthLevel = growth_level !== null ? normalizeGrowthLevel(growth_level) : 0;
+    const finalGrowthFailStack = growth_fail_stack !== null ? normalizeGrowthFailStack(growth_fail_stack) : 0;
 
     const slot = target.find((i) =>
       i.id === itemId &&
@@ -1059,7 +1111,9 @@ export function addItemToList(list, itemId, qty = 1, effects = null, durability 
       i.durability === finalDur &&
       i.max_durability === finalMaxDur &&
       (i.refine_level ?? 0) === finalRefineLevel &&
-      normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) === finalBaseRollPct
+      normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) === finalBaseRollPct &&
+      normalizeGrowthLevel(i.growth_level) === finalGrowthLevel &&
+      normalizeGrowthFailStack(i.growth_fail_stack) === finalGrowthFailStack
     );
 
     if (slot) {
@@ -1072,7 +1126,9 @@ export function addItemToList(list, itemId, qty = 1, effects = null, durability 
         durability: finalDur,
         max_durability: finalMaxDur,
         refine_level: finalRefineLevel,
-        base_roll_pct: finalBaseRollPct
+        base_roll_pct: finalBaseRollPct,
+        growth_level: finalGrowthLevel,
+        growth_fail_stack: finalGrowthFailStack
       });
     }
   } else {
@@ -1084,6 +1140,8 @@ export function addItemToList(list, itemId, qty = 1, effects = null, durability 
       if (durability !== null) item.durability = durability;
       if (max_durability !== null) item.max_durability = max_durability;
       if (refine_level !== null) item.refine_level = refine_level;
+      if (growth_level !== null) item.growth_level = normalizeGrowthLevel(growth_level);
+      if (growth_fail_stack !== null) item.growth_fail_stack = normalizeGrowthFailStack(growth_fail_stack);
       target.push(item);
     }
   }
@@ -1105,21 +1163,27 @@ export function normalizeItemList(items) {
     let finalMaxDur = slot.max_durability;
     let finalRefineLevel = slot.refine_level;
     let finalBaseRollPct = slot.base_roll_pct;
+    let finalGrowthLevel = normalizeGrowthLevel(slot.growth_level);
+    let finalGrowthFailStack = normalizeGrowthFailStack(slot.growth_fail_stack);
 
     if (isEquipment) {
       finalDur = slot.durability !== null ? slot.durability : 100;
       finalMaxDur = slot.max_durability !== null ? slot.max_durability : 100;
       finalRefineLevel = slot.refine_level !== null ? slot.refine_level : 0;
       finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, slot.base_roll_pct, 100);
+      finalGrowthLevel = normalizeGrowthLevel(slot.growth_level);
+      finalGrowthFailStack = normalizeGrowthFailStack(slot.growth_fail_stack);
     }
 
-    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}|${finalBaseRollPct ?? ''}`;
+    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}|${finalBaseRollPct ?? ''}|${finalGrowthLevel}|${finalGrowthFailStack}`;
     const cur = merged.get(key) || { id, qty: 0, effects };
     if (isEquipment) {
       cur.durability = finalDur;
       cur.max_durability = finalMaxDur;
       cur.refine_level = finalRefineLevel;
       cur.base_roll_pct = finalBaseRollPct;
+      cur.growth_level = finalGrowthLevel;
+      cur.growth_fail_stack = finalGrowthFailStack;
     }
     cur.qty += qty;
     merged.set(key, cur);
@@ -1131,10 +1195,10 @@ export function normalizeWarehouse(player) {
   player.warehouse = normalizeItemList(player.warehouse);
 }
 
-export function removeItemFromList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
+export function removeItemFromList(list, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null, growth_level = null, growth_fail_stack = null) {
   if (!Array.isArray(list)) return { ok: false, list: [] };
   const normalized = normalizeEffects(effects);
-  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null;
+  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null || growth_level != null || growth_fail_stack != null;
   const itemTemplate = ITEM_TEMPLATES[itemId];
   const slot = list.find((i) => {
     if (!i || i.id !== itemId) return false;
@@ -1144,6 +1208,8 @@ export function removeItemFromList(list, itemId, qty = 1, effects = null, durabi
       if (max_durability != null && i.max_durability !== max_durability) return false;
       if (refine_level != null && (i.refine_level ?? 0) !== refine_level) return false;
       if (base_roll_pct != null && normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) !== normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, 100)) return false;
+      if (growth_level != null && normalizeGrowthLevel(i.growth_level) !== normalizeGrowthLevel(growth_level)) return false;
+      if (growth_fail_stack != null && normalizeGrowthFailStack(i.growth_fail_stack) !== normalizeGrowthFailStack(growth_fail_stack)) return false;
     }
     return true;
   });
@@ -1171,6 +1237,8 @@ export function normalizeInventory(player) {
     let finalMaxDur = slot.max_durability;
     let finalRefineLevel = slot.refine_level;
     let finalBaseRollPct = slot.base_roll_pct;
+    let finalGrowthLevel = normalizeGrowthLevel(slot.growth_level);
+    let finalGrowthFailStack = normalizeGrowthFailStack(slot.growth_fail_stack);
 
     // 只为装备添加默认耐久度和锻造等级
     if (isEquipment) {
@@ -1178,15 +1246,19 @@ export function normalizeInventory(player) {
       finalMaxDur = slot.max_durability !== null ? slot.max_durability : 100;
       finalRefineLevel = slot.refine_level !== null ? slot.refine_level : 0;
       finalBaseRollPct = normalizeEquipBaseRollPct(itemTemplate, slot.base_roll_pct, 100);
+      finalGrowthLevel = normalizeGrowthLevel(slot.growth_level);
+      finalGrowthFailStack = normalizeGrowthFailStack(slot.growth_fail_stack);
     }
 
-    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}|${finalBaseRollPct ?? ''}`;
+    const key = `${id}|${effectsKey(effects)}|${finalDur}|${finalMaxDur}|${finalRefineLevel}|${finalBaseRollPct ?? ''}|${finalGrowthLevel}|${finalGrowthFailStack}`;
     const cur = merged.get(key) || { id, qty: 0, effects };
     if (isEquipment) {
       cur.durability = finalDur;
       cur.max_durability = finalMaxDur;
       cur.refine_level = finalRefineLevel;
       cur.base_roll_pct = finalBaseRollPct;
+      cur.growth_level = finalGrowthLevel;
+      cur.growth_fail_stack = finalGrowthFailStack;
     }
     cur.qty += qty;
     merged.set(key, cur);
@@ -1225,10 +1297,10 @@ function resolveEquipSlot(player, item) {
   return slot;
 }
 
-export function removeItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
+export function removeItem(player, itemId, qty = 1, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null, growth_level = null, growth_fail_stack = null) {
   if (!player || !player.inventory) return false;
   const normalized = normalizeEffects(effects);
-  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null;
+  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null || growth_level != null || growth_fail_stack != null;
   const itemTemplate = ITEM_TEMPLATES[itemId];
   const slot = player.inventory.find((i) => {
     if (!i || i.id !== itemId) return false;
@@ -1238,6 +1310,8 @@ export function removeItem(player, itemId, qty = 1, effects = null, durability =
       if (max_durability != null && i.max_durability !== max_durability) return false;
       if (refine_level != null && (i.refine_level ?? 0) !== refine_level) return false;
       if (base_roll_pct != null && normalizeEquipBaseRollPct(itemTemplate, i.base_roll_pct, 100) !== normalizeEquipBaseRollPct(itemTemplate, base_roll_pct, 100)) return false;
+      if (growth_level != null && normalizeGrowthLevel(i.growth_level) !== normalizeGrowthLevel(growth_level)) return false;
+      if (growth_fail_stack != null && normalizeGrowthFailStack(i.growth_fail_stack) !== normalizeGrowthFailStack(growth_fail_stack)) return false;
     }
     return true;
   });
@@ -1250,11 +1324,11 @@ export function removeItem(player, itemId, qty = 1, effects = null, durability =
   return true;
 }
 
-export function equipItem(player, itemId, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null) {
+export function equipItem(player, itemId, effects = null, durability = null, max_durability = null, refine_level = null, base_roll_pct = null, growth_level = null, growth_fail_stack = null) {
   const item = ITEM_TEMPLATES[itemId];
   if (!item || !item.slot) return { ok: false, msg: '\u8BE5\u7269\u54C1\u65E0\u6CD5\u88C5\u5907\u3002' };
   const normalized = normalizeEffects(effects);
-  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null;
+  const needsMeta = durability != null || max_durability != null || refine_level != null || base_roll_pct != null || growth_level != null || growth_fail_stack != null;
   let has = player.inventory.find((i) => {
     if (!i || i.id !== itemId) return false;
     if (normalized && !sameEffects(i.effects, normalized)) return false;
@@ -1263,6 +1337,8 @@ export function equipItem(player, itemId, effects = null, durability = null, max
       if (max_durability != null && i.max_durability !== max_durability) return false;
       if (refine_level != null && (i.refine_level ?? 0) !== refine_level) return false;
       if (base_roll_pct != null && normalizeEquipBaseRollPct(item, i.base_roll_pct, 100) !== normalizeEquipBaseRollPct(item, base_roll_pct, 100)) return false;
+      if (growth_level != null && normalizeGrowthLevel(i.growth_level) !== normalizeGrowthLevel(growth_level)) return false;
+      if (growth_fail_stack != null && normalizeGrowthFailStack(i.growth_fail_stack) !== normalizeGrowthFailStack(growth_fail_stack)) return false;
     }
     return true;
   });
@@ -1274,7 +1350,7 @@ export function equipItem(player, itemId, effects = null, durability = null, max
   normalizeEquipment(player);
   const slot = resolveEquipSlot(player, item);
   if (player.equipment[slot]) {
-    addItem(player, player.equipment[slot].id, 1, player.equipment[slot].effects, player.equipment[slot].durability, player.equipment[slot].max_durability, player.equipment[slot].refine_level, player.equipment[slot].base_roll_pct);
+    addItem(player, player.equipment[slot].id, 1, player.equipment[slot].effects, player.equipment[slot].durability, player.equipment[slot].max_durability, player.equipment[slot].refine_level, player.equipment[slot].base_roll_pct, player.equipment[slot].growth_level, player.equipment[slot].growth_fail_stack);
   }
 
   const maxDur = 100;
@@ -1283,8 +1359,10 @@ export function equipItem(player, itemId, effects = null, durability = null, max
   const itemMaxDur = has.max_durability != null ? has.max_durability : maxDur;
   const itemRefineLevel = has.refine_level != null ? has.refine_level : 0;
   const itemBaseRollPct = normalizeEquipBaseRollPct(item, has.base_roll_pct, 100);
-  player.equipment[slot] = { id: itemId, durability: itemDur, max_durability: itemMaxDur, effects: has.effects || null, refine_level: itemRefineLevel, base_roll_pct: itemBaseRollPct };
-  removeItem(player, itemId, 1, has.effects, itemDur, itemMaxDur, itemRefineLevel, itemBaseRollPct);
+  const itemGrowthLevel = normalizeGrowthLevel(has.growth_level);
+  const itemGrowthFailStack = normalizeGrowthFailStack(has.growth_fail_stack);
+  player.equipment[slot] = { id: itemId, durability: itemDur, max_durability: itemMaxDur, effects: has.effects || null, refine_level: itemRefineLevel, base_roll_pct: itemBaseRollPct, growth_level: itemGrowthLevel, growth_fail_stack: itemGrowthFailStack };
+  removeItem(player, itemId, 1, has.effects, itemDur, itemMaxDur, itemRefineLevel, itemBaseRollPct, itemGrowthLevel, itemGrowthFailStack);
   computeDerived(player);
   return { ok: true, msg: `\u5DF2\u88C5\u5907${item.name}\u3002` };
 }
@@ -1299,7 +1377,7 @@ export function unequipItem(player, slot) {
   }
   const current = player.equipment[slot];
   if (!current) return { ok: false, msg: '\u8BE5\u90E8\u4F4D\u6CA1\u6709\u88C5\u5907\u3002' };
-  addItem(player, current.id, 1, current.effects, current.durability, current.max_durability, current.refine_level, current.base_roll_pct);
+  addItem(player, current.id, 1, current.effects, current.durability, current.max_durability, current.refine_level, current.base_roll_pct, current.growth_level, current.growth_fail_stack);
   player.equipment[slot] = null;
   computeDerived(player);
   return { ok: true, msg: `\u5DF2\u5378\u4E0B${ITEM_TEMPLATES[current.id].name}\u3002` };

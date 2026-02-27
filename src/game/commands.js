@@ -40,7 +40,9 @@ import {
   getEffectResetDoubleRate,
   getEffectResetTripleRate,
   getEffectResetQuadrupleRate,
-  getEffectResetQuintupleRate
+  getEffectResetQuintupleRate,
+  getUltimateGrowthConfig,
+  getUltimateGrowthRateByLevel
 } from './settings.js';
 import { getRealmById } from '../db/realms.js';
 import {
@@ -2026,10 +2028,10 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!canAddToListWithLimit(player.warehouse, WAREHOUSE_LIMIT, resolved.slot)) {
           return send('仓库已满。');
         }
-        if (!removeItem(player, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null)) {
+        if (!removeItem(player, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null, resolved.slot.growth_level ?? null, resolved.slot.growth_fail_stack ?? null)) {
           return send('背包里没有足够数量。');
         }
-        player.warehouse = addItemToList(player.warehouse, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null);
+        player.warehouse = addItemToList(player.warehouse, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null, resolved.slot.growth_level ?? null, resolved.slot.growth_fail_stack ?? null);
         player.forceStateRefresh = true;
         send(`已存入仓库：${resolved.item.name} x${finalQty}`);
         return;
@@ -2048,10 +2050,10 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!canAddToListWithLimit(player.inventory, bagLimit(player), resolved.slot)) {
           return send('背包已满。');
         }
-        const removed = removeItemFromList(player.warehouse, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null);
+        const removed = removeItemFromList(player.warehouse, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null, resolved.slot.growth_level ?? null, resolved.slot.growth_fail_stack ?? null);
         if (!removed.ok) return send('仓库里没有足够数量。');
         player.warehouse = removed.list;
-        addItem(player, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null);
+        addItem(player, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null, resolved.slot.growth_level ?? null, resolved.slot.growth_fail_stack ?? null);
         player.forceStateRefresh = true;
         send(`已取出仓库：${resolved.item.name} x${finalQty}`);
         return;
@@ -2322,7 +2324,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         resolved.slot.durability ?? null,
         resolved.slot.max_durability ?? null,
         resolved.slot.refine_level ?? null,
-        resolved.slot.base_roll_pct ?? null
+        resolved.slot.base_roll_pct ?? null,
+        resolved.slot.growth_level ?? null,
+        resolved.slot.growth_fail_stack ?? null
       );
       if (res.ok) player.forceStateRefresh = true;
       send(res.msg);
@@ -3671,6 +3675,8 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       const mainRefineLevel = mainResolved.slot.refine_level || 0;
       const secondaryRefineLevel = secondaryResolved.slot.refine_level || 0;
       const finalRefineLevel = Math.max(mainRefineLevel, secondaryRefineLevel);
+      const mainGrowthLevel = Math.max(0, Math.floor(Number(mainResolved.slot.growth_level || 0)));
+      const mainGrowthFailStack = Math.max(0, Math.floor(Number(mainResolved.slot.growth_fail_stack || 0)));
 
       if (mainEquippedSlot) {
         player.equipment[mainEquippedSlot] = {
@@ -3679,7 +3685,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           durability: mainResolved.slot.durability ?? null,
           max_durability: mainResolved.slot.max_durability ?? null,
           refine_level: finalRefineLevel,
-          base_roll_pct: mainResolved.slot.base_roll_pct ?? null
+          base_roll_pct: mainResolved.slot.base_roll_pct ?? null,
+          growth_level: mainGrowthLevel,
+          growth_fail_stack: mainGrowthFailStack
         };
       } else if (mainPetEquip) {
         const equip = normalizePetEquipment(mainPetEquip.pet);
@@ -3689,7 +3697,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           durability: mainResolved.slot.durability ?? null,
           max_durability: mainResolved.slot.max_durability ?? null,
           refine_level: finalRefineLevel,
-          base_roll_pct: mainResolved.slot.base_roll_pct ?? null
+          base_roll_pct: mainResolved.slot.base_roll_pct ?? null,
+          growth_level: mainGrowthLevel,
+          growth_fail_stack: mainGrowthFailStack
         };
       } else {
         addItem(
@@ -3700,7 +3710,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           mainResolved.slot.durability ?? null,
           mainResolved.slot.max_durability ?? null,
           finalRefineLevel,
-          mainResolved.slot.base_roll_pct ?? null
+          mainResolved.slot.base_roll_pct ?? null,
+          mainGrowthLevel,
+          mainGrowthFailStack
         );
       }
       computeDerived(player);
@@ -4035,6 +4047,134 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         }
       }
       refineActivityMsgs.forEach((msg) => send(msg));
+      return;
+    }
+    case 'growth': {
+      if (source !== 'ui') return;
+      const cfg = getUltimateGrowthConfig();
+      if (!cfg?.enabled) return send('终极装备成长系统未开启。');
+      if (!args) return send('用法：growth <装备Key|equip:部位> [次数]');
+      const parts = String(args || '').trim().split(/\s+/).filter(Boolean);
+      const targetRaw = parts[0];
+      const timesRaw = parts[1];
+      let times = 1;
+      if (timesRaw != null) {
+        const parsedTimes = Number(timesRaw);
+        if (!Number.isFinite(parsedTimes) || parsedTimes <= 0) {
+          return send('次数必须是大于0的整数。');
+        }
+        times = Math.max(1, Math.min(200, Math.floor(parsedTimes)));
+      }
+
+      let targetSlot = null;
+      let targetItem = null;
+      let fromEquip = false;
+      let equipSlotName = null;
+      if (targetRaw.startsWith('equip:')) {
+        equipSlotName = targetRaw.slice('equip:'.length).trim();
+        targetSlot = player.equipment?.[equipSlotName] || null;
+        if (!targetSlot || !targetSlot.id) return send('身上没有该装备。');
+        targetItem = ITEM_TEMPLATES[targetSlot.id] || null;
+        fromEquip = true;
+      } else {
+        const resolved = resolveInventoryItem(player, targetRaw);
+        targetSlot = resolved?.slot || null;
+        targetItem = resolved?.item || null;
+        if (!targetSlot || !targetItem) return send('背包里没有该装备。');
+      }
+
+      if (!targetItem?.slot) return send('只能对装备进行成长。');
+      const rarity = targetItem.rarity || rarityByPrice(targetItem);
+      if (rarity !== 'ultimate') return send('仅终极装备可成长。');
+      if (!fromEquip && Number(targetSlot.qty || 0) > 1) {
+        return send('该装备存在堆叠，请先装备到身上后再成长。');
+      }
+
+      const maxLevelRaw = Number(cfg.maxLevel ?? 0);
+      const hasMaxLevel = Number.isFinite(maxLevelRaw) && Math.floor(maxLevelRaw) > 0;
+      const maxLevel = hasMaxLevel ? Math.floor(maxLevelRaw) : null;
+      let currentLevel = Math.max(0, Math.floor(Number(targetSlot.growth_level || 0)));
+      let failStack = Math.max(0, Math.floor(Number(targetSlot.growth_fail_stack || 0)));
+      if (hasMaxLevel && currentLevel >= maxLevel) {
+        return send(`${targetItem.name} 已达到成长上限 Lv${maxLevel}。`);
+      }
+
+      const materialId = String(cfg.materialId || '').trim();
+      const materialName = ITEM_TEMPLATES[materialId]?.name || materialId || '材料';
+      const breakthroughEvery = Math.max(1, Math.floor(Number(cfg.breakthroughEvery || 20)));
+      const breakthroughMaterialId = String(cfg.breakthroughMaterialId || '').trim();
+      const breakthroughMaterialName = ITEM_TEMPLATES[breakthroughMaterialId]?.name || breakthroughMaterialId || '突破材料';
+      const breakthroughMaterialCost = Math.max(1, Math.floor(Number(cfg.breakthroughMaterialCost || 1)));
+      if (materialId) {
+        const materialTpl = ITEM_TEMPLATES[materialId];
+        if (!materialTpl) return send('成长材料配置无效，请联系管理员。');
+        if (!materialTpl.noDrop) return send('成长材料必须配置为不可掉落道具，请联系管理员。');
+      }
+      if (breakthroughMaterialId) {
+        const breakthroughTpl = ITEM_TEMPLATES[breakthroughMaterialId];
+        if (!breakthroughTpl) return send('突破材料配置无效，请联系管理员。');
+        if (!breakthroughTpl.noDrop) return send('突破材料必须配置为不可掉落道具，请联系管理员。');
+      }
+      let done = 0;
+      let successCount = 0;
+      let failCount = 0;
+      let stopReason = '';
+      for (let i = 0; i < times; i += 1) {
+        const nextLevel = currentLevel + 1;
+        if (hasMaxLevel && nextLevel > maxLevel) {
+          stopReason = `已达上限 Lv${maxLevel}`;
+          break;
+        }
+        const matCost = Math.max(1, Math.floor(Number(cfg.materialCost || 1)));
+        const goldCost = Math.max(0, Math.floor(Number(cfg.goldCost || 0)));
+        const needBreakthroughMat = breakthroughMaterialId && (nextLevel % breakthroughEvery === 0);
+        if (materialId && !removeItem(player, materialId, matCost)) {
+          stopReason = `${materialName}不足`;
+          break;
+        }
+        if (needBreakthroughMat && !removeItem(player, breakthroughMaterialId, breakthroughMaterialCost)) {
+          if (materialId) addItem(player, materialId, matCost);
+          stopReason = `${breakthroughMaterialName}不足`;
+          break;
+        }
+        if (goldCost > 0) {
+          if (Number(player.gold || 0) < goldCost) {
+            if (materialId) addItem(player, materialId, matCost);
+            if (needBreakthroughMat) addItem(player, breakthroughMaterialId, breakthroughMaterialCost);
+            stopReason = '金币不足';
+            break;
+          }
+          player.gold = Math.max(0, Number(player.gold || 0) - goldCost);
+        }
+        const baseRate = Math.max(0, Math.min(100, Number(getUltimateGrowthRateByLevel(nextLevel) || 0)));
+        const failBonusPct = Math.max(0, Number(cfg.failStackBonusPct || 0));
+        const failCapPct = Math.max(0, Number(cfg.failStackCapPct || 0));
+        const extraRate = Math.min(failCapPct * 100, failStack * failBonusPct * 100);
+        const finalRate = Math.max(0, Math.min(100, baseRate + extraRate));
+        const success = Math.random() * 100 < finalRate;
+        done += 1;
+        if (success) {
+          currentLevel = nextLevel;
+          failStack = 0;
+          successCount += 1;
+          if (currentLevel % Math.max(1, Math.floor(Number(cfg.tierEvery || 20))) === 0) {
+            emitAnnouncement(`恭喜玩家 ${player.name} 将 ${targetItem.name} 成长至 Lv${currentLevel}！`, 'announce', null);
+          }
+        } else {
+          failStack += 1;
+          failCount += 1;
+        }
+      }
+
+      targetSlot.growth_level = currentLevel;
+      targetSlot.growth_fail_stack = failStack;
+      if (fromEquip) computeDerived(player);
+      player.forceStateRefresh = true;
+      const previewLevel = hasMaxLevel ? Math.min(currentLevel + 1, maxLevel) : (currentLevel + 1);
+      const rateText = Math.max(0, Math.min(100, Number(getUltimateGrowthRateByLevel(previewLevel) || 0)));
+      const stopped = stopReason ? `，停止原因：${stopReason}` : '';
+      const levelText = hasMaxLevel ? `${currentLevel}/${maxLevel}` : `${currentLevel}/∞`;
+      send(`装备成长完成：${targetItem.name} Lv${levelText}，本次尝试${done}次，成功${successCount}次，失败${failCount}次，当前保底层数${failStack}，下一级基础成功率${rateText.toFixed(2)}%${stopped}。`);
       return;
     }
     case 'effect': {

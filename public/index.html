@@ -549,6 +549,30 @@
     </div>
   </div>
 
+  <div id="growth-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-title">装备成长</div>
+      <div class="modal-list-wrapper">
+        <div class="modal-text">选择主件装备（仅已穿戴终极装备）</div>
+        <div id="growth-main-list" class="forge-list"></div>
+        <div class="refine-selection">
+          <div id="growth-main-selected" class="modal-text">主件: 未选择</div>
+          <div id="growth-level" class="modal-text">当前成长等级: Lv0</div>
+          <div id="growth-fail-stack" class="modal-text">当前保底层数: 0</div>
+          <div id="growth-success-rate" class="modal-text">下一级成功率: --%</div>
+          <div id="growth-cost" class="modal-text">单次消耗: --</div>
+          <div class="training-batch-input" style="margin-top: 8px;">
+            <input id="growth-count" type="number" min="1" max="999" value="1" placeholder="成长次数">
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="growth-confirm" disabled>成长</button>
+        <button id="growth-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <div id="training-batch-modal" class="modal hidden">
     <div class="modal-card">
       <div class="modal-title">修炼次数</div>

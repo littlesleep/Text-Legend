@@ -82,6 +82,7 @@ data class GameState(
     val refine_config: RefineConfig? = null,
     val anti: AntiInfo? = null,
     val effect_reset_config: EffectResetConfig? = null,
+    val ultimate_growth_config: UltimateGrowthConfig? = null,
     val treasure_sets: List<TreasureSetInfo> = emptyList(),
     val auto_full_boss_list: List<String> = emptyList(),
     val treasure: TreasureStateInfo? = null,
@@ -200,6 +201,8 @@ data class ItemInfo(
     val durability: Int? = null,
     val max_durability: Int? = null,
     val refine_level: Int = 0,
+    val growth_level: Int = 0,
+    val growth_fail_stack: Int = 0,
     val effects: JsonObject? = null,
     val is_shop_item: Boolean = false,
     val untradable: Boolean = false,
@@ -212,6 +215,8 @@ data class EquipmentInfo(
     val durability: Int? = null,
     val max_durability: Int? = null,
     val refine_level: Int = 0,
+    val growth_level: Int = 0,
+    val growth_fail_stack: Int = 0,
     val item: ItemInfo? = null
 )
 
@@ -390,6 +395,26 @@ data class EffectResetConfig(
     val triple_rate: Double = 0.0,
     val quadruple_rate: Double = 0.0,
     val quintuple_rate: Double = 0.0
+)
+
+@Serializable
+data class UltimateGrowthConfig(
+    val enabled: Boolean = false,
+    val maxLevel: Int = 0,
+    val perLevelPct: Double = 0.0,
+    val tierEvery: Int = 20,
+    val tierBonusPct: Double = 0.0,
+    val materialId: String = "",
+    val materialCost: Int = 1,
+    val breakthroughEvery: Int = 20,
+    val breakthroughMaterialId: String = "",
+    val breakthroughMaterialCost: Int = 1,
+    val goldCost: Int = 0,
+    val successRateEarly: Double = 100.0,
+    val successRateMid: Double = 70.0,
+    val successRateLate: Double = 45.0,
+    val failStackBonusPct: Double = 0.0,
+    val failStackCapPct: Double = 0.0
 )
 
 @Serializable

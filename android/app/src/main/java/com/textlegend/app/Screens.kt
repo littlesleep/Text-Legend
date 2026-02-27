@@ -461,6 +461,7 @@ fun GameScreen(vm: GameViewModel, onExit: () -> Unit) {
                                         "shop" -> innerNav.navigate("shop")
                                         "forge" -> innerNav.navigate("forge")
                                         "refine" -> innerNav.navigate("refine")
+                                        "growth" -> innerNav.navigate("growth")
                                         "effect" -> innerNav.navigate("effect")
                                         "repair" -> innerNav.navigate("repair")
                                         "changeclass" -> innerNav.navigate("changeclass")
@@ -498,6 +499,7 @@ fun GameScreen(vm: GameViewModel, onExit: () -> Unit) {
             composable("shop") { ShopDialog(vm = vm, state = state, onDismiss = { innerNav.popBackStack() }) }
             composable("forge") { ForgeDialog(vm = vm, state = state, onDismiss = { innerNav.popBackStack() }) }
             composable("refine") { RefineDialog(vm = vm, state = state, onDismiss = { innerNav.popBackStack() }) }
+            composable("growth") { GrowthDialog(vm = vm, state = state, onDismiss = { innerNav.popBackStack() }) }
             composable("effect") { EffectDialog(vm = vm, state = state, onDismiss = { innerNav.popBackStack() }) }
             composable("repair") { RepairDialog(vm = vm, state = state, onDismiss = { innerNav.popBackStack() }) }
             composable("changeclass") { ChangeClassDialog(vm = vm, onDismiss = { innerNav.popBackStack() }) }
@@ -1862,6 +1864,7 @@ private fun ActionsTab(
         ActionItem("转职", "changeclass", R.drawable.ic_hat),
         ActionItem("装备合成", "forge", R.drawable.ic_forge),
         ActionItem("装备锻造", "refine", R.drawable.ic_refine),
+        ActionItem("装备成长", "growth", R.drawable.ic_refine),
         ActionItem("法宝", "treasure", R.drawable.ic_magic),
         ActionItem("特效重置", "effect", R.drawable.ic_magic),
         ActionItem("宠物系统", "pet", R.drawable.ic_magic),
@@ -3359,6 +3362,79 @@ private fun ShopDialog(vm: GameViewModel, state: GameState?, onDismiss: () -> Un
   }
 
 @Composable
+private fun GrowthDialog(vm: GameViewModel, state: GameState?, onDismiss: () -> Unit) {
+    var selection by remember { mutableStateOf("") }
+    var attempts by remember { mutableStateOf("1") }
+    val options = buildUltimateGrowthEquippedOptions(state)
+    val growthConfig = state?.ultimate_growth_config
+    val currentLevel = resolveGrowthLevel(state, selection)
+    val failStack = resolveGrowthFailStack(state, selection)
+    val maxLevelRaw = growthConfig?.maxLevel ?: 0
+    val hasMaxLevel = maxLevelRaw > 0
+    val maxLevel = if (hasMaxLevel) maxLevelRaw else null
+    val nextLevel = if (hasMaxLevel) ((currentLevel ?: 0) + 1).coerceAtMost(maxLevel ?: Int.MAX_VALUE) else ((currentLevel ?: 0) + 1)
+    val rate = if (growthConfig != null && currentLevel != null && failStack != null) {
+        calcGrowthFinalRate(nextLevel, failStack, growthConfig)
+    } else null
+    val baseRate = if (growthConfig != null && currentLevel != null) {
+        calcGrowthBaseRate(nextLevel, growthConfig)
+    } else null
+
+    ScreenScaffold(title = "装备成长", onBack = onDismiss) {
+        Text("已穿戴终极装备")
+        if (options.isEmpty()) {
+            Text("暂无可成长装备", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            OptionGrid(options = options, selected = selection, onSelect = { selection = it })
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("成长次数")
+        OutlinedTextField(
+            value = attempts,
+            onValueChange = { attempts = it.filter { ch -> ch.isDigit() } },
+            label = { Text("次数(1-200)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (currentLevel != null && failStack != null) {
+            Text("当前等级: Lv$currentLevel/${maxLevel ?: "∞"}")
+            Text("当前保底层数: $failStack")
+        }
+        if (rate != null && baseRate != null) {
+            Text("下一级成功率: ${"%.2f".format(rate)}% (基础 ${"%.2f".format(baseRate)}%)")
+        }
+        if (growthConfig != null) {
+            val materialId = growthConfig.materialId.ifBlank { "材料" }
+            val materialCost = growthConfig.materialCost.coerceAtLeast(1)
+            val breakthroughEvery = growthConfig.breakthroughEvery.coerceAtLeast(1)
+            val breakthroughMaterialId = growthConfig.breakthroughMaterialId.ifBlank { "突破材料" }
+            val breakthroughMaterialCost = growthConfig.breakthroughMaterialCost.coerceAtLeast(1)
+            val needBreakthrough = nextLevel % breakthroughEvery == 0
+            val goldCost = growthConfig.goldCost.coerceAtLeast(0)
+            val costLine = buildString {
+                append("单次消耗: ${materialId}x$materialCost")
+                if (goldCost > 0) append(" + 金币$goldCost")
+                if (needBreakthrough) append(" + ${breakthroughMaterialId}x$breakthroughMaterialCost")
+            }
+            Text(costLine)
+            Text("每${breakthroughEvery}级突破额外消耗：${breakthroughMaterialId}x$breakthroughMaterialCost", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Button(
+            onClick = {
+                val count = attempts.toIntOrNull()?.coerceIn(1, 200) ?: 1
+                if (selection.isBlank()) return@Button
+                vm.sendCmd("growth $selection $count")
+            },
+            enabled = selection.isNotBlank() && (!hasMaxLevel || (currentLevel ?: 0) < (maxLevel ?: Int.MAX_VALUE)),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("开始成长") }
+    }
+}
+
+@Composable
 private fun EffectDialog(vm: GameViewModel, state: GameState?, onDismiss: () -> Unit) {
     var mainSelection by remember { mutableStateOf("") }
     var secondarySelection by remember { mutableStateOf("") }
@@ -4711,6 +4787,18 @@ private fun buildInventoryOptions(state: GameState?): List<Pair<String, String>>
       }
   }
 
+private fun buildUltimateGrowthEquippedOptions(state: GameState?): List<Pair<String, String>> {
+    val list = state?.equipment.orEmpty()
+    return list.mapNotNull { eq ->
+        val item = eq.item ?: return@mapNotNull null
+        if (normalizeRarityKey(item.rarity) != "ultimate") return@mapNotNull null
+        val growthLevel = (eq.growth_level.takeIf { it > 0 } ?: item.growth_level).coerceAtLeast(0)
+        val failStack = (eq.growth_fail_stack.takeIf { it > 0 } ?: item.growth_fail_stack).coerceAtLeast(0)
+        val label = "${equipSlotLabel(eq.slot)}: ${item.name} (Lv$growthLevel 保底$failStack)"
+        "equip:${eq.slot}" to label
+    }
+}
+
   private fun equipSlotLabel(slot: String): String = when (slot) {
     "weapon" -> "武器"
     "chest" -> "衣服"
@@ -4820,12 +4908,50 @@ private fun resolveRefineLevel(state: GameState?, selection: String): Int? {
     return item?.refine_level ?: 0
 }
 
+private fun resolveGrowthLevel(state: GameState?, selection: String): Int? {
+    if (selection.isBlank() || state == null) return null
+    if (!selection.startsWith("equip:")) return 0
+    val slot = selection.removePrefix("equip:").trim()
+    val eq = state.equipment.firstOrNull { it.slot == slot } ?: return 0
+    val fromEq = eq.growth_level
+    if (fromEq > 0) return fromEq
+    return eq.item?.growth_level ?: 0
+}
+
+private fun resolveGrowthFailStack(state: GameState?, selection: String): Int? {
+    if (selection.isBlank() || state == null) return null
+    if (!selection.startsWith("equip:")) return 0
+    val slot = selection.removePrefix("equip:").trim()
+    val eq = state.equipment.firstOrNull { it.slot == slot } ?: return 0
+    val fromEq = eq.growth_fail_stack
+    if (fromEq > 0) return fromEq
+    return eq.item?.growth_fail_stack ?: 0
+}
+
 private fun calcRefineSuccessRate(currentLevel: Int, config: RefineConfig): Double {
     val nextLevel = currentLevel + 1
     if (nextLevel == 1) return 100.0
     val tier = kotlin.math.floor((nextLevel - 2) / 10.0).toInt()
     val rate = config.base_success_rate - tier * config.decay_rate
     return kotlin.math.max(1.0, rate)
+}
+
+private fun calcGrowthBaseRate(nextLevel: Int, config: UltimateGrowthConfig): Double {
+    val lv = nextLevel.coerceAtLeast(1)
+    return when {
+        lv <= 60 -> config.successRateEarly
+        lv <= 80 -> config.successRateMid
+        else -> config.successRateLate
+    }
+}
+
+private fun calcGrowthFinalRate(nextLevel: Int, failStack: Int, config: UltimateGrowthConfig): Double {
+    val baseRate = calcGrowthBaseRate(nextLevel, config)
+    val extraRate = kotlin.math.min(
+        config.failStackCapPct * 100.0,
+        failStack.coerceAtLeast(0) * config.failStackBonusPct * 100.0
+    )
+    return (baseRate + extraRate).coerceIn(0.0, 100.0)
 }
 
 private data class PageInfo<T>(val slice: List<T>, val page: Int, val totalPages: Int)

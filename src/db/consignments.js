@@ -30,6 +30,8 @@ export async function createConsignment({
   maxDurability = null,
   refineLevel = null,
   baseRollPct = null,
+  growthLevel = null,
+  growthFailStack = null,
   realmId = 1
 }) {
   const [id] = await knex('consignments').insert({
@@ -43,6 +45,8 @@ export async function createConsignment({
     max_durability: maxDurability,
     refine_level: refineLevel,
     base_roll_pct: baseRollPct,
+    growth_level: growthLevel,
+    growth_fail_stack: growthFailStack,
     realm_id: realmId
   });
   return id;

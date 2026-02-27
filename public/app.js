@@ -652,7 +652,20 @@ const effectUi = {
   batch: document.getElementById('effect-batch'),
   close: document.getElementById('effect-close')
 };
+const growthUi = {
+  modal: document.getElementById('growth-modal'),
+  list: document.getElementById('growth-main-list'),
+  main: document.getElementById('growth-main-selected'),
+  level: document.getElementById('growth-level'),
+  failStack: document.getElementById('growth-fail-stack'),
+  successRate: document.getElementById('growth-success-rate'),
+  cost: document.getElementById('growth-cost'),
+  count: document.getElementById('growth-count'),
+  confirm: document.getElementById('growth-confirm'),
+  close: document.getElementById('growth-close')
+};
 let effectSelection = null;
+let growthSelection = null;
 let effectBatchTask = {
   active: false,
   mainSlot: '',
@@ -3380,6 +3393,93 @@ function showRefineModal() {
   hideItemTooltip();
   renderRefineModal();
   refineUi.modal.classList.remove('hidden');
+}
+
+function resolveGrowthRatePctByLevel(nextLevel, config) {
+  const level = Math.max(1, Math.floor(Number(nextLevel || 1)));
+  if (level <= 60) return Number(config?.successRateEarly ?? 100);
+  if (level <= 80) return Number(config?.successRateMid ?? 70);
+  return Number(config?.successRateLate ?? 45);
+}
+
+function renderGrowthModal() {
+  if (!growthUi.list || !growthUi.main || !growthUi.level || !growthUi.successRate || !growthUi.cost) return;
+
+  const cfg = lastState?.ultimate_growth_config || {};
+  const maxLevelRaw = Number(cfg.maxLevel ?? 0);
+  const hasMaxLevel = Number.isFinite(maxLevelRaw) && Math.floor(maxLevelRaw) > 0;
+  const maxLevel = hasMaxLevel ? Math.floor(maxLevelRaw) : null;
+  const materialCost = Math.max(1, Math.floor(Number(cfg.materialCost || 1)));
+  const materialId = String(cfg.materialId || '').trim();
+  const materialLabel = materialId || '材料';
+  const breakthroughEvery = Math.max(1, Math.floor(Number(cfg.breakthroughEvery || 20)));
+  const breakthroughMaterialCost = Math.max(1, Math.floor(Number(cfg.breakthroughMaterialCost || 1)));
+  const breakthroughMaterialId = String(cfg.breakthroughMaterialId || '').trim();
+  const breakthroughMaterialLabel = breakthroughMaterialId || '突破材料';
+  const goldCost = Math.max(0, Math.floor(Number(cfg.goldCost || 0)));
+  const equippedUltimate = (lastState?.equipment || []).filter((entry) => {
+    if (!entry?.item) return false;
+    return normalizeRarityKey(entry.item.rarity) === 'ultimate';
+  });
+
+  growthUi.list.innerHTML = '';
+  growthSelection = null;
+  growthUi.main.textContent = '主件: 未选择';
+  growthUi.level.textContent = `当前成长等级: Lv0/${hasMaxLevel ? maxLevel : '∞'}`;
+  if (growthUi.failStack) growthUi.failStack.textContent = '当前保底层数: 0';
+  growthUi.successRate.textContent = '下一级成功率: --%';
+  growthUi.cost.textContent = `单次消耗: ${materialLabel}x${materialCost}${goldCost > 0 ? ` + 金币${goldCost}` : ''}（每${breakthroughEvery}级突破额外 ${breakthroughMaterialLabel}x${breakthroughMaterialCost}）`;
+  if (growthUi.confirm) growthUi.confirm.disabled = true;
+  if (growthUi.count) growthUi.count.value = '1';
+
+  if (!equippedUltimate.length) {
+    const empty = document.createElement('div');
+    empty.textContent = '身上暂无终极装备';
+    growthUi.list.appendChild(empty);
+    return;
+  }
+
+  equippedUltimate.forEach((entry) => {
+    const item = entry.item;
+    const currentLevel = Math.max(0, Math.floor(Number(entry.growth_level ?? item.growth_level ?? 0)));
+    const failStack = Math.max(0, Math.floor(Number(entry.growth_fail_stack ?? item.growth_fail_stack ?? 0)));
+    const btn = document.createElement('div');
+    btn.className = 'forge-item';
+    applyRarityClass(btn, item);
+    btn.innerHTML = `
+      <div>${formatItemName(item)}</div>
+      <div class="item-detail">成长Lv${currentLevel}/${hasMaxLevel ? maxLevel : '∞'} | 保底层数:${failStack}</div>
+    `;
+    btn.addEventListener('click', () => {
+      growthSelection = {
+        slot: entry.slot,
+        item,
+        growthLevel: currentLevel,
+        failStack
+      };
+      growthUi.main.textContent = `主件: ${formatItemName(item)}`;
+      growthUi.level.textContent = `当前成长等级: Lv${currentLevel}/${hasMaxLevel ? maxLevel : '∞'}`;
+      if (growthUi.failStack) growthUi.failStack.textContent = `当前保底层数: ${failStack}`;
+      const nextLevel = hasMaxLevel ? Math.min(maxLevel, currentLevel + 1) : (currentLevel + 1);
+      const needBreakthroughMat = breakthroughMaterialId && (nextLevel % breakthroughEvery === 0);
+      const baseRate = Math.max(0, Math.min(100, resolveGrowthRatePctByLevel(nextLevel, cfg)));
+      const failStackBonusPct = Math.max(0, Number(cfg.failStackBonusPct || 0));
+      const failStackCapPct = Math.max(0, Number(cfg.failStackCapPct || 0));
+      const extraRate = Math.min(failStackCapPct * 100, failStack * failStackBonusPct * 100);
+      const finalRate = Math.max(0, Math.min(100, baseRate + extraRate));
+      growthUi.successRate.textContent = `下一级成功率: ${finalRate.toFixed(2)}% (基础${baseRate.toFixed(2)}%)`;
+      growthUi.cost.textContent = `单次消耗: ${materialLabel}x${materialCost}${goldCost > 0 ? ` + 金币${goldCost}` : ''}${needBreakthroughMat ? ` + ${breakthroughMaterialLabel}x${breakthroughMaterialCost}` : ''}`;
+      if (growthUi.confirm) growthUi.confirm.disabled = hasMaxLevel ? (currentLevel >= maxLevel) : false;
+    });
+    growthUi.list.appendChild(btn);
+  });
+}
+
+function showGrowthModal() {
+  if (!growthUi.modal) return;
+  hideItemTooltip();
+  renderGrowthModal();
+  growthUi.modal.classList.remove('hidden');
 }
 
 function renderEffectModal() {
@@ -7664,6 +7764,7 @@ function renderState(state) {
     { id: 'treasure', label: '\u6CD5\u5B9D' },
     { id: 'forge', label: '\u88C5\u5907\u5408\u6210' },
     { id: 'refine', label: '\u88C5\u5907\u953B\u9020' },
+    { id: 'growth', label: '\u88C5\u5907\u6210\u957F' },
     { id: 'effect', label: '\u7279\u6548\u91CD\u7F6E' },
     { id: 'drops', label: '\u5957\u88c5\u6389\u843d' },
     { id: 'switch', label: '\u5207\u6362\u89d2\u8272' },
@@ -7772,6 +7873,10 @@ function renderState(state) {
     }
     if (a.id === 'effect') {
       showEffectModal();
+      return;
+    }
+    if (a.id === 'growth') {
+      showGrowthModal();
       return;
     }
     if (a.id === 'treasure') {
@@ -8874,6 +8979,7 @@ document.addEventListener('click', (evt) => {
     shopUi?.modal,
     repairUi?.modal,
     forgeUi?.modal,
+    growthUi?.modal,
     consignUi?.modal,
     bagUi?.modal,
     statsUi?.modal,
@@ -9445,6 +9551,41 @@ if (refineUi.close) {
   refineUi.close.addEventListener('click', () => {
     refineUi.modal.classList.add('hidden');
     hideItemTooltip();
+  });
+}
+if (growthUi.count) {
+  growthUi.count.addEventListener('input', () => {
+    const raw = String(growthUi.count.value || '').replace(/[^\d]/g, '');
+    if (!raw) {
+      growthUi.count.value = '';
+      return;
+    }
+    const value = Math.max(1, Math.min(200, Math.floor(Number(raw))));
+    growthUi.count.value = String(value);
+  });
+}
+if (growthUi.close) {
+  growthUi.close.addEventListener('click', () => {
+    growthUi.modal.classList.add('hidden');
+    hideItemTooltip();
+  });
+}
+if (growthUi.modal) {
+  growthUi.modal.addEventListener('click', (e) => {
+    if (e.target === growthUi.modal) {
+      growthUi.modal.classList.add('hidden');
+      hideItemTooltip();
+    }
+  });
+}
+if (growthUi.confirm) {
+  growthUi.confirm.addEventListener('click', () => {
+    if (!socket || !growthSelection?.slot) return;
+    const count = Math.max(1, Math.min(200, Math.floor(Number(growthUi.count?.value || 1))));
+    socket.emit('cmd', {
+      text: `growth equip:${growthSelection.slot} ${count}`,
+      source: 'ui'
+    });
   });
 }
 if (effectUi.close) {
