@@ -669,6 +669,7 @@ private fun PetEquipDialog(
 
 // 技能书库 Tab
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun PetBooksTab(
     vm: GameViewModel,
     books: Map<String, Int>,
