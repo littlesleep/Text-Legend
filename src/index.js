@@ -11895,7 +11895,7 @@ function createRandomPet(rarity = 'normal', options = {}) {
     rarity: safeRarity,
     level: 1,
     exp: 0,
-    name: `${role}${randInt(1, 99)}`,
+    name: isDivineBeast ? role : `${role}${randInt(1, 99)}`,
     role,
     battleType,
     growth,
