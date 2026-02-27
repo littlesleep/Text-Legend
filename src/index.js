@@ -14072,11 +14072,17 @@ io.on('connection', (socket) => {
         unlocked = true;
       }
       dirty = true;
-      const replacedText = learned.replaced ? `（替换 ${learned.replaced}）` : '';
+      const learnedName = getPetSkillDef(book.skillId)?.name || book.skillName || book.skillId;
+      const replacedName = learned.replaced ? (getPetSkillDef(learned.replaced)?.name || learned.replaced) : '';
+      const replacedText = replacedName ? `（替换 ${replacedName}）` : '';
       const unlockText = unlocked ? '｜技能格已解锁' : '';
       const activityMsgs = recordTreasurePetFestivalActivity(player, { petBookUses: 1 });
       activityMsgs.forEach((msg) => player.send?.(msg));
-      emitResult(true, `打书成功：${book.skillName}${replacedText}${unlockText}`);
+      const currentSkillsText = (Array.isArray(pet.skills) ? pet.skills : [])
+        .map((id) => getPetSkillDef(id)?.name || id)
+        .join('、');
+      emitResult(true, `打书成功：${learnedName}${replacedText}${unlockText}`);
+      player.send?.(`【打书结果】${pet.name} 学会 ${learnedName}${replacedText}${unlockText}。当前技能：${currentSkillsText || '无'}`);
     } else if (action === 'train') {
       const pet = getPetById(clean?.petId);
       if (!pet) return fail('宠物不存在');

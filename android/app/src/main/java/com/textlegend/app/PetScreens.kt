@@ -85,7 +85,7 @@ fun PetDialog(
         Spacer(modifier = Modifier.height(16.dp))
 
         when (selectedTab) {
-            0 -> PetListTab(vm, pets, activePet, state?.items ?: emptyList(), onDismiss)
+            0 -> PetListTab(vm, pets, activePet, state?.items ?: emptyList())
             1 -> PetBooksTab(vm, books, pets)
         }
     }
@@ -97,14 +97,14 @@ private fun PetListTab(
     vm: GameViewModel,
     pets: List<PetInfo>,
     activePet: PetInfo?,
-    bagItems: List<ItemInfo>,
-    onDismiss: () -> Unit
+    bagItems: List<ItemInfo>
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
     var showTrainDialog by remember { mutableStateOf(false) }
     var showEquipDialog by remember { mutableStateOf(false) }
     var showSynthesizeDialog by remember { mutableStateOf(false) }
     var showBatchSynthesizeConfirm by remember { mutableStateOf(false) }
+    var showDetailDialog by remember { mutableStateOf(false) }
     var selectedPetId by remember { mutableStateOf<String?>(null) }
     val selectedPet = pets.find { it.id == selectedPetId }
 
@@ -137,7 +137,10 @@ private fun PetListTab(
                     selectedPetId = pet.id
                     showEquipDialog = true
                 },
-                onViewDetails = { onDismiss() } // TODO: 打开详情对话框
+                onViewDetails = {
+                    selectedPetId = pet.id
+                    showDetailDialog = true
+                }
             )
         }
         item {
@@ -232,6 +235,16 @@ private fun PetListTab(
             },
             dismissButton = {
                 TextButton(onClick = { showBatchSynthesizeConfirm = false }) { Text("取消") }
+            }
+        )
+    }
+    if (showDetailDialog && selectedPet != null) {
+        PetDetailDialog(
+            pet = selectedPet!!,
+            isActive = activePet?.id == selectedPet!!.id,
+            onDismiss = {
+                showDetailDialog = false
+                selectedPetId = null
             }
         )
     }
@@ -661,14 +674,6 @@ private fun PetBooksTab(
     books: Map<String, Int>,
     pets: List<PetInfo>
 ) {
-    var useBookTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
-    if (books.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("暂无技能书，可通过挑战BOSS获得技能书。")
-        }
-        return
-    }
-
     val bookList = books.map { (id, qty) ->
         val book = PetData.getBookDef(id)
         Triple(id, book, qty)
@@ -676,37 +681,176 @@ private fun PetBooksTab(
         Triple(id, book!!, qty)
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(bookList) { (id, book, qty) ->
-            PetBookCard(
-                book = book,
-                qty = qty,
-                onUse = {
-                    if (pets.isEmpty()) {
-                        vm.showToast("暂无宠物可打书")
-                    } else {
-                        useBookTarget = id to book.skillName
-                    }
-                }
-            )
+    var bookExpanded by remember { mutableStateOf(false) }
+    var petExpanded by remember { mutableStateOf(false) }
+    var selectedBookId by remember { mutableStateOf(bookList.firstOrNull()?.first ?: "") }
+    var selectedPetId by remember { mutableStateOf(pets.firstOrNull()?.id ?: "") }
+
+    LaunchedEffect(bookList.size) {
+        if (bookList.none { it.first == selectedBookId }) {
+            selectedBookId = bookList.firstOrNull()?.first ?: ""
+        }
+    }
+    LaunchedEffect(pets.size) {
+        if (pets.none { it.id == selectedPetId }) {
+            selectedPetId = pets.firstOrNull()?.id ?: ""
         }
     }
 
-    if (useBookTarget != null) {
-        val (bookId, bookName) = useBookTarget!!
-        PetUseBookDialog(
-            pets = pets,
-            bookName = bookName,
-            onConfirm = { petId ->
-                vm.petUseBook(petId, bookId)
-                useBookTarget = null
-            },
-            onDismiss = { useBookTarget = null }
-        )
+    if (books.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("暂无技能书，可通过挑战BOSS获得技能书。")
+        }
+        return
     }
+    if (bookList.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("技能书数据异常，请重新登录后重试。")
+        }
+        return
+    }
+    if (pets.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("暂无宠物可打书。")
+        }
+        return
+    }
+
+    val selectedBookEntry = bookList.find { it.first == selectedBookId } ?: bookList.first()
+    val selectedBook = selectedBookEntry.second
+    val selectedBookQty = selectedBookEntry.third
+    val selectedPet = pets.find { it.id == selectedPetId } ?: pets.first()
+    val selectedEffect = PetData.SKILL_EFFECTS[selectedBook.skillId] ?: "未知效果"
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text("快捷打书", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+
+        ExposedDropdownMenuBox(
+            expanded = bookExpanded,
+            onExpandedChange = { bookExpanded = !bookExpanded }
+        ) {
+            OutlinedTextField(
+                value = "${selectedBook.skillName} x$selectedBookQty",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("选择技能书") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = bookExpanded) },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = bookExpanded,
+                onDismissRequest = { bookExpanded = false }
+            ) {
+                bookList.forEach { (bookId, bookDef, qty) ->
+                    DropdownMenuItem(
+                        text = { Text("${bookDef.skillName} x$qty") },
+                        onClick = {
+                            selectedBookId = bookId
+                            bookExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = petExpanded,
+            onExpandedChange = { petExpanded = !petExpanded }
+        ) {
+            OutlinedTextField(
+                value = "${selectedPet.name} Lv${selectedPet.level}",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("选择宠物") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = petExpanded) },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = petExpanded,
+                onDismissRequest = { petExpanded = false }
+            ) {
+                pets.forEach { pet ->
+                    DropdownMenuItem(
+                        text = { Text("${pet.name} Lv${pet.level}") },
+                        onClick = {
+                            selectedPetId = pet.id
+                            petExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            tonalElevation = 1.dp
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("技能：${selectedBook.skillName}", fontWeight = FontWeight.SemiBold)
+                Text(selectedEffect, fontSize = 12.sp, color = Color(0xFF616161))
+            }
+        }
+
+        Button(
+            onClick = { vm.petUseBook(selectedPet.id, selectedBookEntry.first) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("打书")
+        }
+    }
+}
+
+@Composable
+private fun PetDetailDialog(
+    pet: PetInfo,
+    isActive: Boolean,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("宠物详情") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("名称：${pet.name}${if (isActive) "（出战）" else ""}", fontWeight = FontWeight.SemiBold)
+                Text("稀有度：${PetData.getRarityLabel(pet.rarity)}")
+                Text("等级：Lv${pet.level}")
+                Text("成长：${String.format("%.3f", pet.growth)}")
+                Text("定位：${pet.role}")
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("资质", fontWeight = FontWeight.SemiBold)
+                Text("生命 ${pet.aptitude.hp}  攻击 ${pet.aptitude.atk}  防御 ${pet.aptitude.def}")
+                Text("魔法 ${pet.aptitude.mag}  敏捷 ${pet.aptitude.agility}")
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("技能", fontWeight = FontWeight.SemiBold)
+                if (pet.skills.isEmpty()) {
+                    Text("暂无技能", color = Color.Gray)
+                } else {
+                    pet.skills.forEachIndexed { idx, skillId ->
+                        val skillName = petSkillDisplayName(skillId, pet.skillNames.getOrNull(idx))
+                        val effect = petSkillEffectDisplay(skillId, pet.skillEffects.getOrNull(idx))
+                        Text("• $skillName")
+                        if (effect.isNotBlank()) {
+                            Text(effect, fontSize = 12.sp, color = Color(0xFF616161))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        dismissButton = {}
+    )
 }
 
 // 技能书卡片

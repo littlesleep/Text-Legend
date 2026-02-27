@@ -1581,7 +1581,11 @@ private fun ChatTab(
 ) {
     var selectedName by remember { mutableStateOf<String?>(null) }
     val selectedPlayer = state?.players?.firstOrNull { it.name == selectedName }
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+    ) {
         LazyColumn(modifier = Modifier.weight(1f), reverseLayout = true) {
             items(outputs) { line ->
                 ChatLine(
