@@ -630,13 +630,6 @@ function grantFixedPetToPlayer(player, species, rarity = 'ultimate') {
   if (!player) return { ok: false, reason: 'player_not_found' };
   const petState = normalizePetState(player);
   if (!petState) return { ok: false, reason: 'pet_state_invalid' };
-  if (Array.isArray(petState.pets) && petState.pets.length >= PET_MAX_OWNED) {
-    return {
-      ok: false,
-      reason: 'pet_full',
-      msg: `宠物栏已满（${petState.pets.length}/${PET_MAX_OWNED}），请先放生或处理部分宠物后重试。`
-    };
-  }
   const fixedPet = createRandomPet(rarity, { fixedSpecies: String(species || '').trim() });
   if (!fixedPet) return { ok: false, reason: 'create_failed', msg: '创建神兽数据失败。' };
   petState.pets.push(fixedPet);

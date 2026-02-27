@@ -2695,9 +2695,7 @@ function renderPetModal() {
   if (petUi.summary) {
     const active = pets.find((pet) => pet.id === petState?.activePetId);
     const activeName = active ? active.name : '无';
-    const maxOwned = Number(petState?.maxOwned || 0);
-    const capacityText = maxOwned > 0 ? `${pets.length}/${maxOwned}` : `${pets.length}/∞`;
-    petUi.summary.textContent = `宠物: ${capacityText} | 出战: ${activeName} | 合成:${Number(petState?.synthesisCostGold || 0)}金`;
+    petUi.summary.textContent = `宠物: ${pets.length} | 出战: ${activeName} | 合成:${Number(petState?.synthesisCostGold || 0)}金`;
   }
   if (petUi.setActive) petUi.setActive.disabled = !selected;
   if (petUi.setRest) petUi.setRest.disabled = !selected;

@@ -3508,17 +3508,12 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         const totalCost = Math.max(1, Math.floor(Number(item.cost || 0))) * qty;
         const owned = Math.max(0, Math.floor(Number((player.inventory || []).find((i) => i?.id === 'divine_beast_fragment')?.qty || 0)));
         if (owned < totalCost) return send(`神兽碎片不足，需要 ${totalCost} 个。`);
-        const petState = normalizePetState(player);
-        if (Array.isArray(petState?.pets)) {
-          const maxOwned = 50;
-          if (petState.pets.length + qty > maxOwned) return send(`宠物栏空间不足，需要 ${qty} 格。`);
-        }
         if (!removeItem(player, 'divine_beast_fragment', totalCost)) return send('扣除神兽碎片失败。');
         const gained = [];
         try {
           for (let i = 0; i < qty; i += 1) {
             const grantRes = await activityApi?.grantFixedPet?.(item.species);
-            if (!grantRes?.ok || !grantRes.pet) throw new Error(grantRes?.reason === 'pet_full' ? '宠物栏已满' : '发放神兽失败');
+            if (!grantRes?.ok || !grantRes.pet) throw new Error(grantRes?.msg || '发放神兽失败');
             gained.push(grantRes.pet);
           }
           player.forceStateRefresh = true;
