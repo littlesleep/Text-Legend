@@ -319,6 +319,49 @@ body.theme-dark .admin-switch input:checked + .admin-switch-slider {
   margin: 0;
 }
 
+/* 活动积分商城表格：物品列更紧凑、积分列更宽 */
+.compact-config-table-container table.activity-point-shop-table th:nth-child(1),
+.compact-config-table-container table.activity-point-shop-table td:nth-child(1) {
+  width: 52%;
+}
+
+.compact-config-table-container table.activity-point-shop-table th:nth-child(2),
+.compact-config-table-container table.activity-point-shop-table td:nth-child(2) {
+  width: 30%;
+}
+
+.compact-config-table-container table.activity-point-shop-table th:nth-child(3),
+.compact-config-table-container table.activity-point-shop-table td:nth-child(3) {
+  width: 18%;
+}
+
+.compact-config-table-container table.activity-point-shop-table td:nth-child(1) select {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.compact-config-table-container table.activity-point-shop-table td:nth-child(2) input[type='number'] {
+  min-width: 72px;
+}
+
+.char-migrate-pair-row {
+  display: grid;
+  grid-template-columns: 96px minmax(220px, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.char-migrate-pair-row input {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .char-migrate-pair-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .compact-config-table-container table.compact-config-table.compact-config-table-4col th,
 .compact-config-table-container table.compact-config-table.compact-config-table-4col td {
   padding: 6px 6px;

@@ -671,8 +671,9 @@ const growthUi = {
   failStack: document.getElementById('growth-fail-stack'),
   successRate: document.getElementById('growth-success-rate'),
   cost: document.getElementById('growth-cost'),
-  count: document.getElementById('growth-count'),
+  preview: document.getElementById('growth-preview'),
   confirm: document.getElementById('growth-confirm'),
+  batch: document.getElementById('growth-batch'),
   close: document.getElementById('growth-close')
 };
 let effectSelection = null;
@@ -3413,23 +3414,184 @@ function resolveGrowthRatePctByLevel(nextLevel, config) {
   return Number(config?.successRateLate ?? 45);
 }
 
-function renderGrowthModal() {
-  if (!growthUi.list || !growthUi.main || !growthUi.level || !growthUi.successRate || !growthUi.cost) return;
-
+function getGrowthRuntimeConfig() {
   const cfg = lastState?.ultimate_growth_config || {};
   const maxLevelRaw = Number(cfg.maxLevel ?? 0);
   const hasMaxLevel = Number.isFinite(maxLevelRaw) && Math.floor(maxLevelRaw) > 0;
   const maxLevel = hasMaxLevel ? Math.floor(maxLevelRaw) : null;
-  const materialCost = Math.max(1, Math.floor(Number(cfg.materialCost || 1)));
-  const materialId = String(cfg.materialId || '').trim();
-  const materialName = String(cfg.materialName || '').trim();
-  const materialLabel = materialName || materialId || '材料';
-  const breakthroughEvery = Math.max(1, Math.floor(Number(cfg.breakthroughEvery || 20)));
-  const breakthroughMaterialCost = Math.max(1, Math.floor(Number(cfg.breakthroughMaterialCost || 1)));
-  const breakthroughMaterialId = String(cfg.breakthroughMaterialId || '').trim();
-  const breakthroughMaterialName = String(cfg.breakthroughMaterialName || '').trim();
-  const breakthroughMaterialLabel = breakthroughMaterialName || breakthroughMaterialId || '突破材料';
-  const goldCost = Math.max(0, Math.floor(Number(cfg.goldCost || 0)));
+  return {
+    cfg,
+    hasMaxLevel,
+    maxLevel,
+    materialCost: Math.max(1, Math.floor(Number(cfg.materialCost || 1))),
+    materialId: String(cfg.materialId || '').trim(),
+    materialLabel: String(cfg.materialName || '').trim() || String(cfg.materialId || '').trim() || '材料',
+    breakthroughEvery: Math.max(1, Math.floor(Number(cfg.breakthroughEvery || 20))),
+    breakthroughMaterialCost: Math.max(1, Math.floor(Number(cfg.breakthroughMaterialCost || 1))),
+    breakthroughMaterialId: String(cfg.breakthroughMaterialId || '').trim(),
+    breakthroughMaterialLabel: String(cfg.breakthroughMaterialName || '').trim() || String(cfg.breakthroughMaterialId || '').trim() || '突破材料',
+    goldCost: Math.max(0, Math.floor(Number(cfg.goldCost || 0))),
+    failStackBonusPct: Math.max(0, Number(cfg.failStackBonusPct || 0)),
+    failStackCapPct: Math.max(0, Number(cfg.failStackCapPct || 0))
+  };
+}
+
+function getBagItemQty(itemId) {
+  const id = String(itemId || '').trim();
+  if (!id) return 0;
+  return Math.max(0, Math.floor(Number((lastState?.items || []).find((it) => String(it?.id || '') === id)?.qty || 0)));
+}
+
+function calcGrowthBatchPreview(selection, requestedCount) {
+  const rt = getGrowthRuntimeConfig();
+  const triesRequested = Math.max(1, Math.min(200, Math.floor(Number(requestedCount || 1))));
+  if (!selection?.slot) {
+    return {
+      triesRequested,
+      triesAffordable: 0,
+      materialOwned: 0,
+      breakOwned: 0,
+      goldOwned: Math.max(0, Math.floor(Number(lastState?.stats?.gold ?? 0))),
+      materialNeed: 0,
+      breakNeed: 0,
+      goldNeed: 0,
+      avgRate: 0,
+      avgSuccess: 0,
+      minSuccess: 0,
+      maxSuccess: 0,
+      stopReason: '未选择主件'
+    };
+  }
+
+  let level = Math.max(0, Math.floor(Number(selection.growthLevel || 0)));
+  let failStack = Math.max(0, Math.floor(Number(selection.failStack || 0)));
+  const materialOwned = getBagItemQty(rt.materialId);
+  const breakOwned = getBagItemQty(rt.breakthroughMaterialId);
+  const goldOwned = Math.max(0, Math.floor(Number(lastState?.stats?.gold ?? 0)));
+  let materialNeed = 0;
+  let breakNeed = 0;
+  let goldNeed = 0;
+  let triesAffordable = 0;
+  let stopReason = '';
+  const perTryRate = [];
+
+  for (let i = 0; i < triesRequested; i += 1) {
+    const nextLevel = level + 1;
+    if (rt.hasMaxLevel && nextLevel > rt.maxLevel) {
+      stopReason = `达到上限Lv${rt.maxLevel}`;
+      break;
+    }
+    const needBreak = rt.breakthroughMaterialId && (nextLevel % rt.breakthroughEvery === 0);
+    if (materialNeed + rt.materialCost > materialOwned) {
+      stopReason = `${rt.materialLabel}不足`;
+      break;
+    }
+    if (needBreak && (breakNeed + rt.breakthroughMaterialCost > breakOwned)) {
+      stopReason = `${rt.breakthroughMaterialLabel}不足`;
+      break;
+    }
+    if (goldNeed + rt.goldCost > goldOwned) {
+      stopReason = '金币不足';
+      break;
+    }
+    materialNeed += rt.materialCost;
+    if (needBreak) breakNeed += rt.breakthroughMaterialCost;
+    goldNeed += rt.goldCost;
+    triesAffordable += 1;
+
+    const baseRate = Math.max(0, Math.min(100, resolveGrowthRatePctByLevel(nextLevel, rt.cfg)));
+    const extraRate = Math.min(rt.failStackCapPct * 100, failStack * rt.failStackBonusPct * 100);
+    const finalRate = Math.max(0, Math.min(100, baseRate + extraRate));
+    perTryRate.push(finalRate);
+    // 预估链路里按“期望失败”推进保底，避免显示过于乐观
+    failStack += (1 - finalRate / 100);
+    level = nextLevel;
+  }
+
+  if (triesAffordable <= 0) {
+    return {
+      triesRequested,
+      triesAffordable: 0,
+      materialOwned,
+      breakOwned,
+      goldOwned,
+      materialNeed,
+      breakNeed,
+      goldNeed,
+      avgRate: 0,
+      avgSuccess: 0,
+      minSuccess: 0,
+      maxSuccess: 0,
+      stopReason: stopReason || '无法执行'
+    };
+  }
+
+  // 用快速蒙特卡洛估算成功区间
+  const simCount = 240;
+  const results = [];
+  for (let s = 0; s < simCount; s += 1) {
+    let simLevel = Math.max(0, Math.floor(Number(selection.growthLevel || 0)));
+    let simFail = Math.max(0, Math.floor(Number(selection.failStack || 0)));
+    let success = 0;
+    for (let i = 0; i < triesAffordable; i += 1) {
+      const nextLevel = simLevel + 1;
+      const baseRate = Math.max(0, Math.min(100, resolveGrowthRatePctByLevel(nextLevel, rt.cfg)));
+      const extraRate = Math.min(rt.failStackCapPct * 100, simFail * rt.failStackBonusPct * 100);
+      const finalRate = Math.max(0, Math.min(100, baseRate + extraRate));
+      if (Math.random() * 100 < finalRate) {
+        success += 1;
+        simFail = 0;
+      } else {
+        simFail += 1;
+      }
+      simLevel = nextLevel;
+    }
+    results.push(success);
+  }
+  const avgSuccess = results.reduce((a, b) => a + b, 0) / Math.max(1, results.length);
+  const minSuccess = Math.min(...results);
+  const maxSuccess = Math.max(...results);
+  const avgRate = perTryRate.reduce((a, b) => a + b, 0) / Math.max(1, perTryRate.length);
+  return {
+    triesRequested,
+    triesAffordable,
+    materialOwned,
+    breakOwned,
+    goldOwned,
+    materialNeed,
+    breakNeed,
+    goldNeed,
+    avgRate,
+    avgSuccess,
+    minSuccess,
+    maxSuccess,
+    stopReason
+  };
+}
+
+function updateGrowthBatchPreview() {
+  if (!growthUi.preview) return;
+  const count = 1;
+  if (!growthSelection?.slot) {
+    growthUi.preview.textContent = '一键成长预估: 请选择主件后可预估';
+    return;
+  }
+  const rt = getGrowthRuntimeConfig();
+  const p = calcGrowthBatchPreview(growthSelection, count);
+  const breakText = p.breakNeed > 0 ? ` + ${rt.breakthroughMaterialLabel}x${p.breakNeed}` : '';
+  const ownBreakText = rt.breakthroughMaterialId ? ` + ${rt.breakthroughMaterialLabel}x${p.breakOwned}` : '';
+  const ownGoldText = rt.goldCost > 0 ? ` + 金币${p.goldOwned}` : '';
+  const stopText = p.triesAffordable < p.triesRequested ? `，受限：${p.stopReason || '资源不足'}` : '';
+  growthUi.preview.textContent =
+    `一键成长预估: 当前持有 ${rt.materialLabel}x${p.materialOwned}${ownBreakText}${ownGoldText}；可执行${p.triesAffordable}/${p.triesRequested}次，成功率均值约${p.avgRate.toFixed(2)}%，` +
+    `成功约${p.avgSuccess.toFixed(1)}次（区间${p.minSuccess}-${p.maxSuccess}），消耗${rt.materialLabel}x${p.materialNeed}${breakText}${rt.goldCost > 0 ? ` + 金币${p.goldNeed}` : ''}${stopText}`;
+}
+
+function renderGrowthModal() {
+  if (!growthUi.list || !growthUi.main || !growthUi.level || !growthUi.successRate || !growthUi.cost) return;
+
+  const rt = getGrowthRuntimeConfig();
+  const { cfg, hasMaxLevel, maxLevel, materialCost, materialLabel, breakthroughEvery, breakthroughMaterialCost, breakthroughMaterialId, breakthroughMaterialLabel, goldCost } = rt;
   const equippedUltimate = (lastState?.equipment || []).filter((entry) => {
     if (!entry?.item) return false;
     return normalizeRarityKey(entry.item.rarity) === 'ultimate';
@@ -3442,8 +3604,9 @@ function renderGrowthModal() {
   if (growthUi.failStack) growthUi.failStack.textContent = '当前保底层数: 0';
   growthUi.successRate.textContent = '下一级成功率: --%';
   growthUi.cost.textContent = `单次消耗: ${materialLabel}x${materialCost}${goldCost > 0 ? ` + 金币${goldCost}` : ''}（每${breakthroughEvery}级突破额外 ${breakthroughMaterialLabel}x${breakthroughMaterialCost}）`;
+  if (growthUi.preview) growthUi.preview.textContent = '一键成长预估: --';
   if (growthUi.confirm) growthUi.confirm.disabled = true;
-  if (growthUi.count) growthUi.count.value = '1';
+  if (growthUi.batch) growthUi.batch.disabled = true;
 
   if (!equippedUltimate.length) {
     const empty = document.createElement('div');
@@ -3483,6 +3646,8 @@ function renderGrowthModal() {
       growthUi.successRate.textContent = `下一级成功率: ${finalRate.toFixed(2)}% (基础${baseRate.toFixed(2)}%)`;
       growthUi.cost.textContent = `单次消耗: ${materialLabel}x${materialCost}${goldCost > 0 ? ` + 金币${goldCost}` : ''}${needBreakthroughMat ? ` + ${breakthroughMaterialLabel}x${breakthroughMaterialCost}` : ''}`;
       if (growthUi.confirm) growthUi.confirm.disabled = hasMaxLevel ? (currentLevel >= maxLevel) : false;
+      if (growthUi.batch) growthUi.batch.disabled = hasMaxLevel ? (currentLevel >= maxLevel) : false;
+      updateGrowthBatchPreview();
     });
     growthUi.list.appendChild(btn);
   });
@@ -9591,17 +9756,6 @@ if (refineUi.close) {
     hideItemTooltip();
   });
 }
-if (growthUi.count) {
-  growthUi.count.addEventListener('input', () => {
-    const raw = String(growthUi.count.value || '').replace(/[^\d]/g, '');
-    if (!raw) {
-      growthUi.count.value = '';
-      return;
-    }
-    const value = Math.max(1, Math.min(200, Math.floor(Number(raw))));
-    growthUi.count.value = String(value);
-  });
-}
 if (growthUi.close) {
   growthUi.close.addEventListener('click', () => {
     growthUi.modal.classList.add('hidden');
@@ -9619,9 +9773,50 @@ if (growthUi.modal) {
 if (growthUi.confirm) {
   growthUi.confirm.addEventListener('click', () => {
     if (!socket || !growthSelection?.slot) return;
-    const count = Math.max(1, Math.min(200, Math.floor(Number(growthUi.count?.value || 1))));
     socket.emit('cmd', {
-      text: `growth equip:${growthSelection.slot} ${count}`,
+      text: `growth equip:${growthSelection.slot} 1`,
+      source: 'ui'
+    });
+  });
+}
+if (growthUi.batch) {
+  growthUi.batch.addEventListener('click', async () => {
+    if (!socket || !growthSelection?.slot) return;
+    const input = await promptModal({
+      title: '一键成长次数',
+      text: '请输入要执行的成长次数（1-200）',
+      placeholder: '次数',
+      value: '10',
+      type: 'number',
+      allowEmpty: false
+    });
+    if (input == null) return;
+    const requested = Math.max(1, Math.min(200, Math.floor(Number(String(input).trim() || 1))));
+    if (!Number.isFinite(requested) || requested < 1) {
+      showToast('请输入有效次数（1-200）');
+      return;
+    }
+    const rt = getGrowthRuntimeConfig();
+    const p = calcGrowthBatchPreview(growthSelection, requested);
+    if (p.triesAffordable <= 0) {
+      showToast(`无法执行一键成长：${p.stopReason || '资源不足'}`);
+      return;
+    }
+    const breakText = p.breakNeed > 0 ? ` + ${rt.breakthroughMaterialLabel}x${p.breakNeed}` : '';
+    const confirm = await confirmModal({
+      title: '一键成长确认',
+      text:
+        `目标次数：${p.triesRequested}\n` +
+        `当前持有：${rt.materialLabel}x${p.materialOwned}${rt.breakthroughMaterialId ? ` + ${rt.breakthroughMaterialLabel}x${p.breakOwned}` : ''}${rt.goldCost > 0 ? ` + 金币${p.goldOwned}` : ''}\n` +
+        `可执行次数：${p.triesAffordable}${p.triesAffordable < p.triesRequested ? `（${p.stopReason || '资源不足'}）` : ''}\n` +
+        `预估成功率均值：${p.avgRate.toFixed(2)}%\n` +
+        `预估成功次数：${p.avgSuccess.toFixed(1)}（区间${p.minSuccess}-${p.maxSuccess}）\n` +
+        `预估消耗：${rt.materialLabel}x${p.materialNeed}${breakText}${rt.goldCost > 0 ? ` + 金币${p.goldNeed}` : ''}\n` +
+        `确定执行一键成长吗？`
+    });
+    if (!confirm) return;
+    socket.emit('cmd', {
+      text: `growth equip:${growthSelection.slot} ${p.triesAffordable}`,
       source: 'ui'
     });
   });
