@@ -169,7 +169,7 @@ export function normalizeEquipmentRecycleExchangeConfig(raw) {
   }));
   return {
     version: 1,
-    items: hasItemsArray ? items : fallback
+    items: items.length ? items : fallback
   };
 }
 

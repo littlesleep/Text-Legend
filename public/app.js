@@ -3772,7 +3772,7 @@ function renderHighTierRecycleSalvage() {
     let yieldQty = 0;
     if (rarity === 'epic') {
       yieldQty = slot === 'weapon' ? 12 : slot === 'chest' ? 10 : ['head', 'waist', 'feet'].includes(slot) ? 8 : 6;
-    } else {
+    } else if (rarity === 'legendary') {
       yieldQty = slot === 'weapon' ? 18 : slot === 'chest' ? 15 : ['head', 'waist', 'feet'].includes(slot) ? 12 : 10;
     } else {
       yieldQty = slot === 'weapon' ? 30 : slot === 'chest' ? 24 : ['head', 'waist', 'feet'].includes(slot) ? 20 : 16;
