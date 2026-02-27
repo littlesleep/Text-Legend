@@ -2216,7 +2216,19 @@ function promptMultiSelectModal({
       if (opt.className) {
         btn.classList.add(...String(opt.className).split(/\s+/).filter(Boolean));
       }
-      btn.textContent = opt.label;
+      if (opt.description) {
+        btn.classList.add('prompt-option-rich');
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'prompt-option-title';
+        titleSpan.textContent = opt.label;
+        const descSpan = document.createElement('span');
+        descSpan.className = 'prompt-option-desc';
+        descSpan.textContent = String(opt.description || '');
+        btn.appendChild(titleSpan);
+        btn.appendChild(descSpan);
+      } else {
+        btn.textContent = opt.label;
+      }
       if (selected.has(opt.value)) {
         btn.classList.add('active');
       }
@@ -3039,7 +3051,7 @@ function renderPetModal() {
       ownedBooks.forEach((book) => {
         const row = document.createElement('div');
         row.className = 'pet-book-entry';
-        row.textContent = `${book.name} (${book.skillName}) x${Number(book.qty || 0)}`;
+        row.textContent = `${book.name} x${Number(book.qty || 0)}`;
         if (book.effect) {
           row.addEventListener('mouseenter', (evt) => showItemTooltip(book.effect, evt));
           row.addEventListener('mousemove', (evt) => positionTooltip(evt.clientX, evt.clientY));
@@ -3156,7 +3168,8 @@ async function openPetUseBookDialog() {
     text: '请选择要给当前宠物使用的技能书',
     options: ownedBooks.map((book) => ({
       value: String(book.id || ''),
-      label: `${book.name || book.id} x${Number(book.qty || 0)}`
+      label: `${book.name || book.id} x${Number(book.qty || 0)}`,
+      description: String(book.effect || '暂无技能说明')
     })),
     selectedValues: [],
     singleSelect: true
@@ -3171,6 +3184,14 @@ async function openPetTrainDialog() {
     showToast('请先选择宠物');
     return;
   }
+  const fruitQty = Math.max(
+    0,
+    Math.floor(
+      Number(
+        (Array.isArray(lastState?.items) ? lastState.items : []).find((item) => String(item?.id || '') === 'pet_training_fruit')?.qty || 0
+      )
+    )
+  );
   const attrOptions = [
     { value: 'hp', label: '生命' },
     { value: 'mp', label: '魔法值' },
@@ -3191,7 +3212,7 @@ async function openPetTrainDialog() {
   if (!attr) return;
   const count = await promptModal({
     title: '宠物修炼',
-    text: '请输入修炼次数（1-999）',
+    text: `请输入修炼次数（1-999）\n当前宠物修炼果：${fruitQty}`,
     placeholder: '次数',
     value: String(petUi.trainCount?.value || '1'),
     type: 'number'

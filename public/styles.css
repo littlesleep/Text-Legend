@@ -2400,6 +2400,27 @@ body.dark .chat-name-btn.sponsor-player-name:hover {
   font-size: 0.85rem;
 }
 
+.prompt-options .prompt-option.prompt-option-rich {
+  display: grid;
+  gap: 4px;
+  width: min(320px, 100%);
+  padding: 10px 12px;
+  border-radius: 14px;
+  text-align: left;
+  white-space: normal;
+}
+
+.prompt-options .prompt-option .prompt-option-title {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.prompt-options .prompt-option .prompt-option-desc {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: rgba(236, 221, 203, 0.82);
+}
+
 .prompt-options .prompt-option.active {
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.18);
@@ -6492,6 +6513,10 @@ body.dark .sponsor-markdown .sponsor-tip {
   background: linear-gradient(180deg, rgba(35, 22, 13, 0.88), rgba(24, 16, 10, 0.96));
   border: 1px solid rgba(206, 151, 80, 0.14);
   box-shadow: inset 0 1px 0 rgba(255, 219, 168, 0.04);
+}
+
+.pet-section.hidden {
+  display: none;
 }
 
 .pet-detail-section {
