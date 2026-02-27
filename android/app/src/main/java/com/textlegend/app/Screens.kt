@@ -362,8 +362,10 @@ fun GameScreen(vm: GameViewModel, onExit: () -> Unit) {
             ) {
             composable("main") {
                 Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-                    TopStatus(state = state)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    if (tabIndex != 3) {
+                        TopStatus(state = state)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     if (state == null) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
