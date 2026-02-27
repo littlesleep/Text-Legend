@@ -15417,6 +15417,62 @@ function pickCombatSkillId(player, combatSkillId) {
   return combatSkillId;
 }
 
+function tryAutoSummon(player) {
+  if (!player || player.hp <= 0) return false;
+  if (!player.flags?.autoSkillId) return false;
+  if (!isVipAutoEnabled(player)) return false;
+  const skills = getLearnedSkills(player).filter((skill) => skill.type === 'summon');
+  if (!skills.length) return false;
+
+  const autoSkill = player.flags.autoSkillId;
+  let allowedSummonSkills = [];
+  if (autoSkill === 'all') {
+    allowedSummonSkills = skills;
+  } else if (Array.isArray(autoSkill)) {
+    allowedSummonSkills = skills.filter((skill) => autoSkill.includes(skill.id));
+  } else if (typeof autoSkill === 'string') {
+    allowedSummonSkills = skills.filter((skill) => skill.id === autoSkill);
+  }
+  if (!allowedSummonSkills.length) return false;
+
+  const now = Date.now();
+  const aliveIds = new Set(getAliveSummons(player).map((summon) => summon.id));
+  const candidates = allowedSummonSkills
+    .filter((skill) => !aliveIds.has(skill.id))
+    .filter((skill) => {
+      if (player.mp < skill.mp) return false;
+      if (!skill.cooldown) return true;
+      const lastUse = Number(player.status?.skillCooldowns?.[skill.id] || 0);
+      return lastUse + skill.cooldown <= now;
+    });
+  if (!candidates.length) return false;
+
+  const lastSkillId = String(player.flags?.lastSummonSkill || '').trim();
+  let summonSkill = null;
+  if (lastSkillId) {
+    summonSkill = candidates.find((skill) => skill.id === lastSkillId) || null;
+  }
+  if (!summonSkill) {
+    candidates.sort((a, b) => getSkillLevel(player, b.id) - getSkillLevel(player, a.id));
+    summonSkill = candidates[0] || null;
+  }
+  if (!summonSkill) return false;
+
+  player.mp = clamp(player.mp - summonSkill.mp, 0, player.max_mp);
+  if (summonSkill.cooldown) {
+    if (!player.status) player.status = {};
+    if (!player.status.skillCooldowns) player.status.skillCooldowns = {};
+    player.status.skillCooldowns[summonSkill.id] = now;
+  }
+  const skillLevel = getSkillLevel(player, summonSkill.id);
+  const summon = summonStats(player, summonSkill, skillLevel);
+  addOrReplaceSummon(player, { ...summon, exp: 0 });
+  if (!player.flags) player.flags = {};
+  player.flags.lastSummonSkill = summonSkill.id;
+  player.send(`自动召唤 ${summon.name} (等级 ${summon.level})。`);
+  return true;
+}
+
 function autoResummon(player, desiredSkillId = null) {
   if (!player || player.hp <= 0) return false;
   if (!isVipAutoEnabled(player)) return false;
@@ -16270,6 +16326,7 @@ async function combatTick() {
 
     if (!player.combat) {
       regenOutOfCombat(player);
+      tryAutoSummon(player);
       tryPendingResummon(player);
       tryAutoHeal(player);
       const aggroMob = roomMobs.find((m) => m.status?.aggroTarget === player.name);
@@ -16310,6 +16367,7 @@ async function combatTick() {
     player.flags.lastCombatAt = Date.now();
 
     tryAutoPotion(player);
+    tryAutoSummon(player);
     tryPendingResummon(player);
     tryAutoHeal(player);
     tryAutoBuff(player);
