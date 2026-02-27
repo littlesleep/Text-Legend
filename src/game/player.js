@@ -558,8 +558,59 @@ export function computeDerived(player) {
   const petSkills = new Set();
   const activePetSkills = getActivePetSkillSet(player);
   const petAgilityBonus = 0;
+  if (activePetSkills.has('pet_beast_rat_swiftness')) {
+    petDexPct += 0.12;
+    evadeChance += 0.04;
+    player.flags.petHitBonusPct += 10;
+  }
+  if (activePetSkills.has('pet_beast_ox_bulwark')) {
+    petDefPct += 0.25;
+    petMaxHpPct += 0.2;
+  }
+  if (activePetSkills.has('pet_beast_tiger_fang')) {
+    petAtkPct += 0.22;
+  }
+  if (activePetSkills.has('pet_beast_rabbit_moonstep')) {
+    petDexPct += 0.18;
+    evadeChance += 0.06;
+  }
+  if (activePetSkills.has('pet_beast_dragon_might')) {
+    petAtkPct += 0.16;
+    petMagPct += 0.16;
+    petSpiritPct += 0.16;
+  }
+  if (activePetSkills.has('pet_beast_snake_scale')) {
+    petDefPct += 0.18;
+    petMagPct += 0.12;
+    petSpiritPct += 0.12;
+  }
   if (activePetSkills.has('pet_beast_aegis')) {
     petDefPct += 0.4; // 神兽专属：人物防御/魔御提升40%
+  }
+  if (activePetSkills.has('pet_beast_goat_bless')) {
+    petDefPct += 0.12;
+    petMaxHpPct += 0.15;
+    petMaxMpPct += 0.15;
+  }
+  if (activePetSkills.has('pet_beast_monkey_edge')) {
+    petAtkPct += 0.15;
+    petDexPct += 0.15;
+    evadeChance += 0.05;
+  }
+  if (activePetSkills.has('pet_beast_rooster_warcry')) {
+    petAtkPct += 0.14;
+    petMagPct += 0.14;
+    petSpiritPct += 0.14;
+    player.flags.petHitBonusPct += 10;
+  }
+  if (activePetSkills.has('pet_beast_dog_guard')) {
+    petDefPct += 0.2;
+    petMaxHpPct += 0.12;
+    player.flags.petDamageReductionPct += 0.05;
+  }
+  if (activePetSkills.has('pet_beast_pig_fortune')) {
+    petDefPct += 0.15;
+    petMaxHpPct += 0.28;
   }
   if (petSkills.has('pet_bash')) petAtkPct += 0.08;
   if (petSkills.has('pet_guard')) {

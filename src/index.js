@@ -9674,8 +9674,51 @@ let PET_RARITY_APTITUDE_RANGE = {
   ultimate: { hp: [6200, 8000], atk: [300, 440], def: [280, 420], mag: [300, 440], agility: [280, 420] }
 };
 
+const ZODIAC_DIVINE_BEAST_CONFIG = {
+  '鼠年神兽': { skillId: 'pet_beast_rat_swiftness', skillName: '神鼠灵跃' },
+  '牛年神兽': { skillId: 'pet_beast_ox_bulwark', skillName: '神牛壁垒' },
+  '虎年神兽': { skillId: 'pet_beast_tiger_fang', skillName: '神虎战意' },
+  '兔年神兽': { skillId: 'pet_beast_rabbit_moonstep', skillName: '神兔月影' },
+  '龙年神兽': { skillId: 'pet_beast_dragon_might', skillName: '神龙天威' },
+  '蛇年神兽': { skillId: 'pet_beast_snake_scale', skillName: '神蛇玄鳞' },
+  '马年神兽': { skillId: 'pet_beast_aegis', skillName: '神兽护甲' },
+  '羊年神兽': { skillId: 'pet_beast_goat_bless', skillName: '神羊赐福' },
+  '猴年神兽': { skillId: 'pet_beast_monkey_edge', skillName: '神猴灵锋' },
+  '鸡年神兽': { skillId: 'pet_beast_rooster_warcry', skillName: '神鸡战鸣' },
+  '狗年神兽': { skillId: 'pet_beast_dog_guard', skillName: '神犬守护' },
+  '猪年神兽': { skillId: 'pet_beast_pig_fortune', skillName: '神猪厚土' }
+};
+const ZODIAC_DIVINE_BEAST_SPECIES = Object.keys(ZODIAC_DIVINE_BEAST_CONFIG);
+const DIVINE_BEAST_SHARED_SKILLS = [
+  'pet_guard_adv',
+  'pet_tough_skin_adv',
+  'pet_fury_adv',
+  'pet_crit_adv',
+  'pet_bloodline_adv'
+];
+
+function getDivineBeastConfigBySpecies(species) {
+  const key = String(species || '').trim();
+  return ZODIAC_DIVINE_BEAST_CONFIG[key] || null;
+}
+
+function getDivineBeastExclusiveSkillBySpecies(species) {
+  return getDivineBeastConfigBySpecies(species)?.skillId || null;
+}
+
 let PET_SKILL_LIBRARY = [
+  { id: 'pet_beast_rat_swiftness', name: '神鼠灵跃', grade: 'exclusive' },
+  { id: 'pet_beast_ox_bulwark', name: '神牛壁垒', grade: 'exclusive' },
+  { id: 'pet_beast_tiger_fang', name: '神虎战意', grade: 'exclusive' },
+  { id: 'pet_beast_rabbit_moonstep', name: '神兔月影', grade: 'exclusive' },
+  { id: 'pet_beast_dragon_might', name: '神龙天威', grade: 'exclusive' },
+  { id: 'pet_beast_snake_scale', name: '神蛇玄鳞', grade: 'exclusive' },
   { id: 'pet_beast_aegis', name: '神兽护甲', grade: 'exclusive' },
+  { id: 'pet_beast_goat_bless', name: '神羊赐福', grade: 'exclusive' },
+  { id: 'pet_beast_monkey_edge', name: '神猴灵锋', grade: 'exclusive' },
+  { id: 'pet_beast_rooster_warcry', name: '神鸡战鸣', grade: 'exclusive' },
+  { id: 'pet_beast_dog_guard', name: '神犬守护', grade: 'exclusive' },
+  { id: 'pet_beast_pig_fortune', name: '神猪厚土', grade: 'exclusive' },
   { id: 'pet_bash', name: '强力', grade: 'normal' },
   { id: 'pet_bash_adv', name: '高级强力', grade: 'advanced' },
   { id: 'pet_crit', name: '会心', grade: 'normal' },
@@ -9724,12 +9767,25 @@ let PET_SKILL_LIBRARY = [
   { id: 'pet_rebirth', name: '涅槃', grade: 'normal' },
   { id: 'pet_rebirth_adv', name: '高级涅槃', grade: 'advanced' }
 ];
-const REQUIRED_PET_SKILL_LIBRARY_ENTRIES = [
-  { id: 'pet_beast_aegis', name: '神兽护甲', grade: 'exclusive' }
-];
+const REQUIRED_PET_SKILL_LIBRARY_ENTRIES = Object.entries(ZODIAC_DIVINE_BEAST_CONFIG).map(([, cfg]) => ({
+  id: cfg.skillId,
+  name: cfg.skillName,
+  grade: 'exclusive'
+}));
 
 let PET_SKILL_EFFECTS = {
-  pet_beast_aegis: '被动：出战时提升主人防御与魔御40%（神兽专属）',
+  pet_beast_rat_swiftness: '被动：主人敏捷+12%、闪避+4%、命中+10%；协战连击触发+4%、疾袭触发+12%（追加伤害+8%）、护主闪避减伤触发+10%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_ox_bulwark: '被动：主人气血+20%、防御/魔御+25%；协战护主回血+1.2%最大生命，神佑触发+12%（护主减伤最高至18%）（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_tiger_fang: '被动：主人攻击+22%；协战伤害×1.12，暴击触发+3%，暴伤提升至1.72倍（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_rabbit_moonstep: '被动：主人敏捷+18%、闪避+6%；协战疾袭触发+16%（追加伤害+10%）、护主闪避减伤触发+8%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_dragon_might: '被动：主人攻击/魔法/道术+16%；协战伤害×1.10，破防+10%，破魔+10%，撕裂压制+10%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_snake_scale: '被动：主人防御/魔御+18%、魔法/道术+12%；协战破魔+18%，禁疗触发+12%，魂链压制+8%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_aegis: '被动：主人防御/魔御+40%；协战神佑触发+12%、护主闪避减伤触发+12%，破防+6%，破魔+6%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_goat_bless: '被动：主人气血/法力+15%、防御/魔御+12%；协战护主回血+1.8%最大生命，神佑触发+10%，护主闪避减伤触发+8%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_monkey_edge: '被动：主人攻击+15%、敏捷+15%、闪避+5%；协战连击触发+6%（连击伤害+12%）、奥术回响触发+10%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_rooster_warcry: '被动：主人攻击/魔法/道术+14%、命中+10%；协战伤害×1.06，禁疗触发+22%，破防+8%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_dog_guard: '被动：主人防御/魔御+20%、气血+12%、额外减伤+5%；协战神佑触发+18%（护主减伤最高至22%），魂链护主减伤额外+3%（PVP中触发率×82%，数值×88%）（神兽专属）',
+  pet_beast_pig_fortune: '被动：主人气血+28%、防御/魔御+15%；协战护主回血+2.5%最大生命，吸血+4%，反扑触发+14%（PVP中触发率×82%，数值×88%）（神兽专属）',
   pet_bash: '被动：物理协战伤害提升（约+4%~4.5%）',
   pet_bash_adv: '被动：物理协战伤害提升（约+6%~6.75%）',
   pet_crit: '被动：协战暴击率提升（PVE约+4.5%，PVP约+4%）',
@@ -9780,7 +9836,18 @@ let PET_SKILL_EFFECTS = {
 };
 
 const PET_SKILL_TYPE_HINTS = {
+  pet_beast_rat_swiftness: '神兽',
+  pet_beast_ox_bulwark: '神兽',
+  pet_beast_tiger_fang: '神兽',
+  pet_beast_rabbit_moonstep: '神兽',
+  pet_beast_dragon_might: '神兽',
+  pet_beast_snake_scale: '神兽',
   pet_beast_aegis: '神兽',
+  pet_beast_goat_bless: '神兽',
+  pet_beast_monkey_edge: '神兽',
+  pet_beast_rooster_warcry: '神兽',
+  pet_beast_dog_guard: '神兽',
+  pet_beast_pig_fortune: '神兽',
   pet_bash: '物理宠优先',
   pet_bash_adv: '物理宠优先',
   pet_crit: '物理宠/法术宠优先',
@@ -10074,7 +10141,18 @@ let PET_SPECIES_NAME_MAP = {
   SkyTorch: '天焰',
   OriginYingLong: '元初应龙',
   HongmengCrow: '鸿蒙鸦',
-  DivineBeast: '马年神兽'
+  RatDivineBeast: '鼠年神兽',
+  OxDivineBeast: '牛年神兽',
+  TigerDivineBeast: '虎年神兽',
+  RabbitDivineBeast: '兔年神兽',
+  DragonDivineBeast: '龙年神兽',
+  SnakeDivineBeast: '蛇年神兽',
+  DivineBeast: '马年神兽',
+  GoatDivineBeast: '羊年神兽',
+  MonkeyDivineBeast: '猴年神兽',
+  RoosterDivineBeast: '鸡年神兽',
+  DogDivineBeast: '狗年神兽',
+  PigDivineBeast: '猪年神兽'
 };
 
 let PET_SPECIES_BY_RARITY = {
@@ -10084,9 +10162,9 @@ let PET_SPECIES_BY_RARITY = {
   epic: ['幽冥虎', '旭日凤凰', '风暴龙', '冰麒麟', '幼玄武', '九尾狐', '战虎机甲', '金翅鹏', '魂蛛', '海鲲'],
   legendary: ['烛龙', '应龙', '白泽', '穷奇', '饕餮', '狴犴', '冥鸟', '青鸾', '毕方', '白虎'],
   supreme: ['太初龙', '混沌麒麟', '不死鸦', '虚空玄武', '万相白泽', '九幽凤凰', '狱獬豸', '天罡猿', '天烛龙', '狂饕餮'],
-  ultimate: ['终源龙', '永恒凤凰', '太虚鹏', '无极白泽', '创世麒麟', '混元玄武', '深渊穷奇', '天焰', '元初应龙', '鸿蒙鸦', '马年神兽']
+  ultimate: ['终源龙', '永恒凤凰', '太虚鹏', '无极白泽', '创世麒麟', '混元玄武', '深渊穷奇', '天焰', '元初应龙', '鸿蒙鸦', ...ZODIAC_DIVINE_BEAST_SPECIES]
 };
-const PET_NON_DROPPABLE_SPECIES = new Set(['马年神兽']);
+const PET_NON_DROPPABLE_SPECIES = new Set(ZODIAC_DIVINE_BEAST_SPECIES);
 
 function buildPetBookLibrary(skills, priceConfig) {
   const safeSkills = Array.isArray(skills) ? skills.filter((skill) => skill && skill.id && skill.grade !== 'exclusive') : [];
@@ -10416,7 +10494,7 @@ function getPetSkillDef(skillId) {
 function isPetLockedSkill(skillId) {
   const def = getPetSkillDef(skillId);
   if (!def) return false;
-  return def.grade === 'exclusive' || skillId === 'pet_beast_aegis';
+  return def.grade === 'exclusive';
 }
 
 function getPetSkillTier(skillId) {
@@ -10448,6 +10526,75 @@ function hasActivePetSkill(player, skillId) {
 function hasPetSkillOnPet(pet, skillId) {
   if (!pet || !skillId || !Array.isArray(pet.skills)) return false;
   return pet.skills.includes(skillId);
+}
+
+function applyDivineBeastExclusiveCombatMods(pet, typeMods, { pvp = false } = {}) {
+  if (!pet || !typeMods) return;
+  const rateMul = pvp ? 0.82 : 1;
+  const valMul = pvp ? 0.88 : 1;
+  if (hasPetSkillOnPet(pet, 'pet_beast_rat_swiftness')) {
+    typeMods.comboChanceBonus += 0.04 * rateMul;
+    typeMods.quickStrikeChance += 0.12 * rateMul;
+    typeMods.quickStrikeRatio += 0.08 * valMul;
+    typeMods.dodgeGuardChance += 0.1 * rateMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_ox_bulwark')) {
+    typeMods.ownerHealRatio += 0.012 * valMul;
+    typeMods.divineGuardChance += 0.12 * rateMul;
+    typeMods.divineGuardDamageMul = Math.min(typeMods.divineGuardDamageMul || 1, 0.82);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_tiger_fang')) {
+    typeMods.baseMul *= 1.12;
+    typeMods.critChanceBonus += 0.03 * rateMul;
+    typeMods.critDamageMul = Math.max(typeMods.critDamageMul || 1.5, 1.72);
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_rabbit_moonstep')) {
+    typeMods.quickStrikeChance += 0.16 * rateMul;
+    typeMods.quickStrikeRatio += 0.1 * valMul;
+    typeMods.dodgeGuardChance += 0.08 * rateMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_dragon_might')) {
+    typeMods.baseMul *= 1.1;
+    typeMods.breakDefChance += 0.1 * rateMul;
+    typeMods.breakMdefChance += 0.1 * rateMul;
+    typeMods.sunderChance += 0.1 * rateMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_snake_scale')) {
+    typeMods.breakMdefChance += 0.18 * rateMul;
+    typeMods.warHornChance += 0.12 * rateMul;
+    typeMods.soulChainChance += 0.08 * rateMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_aegis')) {
+    typeMods.divineGuardChance += 0.12 * rateMul;
+    typeMods.dodgeGuardChance += 0.12 * rateMul;
+    typeMods.breakDefChance += 0.06 * rateMul;
+    typeMods.breakMdefChance += 0.06 * rateMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_goat_bless')) {
+    typeMods.ownerHealRatio += 0.018 * valMul;
+    typeMods.divineGuardChance += 0.1 * rateMul;
+    typeMods.dodgeGuardChance += 0.08 * rateMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_monkey_edge')) {
+    typeMods.comboChanceBonus += 0.06 * rateMul;
+    typeMods.comboRatioBonus += 0.12 * valMul;
+    typeMods.arcaneEchoChance += 0.1 * rateMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_rooster_warcry')) {
+    typeMods.warHornChance += 0.22 * rateMul;
+    typeMods.breakDefChance += 0.08 * rateMul;
+    typeMods.baseMul *= 1.06;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_dog_guard')) {
+    typeMods.divineGuardChance += 0.18 * rateMul;
+    typeMods.divineGuardDamageMul = Math.min(typeMods.divineGuardDamageMul || 1, 0.78);
+    typeMods.soulChainGuardRatio += 0.03 * valMul;
+  }
+  if (hasPetSkillOnPet(pet, 'pet_beast_pig_fortune')) {
+    typeMods.ownerHealRatio += 0.025 * valMul;
+    typeMods.counterLashChance += 0.14 * rateMul;
+    typeMods.lifestealRatio += 0.04 * valMul;
+  }
 }
 
 function getPetSkillTierOnPet(pet, baseSkillId) {
@@ -10943,6 +11090,7 @@ function calcPetAssistDamage(player, mob) {
   }
   if (hasPetSkillOnPet(pet, 'pet_war_horn')) typeMods.warHornChance += 0.12;
   if (hasPetSkillOnPet(pet, 'pet_war_horn_adv')) typeMods.warHornChance += 0.2;
+  applyDivineBeastExclusiveCombatMods(pet, typeMods, { pvp: false });
 
   base *= typeMods.baseMul;
   let damage = Math.max(1, Math.floor(base));
@@ -11249,6 +11397,7 @@ function calcPetAssistDamageToPlayer(attacker, target) {
   }
   if (hasPetSkillOnPet(pet, 'pet_war_horn')) typeMods.warHornChance += 0.08;
   if (hasPetSkillOnPet(pet, 'pet_war_horn_adv')) typeMods.warHornChance += 0.14;
+  applyDivineBeastExclusiveCombatMods(pet, typeMods, { pvp: true });
 
   base *= typeMods.baseMul;
   let damage = Math.max(1, Math.floor(base));
@@ -11608,8 +11757,9 @@ function normalizePetState(player) {
       let skills = Array.from(new Set(rawSkills.map((idValue) => String(idValue || '').trim()).filter(Boolean)))
         .filter((skillId) => Boolean(getPetSkillDef(skillId)))
         .slice(0, skillSlots);
-      if (mappedRole === '马年神兽' && Boolean(getPetSkillDef('pet_beast_aegis')) && !skills.includes('pet_beast_aegis')) {
-        const nextSkills = ['pet_beast_aegis', ...skills.filter((id) => id !== 'pet_beast_aegis')];
+      const divineExclusiveSkillId = getDivineBeastExclusiveSkillBySpecies(mappedRole);
+      if (divineExclusiveSkillId && Boolean(getPetSkillDef(divineExclusiveSkillId)) && !skills.includes(divineExclusiveSkillId)) {
+        const nextSkills = [divineExclusiveSkillId, ...skills.filter((id) => id !== divineExclusiveSkillId)];
         while (nextSkills.length > skillSlots) {
           const removableIndex = nextSkills.findIndex((id, idx) => idx > 0 && !isPetLockedSkill(id));
           if (removableIndex > 0) nextSkills.splice(removableIndex, 1);
@@ -11699,7 +11849,8 @@ function createRandomPet(rarity = 'normal', options = {}) {
   if (!role) return null;
   const growthRange = PET_RARITY_GROWTH_RANGE[safeRarity] || PET_RARITY_GROWTH_RANGE.normal;
   const growth = Number((growthRange[0] + Math.random() * (growthRange[1] - growthRange[0])).toFixed(3));
-  const isDivineBeast = String(role) === '马年神兽';
+  const divineCfg = getDivineBeastConfigBySpecies(role);
+  const isDivineBeast = Boolean(divineCfg);
   const availableGrades = new Set(PET_AVAILABLE_GRADES_BY_RARITY[safeRarity] || PET_AVAILABLE_GRADES_BY_RARITY.normal || ['normal']);
   const skillPool = PET_SKILL_LIBRARY.filter((skill) => availableGrades.has(skill.grade));
   const normalSkills = PET_SKILL_LIBRARY.filter((skill) => skill.grade === 'normal');
@@ -11710,12 +11861,8 @@ function createRandomPet(rarity = 'normal', options = {}) {
   if (isDivineBeast) {
     skillSlots = Math.max(6, PET_BASE_SKILL_SLOTS);
     skills = [
-      'pet_beast_aegis',
-      'pet_guard_adv',
-      'pet_tough_skin_adv',
-      'pet_fury_adv',
-      'pet_crit_adv',
-      'pet_bloodline_adv'
+      divineCfg?.skillId,
+      ...DIVINE_BEAST_SHARED_SKILLS
     ].filter((id) => Boolean(getPetSkillDef(id)));
   } else {
     const openSkillCount = Math.min(PET_BASE_SKILL_SLOTS, randInt(minOpen, maxOpen));
