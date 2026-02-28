@@ -2235,6 +2235,14 @@ function promptMultiSelectModal({
       if (selected.has(opt.value)) {
         btn.classList.add('active');
       }
+      if (opt.tooltipText) {
+        const tooltipText = String(opt.tooltipText || '').trim();
+        if (tooltipText) {
+          btn.addEventListener('mouseenter', (evt) => showItemTooltip(tooltipText, evt));
+          btn.addEventListener('mousemove', (evt) => positionTooltip(evt.clientX, evt.clientY));
+          btn.addEventListener('mouseleave', hideItemTooltip);
+        }
+      }
       btn.addEventListener('click', async () => {
         if (singleSelect) {
           selected.clear();
@@ -2274,6 +2282,44 @@ function promptMultiSelectModal({
       else promptUi.ok?.focus();
     }, 0);
   });
+}
+
+const DIVINE_BEAST_EXCLUSIVE_SKILL_TOOLTIP = Object.freeze({
+  '鼠年神兽': '专属技能：神鼠灵跃\n被动：主人敏捷+12%、闪避+4%、命中+10%；协战连击触发+4%、疾袭触发+12%（追加伤害+8%）、护主闪避减伤触发+10%（神兽专属）',
+  '牛年神兽': '专属技能：神牛壁垒\n被动：主人气血+20%、防御/魔御+25%；协战护主回血+1.2%最大生命，神佑触发+12%（护主减伤最高至18%）（神兽专属）',
+  '虎年神兽': '专属技能：神虎战意\n被动：主人攻击+22%；协战伤害x1.12，暴击触发+3%，暴伤提升至1.72倍（神兽专属）',
+  '兔年神兽': '专属技能：神兔月影\n被动：主人敏捷+18%、闪避+6%；协战疾袭触发+16%（追加伤害+10%）、护主闪避减伤触发+8%（神兽专属）',
+  '龙年神兽': '专属技能：神龙天威\n被动：主人攻击/魔法/道术+16%；协战伤害x1.10，破防+10%，破魔+10%，撕裂压制+10%（神兽专属）',
+  '蛇年神兽': '专属技能：神蛇玄鳞\n被动：主人防御/魔御+18%、魔法/道术+12%；协战破魔+18%，禁疗触发+12%，魂链压制+8%（神兽专属）',
+  '马年神兽': '专属技能：神兽护甲\n被动：主人防御/魔御+40%；协战神佑触发+12%、护主闪避减伤触发+12%，破防+6%，破魔+6%（神兽专属）',
+  '羊年神兽': '专属技能：神羊赐福\n被动：主人气血/法力+15%、防御/魔御+12%；协战护主回血+1.8%最大生命，神佑触发+10%，护主闪避减伤触发+8%（神兽专属）',
+  '猴年神兽': '专属技能：神猴灵锋\n被动：主人攻击+15%、敏捷+15%、闪避+5%；协战连击触发+6%（连击伤害+12%）、奥术回响触发+10%（神兽专属）',
+  '鸡年神兽': '专属技能：神鸡战鸣\n被动：主人攻击/魔法/道术+14%、命中+10%；协战伤害x1.06，禁疗触发+22%，破防+8%（神兽专属）',
+  '狗年神兽': '专属技能：神犬守护\n被动：主人防御/魔御+20%、气血+12%、额外减伤+5%；协战神佑触发+18%（护主减伤最高至22%），魂链护主减伤额外+3%（神兽专属）',
+  '猪年神兽': '专属技能：神猪厚土\n被动：主人气血+28%、防御/魔御+15%；协战护主回血+2.5%最大生命，吸血+4%，反扑触发+14%（神兽专属）'
+});
+
+function formatHarvestBlessingLabel(blessing, claimed = false) {
+  if (!blessing || typeof blessing !== 'object') {
+    return claimed ? '已领取' : '未领取';
+  }
+  const expMult = Math.max(1, Number(blessing.expMult || 1));
+  const goldMult = Math.max(1, Number(blessing.goldMult || 1));
+  const patrolBonus = Math.max(0, Math.floor(Number(blessing.patrolBonus || 0)));
+  if (patrolBonus > 0) {
+    return `巡礼加持(每3次巡礼额外+${patrolBonus}积分)`;
+  }
+  if (expMult > 1 && goldMult > 1) {
+    return `双收赐福(经验+${Math.round((expMult - 1) * 100)}%/金币+${Math.round((goldMult - 1) * 100)}%)`;
+  }
+  if (expMult > 1) {
+    return `经验丰收(经验+${Math.round((expMult - 1) * 100)}%)`;
+  }
+  if (goldMult > 1) {
+    return `金币丰收(金币+${Math.round((goldMult - 1) * 100)}%)`;
+  }
+  const rawName = String(blessing.name || '').trim();
+  return rawName || (claimed ? '已领取' : '未领取');
 }
 
 function confirmModal({ title, text }) {
@@ -5763,6 +5809,7 @@ function showAutoFullBossModal() {
       value: `beast:${it.id}`,
       label: `${it.name || it.species || it.id}（${Number(it.cost || 0)}${fragmentName}）`,
       description: `兑换指定神兽：${it.name || it.species || it.id}`,
+      tooltipText: DIVINE_BEAST_EXCLUSIVE_SKILL_TOOLTIP[String(it.species || it.name || '').trim()] || '',
       className: 'activity-action-shop'
     }));
     await promptMultiSelectModal({
@@ -5958,7 +6005,7 @@ function showAutoFullBossModal() {
     const summaryLines = [
       activeList.length ? `当前活动：${activeList.map((a) => a.name).join('、')}` : '当前没有进行中的限时活动',
       `活动积分：${Number(currency.activity_points || 0)}（累计获得 ${Number(currency.activity_points_earned || 0)} / 消费 ${Number(currency.activity_points_spent || 0)}）`,
-      `丰收季（每日全天）：签到 ${harvest.loginClaimed ? '已领取' : '未领取'} / 赐福 ${harvest.blessing?.name || (harvest.blessingClaimed ? '已领取' : '未领取')} / 补给 ${harvest.supplyClaimed ? '已领取' : '未领取'} / 宝箱 ${harvestChest.active ? `${harvestChest.name}${harvestChest.claimed ? '（已领）' : '（可领）'}` : `${harvestChest.name || '待开启'} ${harvestChest.startText || ''}${harvestChest.endText ? `-${harvestChest.endText}` : ''}`.trim()} / 挂机 ${Number(harvest.onlineMinutes || 0)} 分钟 / 巡礼 ${Number(harvest.patrolPoints || 0)}（全部统一计入活动积分）`,
+      `丰收季（每日全天）：签到 ${harvest.loginClaimed ? '已领取' : '未领取'} / 赐福 ${formatHarvestBlessingLabel(harvest.blessing, harvest.blessingClaimed)} / 补给 ${harvest.supplyClaimed ? '已领取' : '未领取'} / 宝箱 ${harvestChest.active ? `${harvestChest.name}${harvestChest.claimed ? '（已领）' : '（可领）'}` : `${harvestChest.name || '待开启'} ${harvestChest.startText || ''}${harvestChest.endText ? `-${harvestChest.endText}` : ''}`.trim()} / 挂机 ${Number(harvest.onlineMinutes || 0)} 分钟 / 巡礼 ${Number(harvest.patrolPoints || 0)}（全部统一计入活动积分）`,
       `新手追赶计划（${scheduleText.newbie}）`,
       `双倍秘境（${scheduleText.double}）：${ddMeta.zoneName || doubleDungeon.zoneId || '-'}（击杀 ${Number(doubleDungeon.kills || 0)}）`,
       `世界BOSS悬赏（${scheduleText.bounty}）：${bountyMeta.mobName || bounty.mobId || '-'}（积分 ${Number(bounty.points || 0)} / 击杀 ${Number(bounty.kills || 0)}）`,

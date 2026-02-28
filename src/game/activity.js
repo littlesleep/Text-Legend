@@ -511,6 +511,29 @@ export function claimHarvestBlessing(player, { now = Date.now() } = {}) {
   return { ok: true, blessing: { ...blessing } };
 }
 
+function formatHarvestBlessingName(blessing, claimed = false) {
+  if (!blessing || typeof blessing !== 'object') {
+    return claimed ? '已领' : '未领';
+  }
+  const expMult = Math.max(1, Number(blessing.expMult || 1));
+  const goldMult = Math.max(1, Number(blessing.goldMult || 1));
+  const patrolBonus = Math.max(0, Math.floor(Number(blessing.patrolBonus || 0)));
+  if (patrolBonus > 0) {
+    return `巡礼加持(每3次巡礼额外+${patrolBonus}积分)`;
+  }
+  if (expMult > 1 && goldMult > 1) {
+    return `双收赐福(经验+${Math.round((expMult - 1) * 100)}%/金币+${Math.round((goldMult - 1) * 100)}%)`;
+  }
+  if (expMult > 1) {
+    return `经验丰收(经验+${Math.round((expMult - 1) * 100)}%)`;
+  }
+  if (goldMult > 1) {
+    return `金币丰收(金币+${Math.round((goldMult - 1) * 100)}%)`;
+  }
+  const rawName = String(blessing.name || '').trim();
+  return rawName || (claimed ? '已领' : '未领');
+}
+
 export async function claimHarvestSupplyByMail(player, {
   sendMail,
   realmId = 1,
@@ -986,7 +1009,7 @@ export function getActivityChatLines(player, now = Date.now()) {
   const chestText = chestState.active
     ? `${chestState.name}${chestState.claimed ? '已领' : '可领'}`
     : `${chestState.name} ${chestState.startText}-${chestState.endText}`;
-  lines.push(`丰收季：签到${ap.harvestSeason?.loginClaimed ? '已领' : '未领'} / 挂机 ${Number(ap.harvestSeason?.onlineMinutes || 0)} 分钟 / 巡礼 ${Number(ap.harvestSeason?.patrolPoints || 0)} / 宝箱 ${chestText} / 补给 ${ap.harvestSeason?.supplyClaimed ? '已领' : '未领'} / 赐福 ${ap.harvestSeason?.blessing?.name || (ap.harvestSeason?.blessingClaimed ? '已领' : '未领')}`);
+  lines.push(`丰收季：签到${ap.harvestSeason?.loginClaimed ? '已领' : '未领'} / 挂机 ${Number(ap.harvestSeason?.onlineMinutes || 0)} 分钟 / 巡礼 ${Number(ap.harvestSeason?.patrolPoints || 0)} / 宝箱 ${chestText} / 补给 ${ap.harvestSeason?.supplyClaimed ? '已领' : '未领'} / 赐福 ${formatHarvestBlessingName(ap.harvestSeason?.blessing, ap.harvestSeason?.blessingClaimed)}`);
   return lines;
 }
 function ensureClaimStore(player, now = Date.now()) {
