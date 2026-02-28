@@ -5948,6 +5948,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!petState) return send('宠物系统未初始化。');
         const pet = petState.pets.find((p) => p.id === petId);
         if (!pet) return send('找不到指定的宠物。');
+        if (isDivineBeastSpeciesName(pet.role || pet.species || '')) {
+          return send('生肖神兽不允许洗练。');
+        }
         
         // 检查金柳露数量
         const willowDewCount = (player.items || []).filter((i) => i.id === 'willow_dew').length;

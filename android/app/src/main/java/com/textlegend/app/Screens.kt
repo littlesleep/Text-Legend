@@ -1098,10 +1098,7 @@ private fun BattleMobCard(
                   Text(text = "背包", style = MaterialTheme.typography.titleSmall, color = primaryText)
               }
               val bagItems = state?.items.orEmpty()
-                  .sortedWith(
-                      compareByDescending<ItemInfo> { rarityRank(it.rarity) }
-                          .thenBy { it.name }
-                  )
+                  .sortedWith(::compareInventoryItems)
               val bagPageInfo = paginate(bagItems, bagPage, bagPageSize)
               bagPage = bagPageInfo.page
               item {
@@ -1187,10 +1184,7 @@ private fun BattleMobCard(
               }
               val sourceItems = if (warehouseMode == "deposit") state?.items.orEmpty() else state?.warehouse.orEmpty()
               val filtered = filterInventory(sourceItems, warehouseFilter)
-              val warehouseItems = filtered.sortedWith(
-                  compareByDescending<ItemInfo> { rarityRank(it.rarity) }
-                      .thenBy { it.name }
-              )
+              val warehouseItems = filtered.sortedWith(::compareInventoryItems)
               val warehousePageInfo = paginate(warehouseItems, warehousePage, bagPageSize)
               warehousePage = warehousePageInfo.page
               item {
@@ -1308,6 +1302,51 @@ private fun rarityRank(rarity: String?): Int = when (normalizeRarityKey(rarity))
     "uncommon" -> 1
     "common" -> 0
     else -> 0
+}
+
+private fun isEquipmentItem(item: ItemInfo): Boolean = !item.slot.isNullOrBlank()
+
+private fun equipmentSlotRank(slot: String?): Int = when (slot?.trim()?.lowercase()) {
+    "weapon" -> 1
+    "head" -> 2
+    "chest", "armor" -> 3
+    "shield" -> 4
+    "neck" -> 5
+    "bracelet", "bracelet_left", "bracelet_right" -> 6
+    "ring", "ring_left", "ring_right" -> 7
+    "waist" -> 8
+    "feet", "boots" -> 9
+    "accessory" -> 10
+    else -> 999
+}
+
+private fun equipmentAttrScore(item: ItemInfo): Double {
+    return item.atk.toDouble() +
+        item.def.toDouble() +
+        item.mdef.toDouble() +
+        item.mag.toDouble() +
+        item.spirit.toDouble() +
+        item.dex.toDouble() +
+        item.hp.toDouble() / 10.0 +
+        item.mp.toDouble() / 10.0
+}
+
+private fun compareInventoryItems(a: ItemInfo, b: ItemInfo): Int {
+    val rarityDiff = rarityRank(b.rarity) - rarityRank(a.rarity)
+    if (rarityDiff != 0) return rarityDiff
+    if (isEquipmentItem(a) && isEquipmentItem(b)) {
+        val slotDiff = equipmentSlotRank(a.slot) - equipmentSlotRank(b.slot)
+        if (slotDiff != 0) return slotDiff
+        val attrDiff = equipmentAttrScore(b).compareTo(equipmentAttrScore(a))
+        if (attrDiff != 0) return attrDiff
+        val refineDiff = b.refine_level - a.refine_level
+        if (refineDiff != 0) return refineDiff
+        val qtyDiff = b.qty - a.qty
+        if (qtyDiff != 0) return qtyDiff
+    }
+    val nameDiff = a.name.compareTo(b.name)
+    if (nameDiff != 0) return nameDiff
+    return b.qty - a.qty
 }
 
 private fun normalizeHighTierRecycleSlot(slot: String?): String = when (slot?.trim()?.lowercase()) {
@@ -3622,7 +3661,7 @@ private fun HighTierRecycleDialog(vm: GameViewModel, state: GameState?, onDismis
     val items = state?.items.orEmpty()
     val salvageItems = remember(items) {
         items.filter { it.slot != null && (it.rarity == "epic" || it.rarity == "legendary" || it.rarity == "supreme") }
-            .sortedWith(compareByDescending<ItemInfo> { rarityRank(it.rarity) }.thenBy { it.name })
+            .sortedWith(::compareInventoryItems)
     }
     val batchEpicCount = remember(items) {
         items.filter { isBatchRecyclableEquipment(it) && normalizeRarityKey(it.rarity) == "epic" }

@@ -203,6 +203,7 @@ private fun PetListTab(
                         selectedPetId = pet.id
                         showDivineAdvanceDialog = true
                     },
+                    showReset = !isDivineBeastPet(pet),
                     showDivineAdvance = isDivineBeastPet(pet),
                     onViewDetails = {
                         selectedPetId = pet.id
@@ -393,6 +394,7 @@ private fun PetCard(
     onTrain: () -> Unit,
     onEquip: () -> Unit,
     onDivineAdvance: () -> Unit,
+    showReset: Boolean,
     showDivineAdvance: Boolean,
     onViewDetails: () -> Unit
 ) {
@@ -597,12 +599,16 @@ private fun PetCard(
                 } else {
                     Spacer(modifier = Modifier.weight(1f))
                 }
-                Button(
-                    onClick = onReset,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("洗练")
+                if (showReset) {
+                    Button(
+                        onClick = onReset,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("洗练")
+                    }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -703,11 +709,7 @@ private fun PetEquipDialog(
         .sortedBy { petEquipSlotOrder(it.slot) }
     val equipables = bagItems
         .filter { isPetEquipableItem(it) }
-        .sortedWith(
-            compareByDescending<ItemInfo> { itemRarityRank(it.rarity) }
-                .thenByDescending { it.refine_level }
-                .thenBy { it.name }
-        )
+        .sortedWith(::comparePetEquipableItems)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1388,6 +1390,31 @@ private fun itemRarityRank(rarity: String?): Int = when (rarity?.lowercase()) {
     "excellent" -> 2
     "normal" -> 1
     else -> 0
+}
+
+private fun petEquipItemAttrScore(item: ItemInfo): Double {
+    return item.atk.toDouble() +
+        item.def.toDouble() +
+        item.mdef.toDouble() +
+        item.mag.toDouble() +
+        item.spirit.toDouble() +
+        item.dex.toDouble() +
+        item.hp.toDouble() / 10.0 +
+        item.mp.toDouble() / 10.0
+}
+
+private fun comparePetEquipableItems(a: ItemInfo, b: ItemInfo): Int {
+    val rarityDiff = itemRarityRank(b.rarity) - itemRarityRank(a.rarity)
+    if (rarityDiff != 0) return rarityDiff
+    val slotDiff = petEquipSlotOrder(a.slot) - petEquipSlotOrder(b.slot)
+    if (slotDiff != 0) return slotDiff
+    val attrDiff = petEquipItemAttrScore(b).compareTo(petEquipItemAttrScore(a))
+    if (attrDiff != 0) return attrDiff
+    val refineDiff = b.refine_level - a.refine_level
+    if (refineDiff != 0) return refineDiff
+    val qtyDiff = b.qty - a.qty
+    if (qtyDiff != 0) return qtyDiff
+    return a.name.compareTo(b.name)
 }
 
 private fun petItemRarityColor(rarity: String?): Color = when (rarity?.lowercase()) {

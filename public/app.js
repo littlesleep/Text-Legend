@@ -613,6 +613,7 @@ const petUi = {
   setActive: document.getElementById('pet-set-active'),
   setRest: document.getElementById('pet-set-rest'),
   rename: document.getElementById('pet-rename'),
+  reset: document.getElementById('pet-reset'),
   release: document.getElementById('pet-release'),
   divineAdvanceBtn: document.getElementById('pet-divine-advance-btn'),
   openEquipModalBtn: document.getElementById('pet-open-equip-modal-btn'),
@@ -2826,6 +2827,11 @@ function renderPetModal() {
   if (petUi.setActive) petUi.setActive.disabled = !selected;
   if (petUi.setRest) petUi.setRest.disabled = !selected;
   if (petUi.rename) petUi.rename.disabled = !selected;
+  if (petUi.reset) {
+    const canReset = Boolean(selected) && !isDivineBeastPet(selected);
+    petUi.reset.disabled = !canReset;
+    petUi.reset.style.display = canReset ? '' : 'none';
+  }
   if (petUi.release) petUi.release.disabled = !selected;
   if (petUi.trainBtn) petUi.trainBtn.disabled = !selected;
   if (petUi.openEquipModalBtn) petUi.openEquipModalBtn.disabled = !selected;
@@ -10632,6 +10638,31 @@ if (petUi.rename) {
     });
     if (!name) return;
     sendPetAction('rename', { petId: selectedPetId, name: String(name).trim() });
+  });
+}
+if (petUi.reset) {
+  petUi.reset.addEventListener('click', async () => {
+    if (!socket) return;
+    const petId = String(selectedPetId || '').trim();
+    const pet = getPetByStateId(petId);
+    if (!petId || !pet) return showToast('请先选择宠物');
+    const willowDewQty = Math.max(
+      0,
+      Math.floor(
+        Number(
+          (Array.isArray(lastState?.items) ? lastState.items : []).find((item) => String(item?.id || '') === 'willow_dew')?.qty || 0
+        )
+      )
+    );
+    const ok = await confirmModal({
+      title: '洗练宠物',
+      text:
+        `确认使用金柳露洗练 ${pet.name} 吗？\n` +
+        `将重置宠物资质、等级和技能格为初始状态。\n` +
+        `消耗：金柳露 x1（当前 ${willowDewQty}）`
+    });
+    if (!ok) return;
+    socket.emit('cmd', { text: `pet reset ${petId}`, source: 'ui' });
   });
 }
 if (petUi.release) {
