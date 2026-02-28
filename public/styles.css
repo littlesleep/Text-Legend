@@ -939,12 +939,13 @@ header p {
   border-radius: 14px;
   background: linear-gradient(145deg, rgba(199, 139, 81, 0.22), rgba(122, 70, 28, 0.18));
   border: 1px solid rgba(199, 139, 81, 0.24);
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  font-size: 1.02rem;
+  font-weight: 800;
   line-height: 1;
   color: #7a4c24;
-  transform: translateY(-1px);
+  text-align: center;
+  transform: none;
 }
 
 .auth-feature strong {

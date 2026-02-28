@@ -823,7 +823,7 @@ export function recordTreasurePetFestivalActivity(player, {
     const ts = ap.treasureSprint || (ap.treasureSprint = { treasureUpgrades: 0, treasureAdvances: 0, score: 0 });
     ts.treasureUpgrades = Math.max(0, Number(ts.treasureUpgrades || 0)) + Math.max(0, Number(treasureUpgrades || 0));
     ts.treasureAdvances = Math.max(0, Number(ts.treasureAdvances || 0)) + Math.max(0, Number(treasureAdvances || 0));
-    const deltaScore = Math.max(0, Number(treasureUpgrades || 0)) + Math.max(0, Number(treasureAdvances || 0));
+    const deltaScore = Math.max(0, Number(treasureUpgrades || 0)) + Math.max(0, Number(treasureAdvances || 0)) * 2;
     ts.score = Math.max(0, Number(ts.score || 0)) + deltaScore;
     if (deltaScore > 0) addActivityPoints(player, deltaScore, now);
     msgs.push(`法宝冲刺日：积分 +${deltaScore}（当前 ${ts.score}）`);
