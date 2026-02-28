@@ -1126,6 +1126,10 @@ input, select {
   padding: 20px;
 }
 
+.auth-overlay.hidden {
+  display: none !important;
+}
+
 .auth-overlay-backdrop {
   position: absolute;
   inset: 0;
