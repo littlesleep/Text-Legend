@@ -497,10 +497,10 @@ export function claimHarvestBlessing(player, { now = Date.now() } = {}) {
     return { ok: false, error: '今日已领取丰收赐福。' };
   }
   const blessDefs = [
-    { id: 'exp', name: '经验丰收', expMult: 1.2, goldMult: 1, patrolBonus: 0, points: 8 },
-    { id: 'gold', name: '金币丰收', expMult: 1, goldMult: 1.2, patrolBonus: 0, points: 8 },
-    { id: 'double', name: '双收赐福', expMult: 1.1, goldMult: 1.1, patrolBonus: 0, points: 10 },
-    { id: 'patrol', name: '巡礼加持', expMult: 1, goldMult: 1, patrolBonus: 1, points: 12 }
+    { id: 'exp', name: '经验丰收(经验+20%)', expMult: 1.2, goldMult: 1, patrolBonus: 0, points: 8 },
+    { id: 'gold', name: '金币丰收(金币+20%)', expMult: 1, goldMult: 1.2, patrolBonus: 0, points: 8 },
+    { id: 'double', name: '双收赐福(经验+10%/金币+10%)', expMult: 1.1, goldMult: 1.1, patrolBonus: 0, points: 10 },
+    { id: 'patrol', name: '巡礼加持(每3次巡礼额外+1积分)', expMult: 1, goldMult: 1, patrolBonus: 1, points: 12 }
   ];
   const t = getChinaDate(now);
   const seed = `${player?.userId || 0}:${player?.id || player?.name || ''}:${t.dateKey}`;
