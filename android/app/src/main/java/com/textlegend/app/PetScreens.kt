@@ -43,6 +43,7 @@ fun PetDialog(
     val activePetId = petState?.activePetId
     val activePet = pets.find { it.id == activePetId }
     val books = normalizePetBooksMap(petState?.books)
+    val noticeDialog by vm.noticeDialog.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) }
     var backLocked by remember { mutableStateOf(false) }
@@ -118,6 +119,19 @@ fun PetDialog(
             0 -> PetListTab(vm, pets, activePet, state?.items ?: emptyList())
             1 -> PetBooksTab(vm, books, pets)
         }
+    }
+
+    if (noticeDialog != null) {
+        AlertDialog(
+            onDismissRequest = { vm.clearDialog() },
+            title = { Text(noticeDialog!!.title, fontWeight = FontWeight.Bold) },
+            text = { Text(noticeDialog!!.message) },
+            confirmButton = {
+                Button(onClick = { vm.clearDialog() }) {
+                    Text("确定")
+                }
+            }
+        )
     }
 }
 
@@ -206,12 +220,14 @@ private fun PetListTab(
                     onGift = {
                         val hasEquip = pet.equippedItems.isNotEmpty()
                         if (pet.id == activePet?.id) {
-                            vm.showToast("出战中的宠物不能赠送")
+                            vm.showDialog("宠物赠送", "出战中的宠物不能赠送。")
                         } else if (hasEquip) {
-                            vm.showToast("已穿戴装备的宠物不能赠送")
+                            vm.showDialog("宠物赠送", "已穿戴装备的宠物不能赠送。")
+                        } else if (petGiftCardQty < 1) {
+                            vm.showDialog("宠物赠送", "宠物赠送卡不足，需要宠物赠送卡 x1。")
                         } else {
-                        selectedPetId = pet.id
-                        showGiftDialog = true
+                            selectedPetId = pet.id
+                            showGiftDialog = true
                         }
                     },
                     onDivineAdvance = {

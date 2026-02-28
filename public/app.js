@@ -9620,6 +9620,7 @@ function enterGame(name) {
       msg.includes('合成') ||
       msg.includes('修炼') ||
       msg.includes('进阶') ||
+      msg.includes('赠送') ||
       msg.includes('放生') ||
       msg.includes('打书')
     ) {
@@ -10778,11 +10779,20 @@ if (petUi.gift) {
   petUi.gift.addEventListener('click', async () => {
     const petId = String(selectedPetId || '').trim();
     const pet = getPetByStateId(petId);
-    if (!petId || !pet) return showToast('请先选择宠物');
+    if (!petId || !pet) {
+      noticeModal({ title: '宠物赠送', text: '请先选择要赠送的宠物。' });
+      return;
+    }
     const isActive = lastState?.pet?.activePetId === pet.id;
     const hasEquip = Array.isArray(pet.equippedItems) && pet.equippedItems.length > 0;
-    if (isActive) return showToast('出战中的宠物不能赠送');
-    if (hasEquip) return showToast('已穿戴装备的宠物不能赠送');
+    if (isActive) {
+      noticeModal({ title: '宠物赠送', text: '出战中的宠物不能赠送。' });
+      return;
+    }
+    if (hasEquip) {
+      noticeModal({ title: '宠物赠送', text: '已穿戴装备的宠物不能赠送。' });
+      return;
+    }
     const cardQty = Math.max(
       0,
       Math.floor(
@@ -10791,6 +10801,10 @@ if (petUi.gift) {
         )
       )
     );
+    if (cardQty < 1) {
+      noticeModal({ title: '宠物赠送', text: '宠物赠送卡不足，需要宠物赠送卡 x1。' });
+      return;
+    }
     const targetName = await promptModal({
       title: '赠送宠物',
       text: `请输入目标玩家名\n将把 ${pet.name} 直接赠送到对方宠物栏\n消耗：宠物赠送卡 x1（当前 ${cardQty}）`,
@@ -10798,6 +10812,7 @@ if (petUi.gift) {
     });
     const finalName = String(targetName || '').trim();
     if (!finalName) return;
+    showToast('已提交宠物赠送请求');
     sendPetAction('gift', { petId, targetName: finalName });
   });
 }

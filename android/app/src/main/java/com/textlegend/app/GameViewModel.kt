@@ -14,6 +14,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
+data class DialogNotice(
+    val title: String,
+    val message: String
+)
+
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = AppPreferences(application)
     private val json = Json {
@@ -91,6 +96,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast
+    private val _noticeDialog = MutableStateFlow<DialogNotice?>(null)
+    val noticeDialog: StateFlow<DialogNotice?> = _noticeDialog
 
     private val _socketStatus = MutableStateFlow<String?>(null)
     val socketStatus: StateFlow<String?> = _socketStatus
@@ -261,7 +268,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             onGuildMembers = { data -> _guildMembers.value = data },
             onGuildList = { data -> _guildList.value = data },
             onGuildApplications = { data -> _guildApplications.value = data },
-            onSimpleResult = { res -> _toast.value = res.msg },
+            onSimpleResult = { res ->
+                val msg = res.msg
+                if (
+                    msg.contains("宠物赠送") ||
+                    msg.contains("不能赠送") ||
+                    msg.contains("赠送卡")
+                ) {
+                    _noticeDialog.value = DialogNotice("宠物赠送", msg)
+                } else {
+                    _toast.value = msg
+                }
+            },
             onSabakInfo = { data -> _sabakInfo.value = data },
             onConsignList = { data ->
                 _consignList.value = data
@@ -399,6 +417,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun showToast(message: String) {
         _toast.value = message
+    }
+
+    fun showDialog(title: String, message: String) {
+        _noticeDialog.value = DialogNotice(title, message)
+    }
+
+    fun clearDialog() {
+        _noticeDialog.value = null
     }
 
     fun logout() {
