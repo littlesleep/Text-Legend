@@ -14692,7 +14692,7 @@ io.on('connection', (socket) => {
         await sendState(onlineTarget);
         await savePlayer(onlineTarget);
       } else {
-        await saveCharacter(targetPlayer);
+        await saveCharacter(targetRow.user_id, targetPlayer, targetRow.realm_id || 1);
       }
 
       await sendMail(
@@ -15199,9 +15199,6 @@ io.on('connection', (socket) => {
   socket.on('mail_send', async (payload) => {
     const player = players.get(socket.id);
     if (!player) return;
-    if (isCultivationRoom(player.position.zone)) {
-      return socket.emit('mail_send_result', { ok: false, msg: '修真房间内无法使用邮件。' });
-    }
     const { clean } = sanitizePayload(payload, ['toName', 'title', 'body', 'items', 'gold'], 'mail_send');
     const toName = String(clean?.toName || '').trim();
     const title = String(clean?.title || '').trim();
@@ -15212,8 +15209,14 @@ io.on('connection', (socket) => {
     if (!title) return socket.emit('mail_send_result', { ok: false, msg: '请输入邮件标题。' });
     if (!body) return socket.emit('mail_send_result', { ok: false, msg: '请输入邮件内容。' });
 
-    const target = await findCharacterByNameInRealm(toName, player.realmId || 1);
-    if (!target) return socket.emit('mail_send_result', { ok: false, msg: '收件人不存在。' });
+    let target = await findCharacterByNameInRealm(toName, player.realmId || 1);
+    if (!target) {
+      const anyTarget = await findCharacterByName(toName);
+      if (anyTarget) {
+        return socket.emit('mail_send_result', { ok: false, msg: '邮件只能发送给同区服玩家。' });
+      }
+      return socket.emit('mail_send_result', { ok: false, msg: '收件人不存在。' });
+    }
 
     const items = [];
     if (itemsPayload.length) {

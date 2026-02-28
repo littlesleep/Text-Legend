@@ -269,7 +269,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             onGuildList = { data -> _guildList.value = data },
             onGuildApplications = { data -> _guildApplications.value = data },
             onSimpleResult = { res ->
-                val msg = res.msg
+                val msg = res.msg ?: ""
                 if (
                     msg.contains("宠物") ||
                     msg.contains("打书") ||
@@ -287,7 +287,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         msg
                     )
                 } else {
-                    _toast.value = msg
+                    _toast.value = if (msg.isNotBlank()) msg else "操作完成"
                 }
             },
             onSabakInfo = { data -> _sabakInfo.value = data },

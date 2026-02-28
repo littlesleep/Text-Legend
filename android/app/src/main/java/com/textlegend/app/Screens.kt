@@ -2983,6 +2983,11 @@ private fun MailDialog(vm: GameViewModel, prefillName: String?, onDismiss: () ->
 
         Spacer(modifier = Modifier.height(8.dp))
         Text("发送邮件")
+        Text(
+            "跨服地图内也可发送邮件，但仅可发送给同区服玩家。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         OutlinedTextField(value = toName, onValueChange = { toName = it }, label = { Text("收件人") })
         OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("标题") })
         OutlinedTextField(value = body, onValueChange = { body = it }, label = { Text("内容") })
