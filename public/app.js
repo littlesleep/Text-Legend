@@ -2337,6 +2337,95 @@ function confirmModal({ title, text }) {
   });
 }
 
+function noticeModal({ title, text, buttonText = '知道了' }) {
+  if (!promptUi.modal || !promptUi.ok || !promptUi.cancel) return Promise.resolve();
+  return new Promise((resolve) => {
+    const onOk = () => {
+      cleanup();
+      resolve();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') onOk();
+    };
+    const onBackdrop = (e) => {
+      if (e.target === promptUi.modal) onOk();
+    };
+    const cleanup = () => {
+      promptUi.ok.removeEventListener('click', onOk);
+      promptUi.modal.removeEventListener('keydown', onKey);
+      promptUi.modal.removeEventListener('click', onBackdrop);
+      promptUi.modal.classList.add('hidden');
+      promptUi.input.classList.remove('hidden');
+      if (promptUi.label) {
+        promptUi.label.classList.add('hidden');
+        promptUi.label.textContent = '';
+      }
+      if (promptUi.secondaryRow) {
+        promptUi.secondaryRow.classList.add('hidden');
+      }
+      if (promptUi.inputSecondary) {
+        promptUi.inputSecondary.value = '';
+        promptUi.inputSecondary.placeholder = '';
+      }
+      if (promptUi.options) {
+        promptUi.options.classList.add('hidden');
+        promptUi.options.innerHTML = '';
+      }
+      if (promptUi.extra) {
+        promptUi.extra.classList.add('hidden');
+        promptUi.extra.textContent = '';
+      }
+      promptUi.cancel.classList.remove('hidden');
+      promptUi.cancel.textContent = '取消';
+      promptUi.ok.textContent = '确定';
+    };
+
+    promptUi.title.textContent = title || '提示';
+    promptUi.text.textContent = text || '';
+    promptUi.input.classList.add('hidden');
+    if (promptUi.label) {
+      promptUi.label.classList.add('hidden');
+      promptUi.label.textContent = '';
+    }
+    if (promptUi.secondaryRow) {
+      promptUi.secondaryRow.classList.add('hidden');
+    }
+    if (promptUi.options) {
+      promptUi.options.classList.add('hidden');
+      promptUi.options.innerHTML = '';
+    }
+    if (promptUi.extra) {
+      promptUi.extra.classList.add('hidden');
+      promptUi.extra.textContent = '';
+    }
+    promptUi.cancel.classList.add('hidden');
+    promptUi.ok.textContent = buttonText || '知道了';
+    promptUi.ok.addEventListener('click', onOk);
+    promptUi.modal.addEventListener('keydown', onKey);
+    promptUi.modal.addEventListener('click', onBackdrop);
+    promptUi.modal.classList.remove('hidden');
+    setTimeout(() => promptUi.ok?.focus(), 0);
+  });
+}
+
+function inferImportantNoticeTitle(text = '') {
+  const msg = String(text || '');
+  if (!msg) return '';
+  if (msg.includes('丰收签到')) return '丰收签到';
+  if (msg.includes('宝箱')) return '丰收宝箱';
+  if (msg.startsWith('装备成长完成') || msg.includes('成长上限') || msg.includes('终极装备成长')) return '装备成长';
+  if (msg.startsWith('兑换成功') || msg.startsWith('兑换失败')) return '兑换结果';
+  if (msg.includes('角色改名') || msg.includes('改名卡')) return '角色改名';
+  if (msg.includes('角色迁移')) return '角色迁移';
+  if (msg.startsWith('领取成功') || msg.startsWith('一键领取成功')) return '邮件领取';
+  if (msg.includes('邮件已删除') || msg.startsWith('一键删除完成')) return '邮件操作';
+  return '';
+}
+
+function shouldShowImportantNotice(text = '') {
+  return !!inferImportantNoticeTitle(text);
+}
+
 function showShopModal(items) {
   if (!shopUi.modal || !shopUi.list) return;
   hideItemTooltip();
@@ -2978,6 +3067,7 @@ function renderPetModal() {
     waist: '腰带',
     feet: '鞋子',
     neck: '项链',
+    bracelet: '手镯',
     ring_left: '左戒指',
     ring_right: '右戒指',
     bracelet_left: '左手镯',
@@ -5729,16 +5819,6 @@ function showAutoFullBossModal() {
     if (action === 'harvest_sign') {
       socket.emit('cmd', { text: '活动 丰收签到', source: 'ui' });
       showToast('已请求领取丰收签到奖励');
-      return;
-    }
-    if (action === 'harvest_bless') {
-      socket.emit('cmd', { text: '活动 丰收赐福', source: 'ui' });
-      showToast('已请求领取丰收赐福');
-      return;
-    }
-    if (action === 'harvest_supply') {
-      socket.emit('cmd', { text: '活动 丰收补给', source: 'ui' });
-      showToast('已请求领取收菜补给');
       return;
     }
     if (action === 'harvest_chest') {
@@ -9272,6 +9352,11 @@ function enterGame(name) {
   socket.on('output', (payload) => {
     dlog('Received output:', payload);
     appendLine(payload);
+    const outText = String(payload?.text || '');
+    if (shouldShowImportantNotice(outText)) {
+      const title = inferImportantNoticeTitle(outText) || '提示';
+      noticeModal({ title, text: outText });
+    }
     if (effectBatchTask.active && payload && typeof payload.text === 'string') {
       const text = payload.text;
       const isEffectSuccess = text.includes('特效重置成功');
@@ -9344,6 +9429,17 @@ function enterGame(name) {
   socket.on('pet_result', (payload) => {
     const ok = Boolean(payload?.ok);
     const msg = String(payload?.msg || (ok ? '宠物操作成功。' : '宠物操作失败。'));
+    if (
+      msg.includes('宠物改名') ||
+      msg.includes('合成') ||
+      msg.includes('修炼') ||
+      msg.includes('进阶') ||
+      msg.includes('放生') ||
+      msg.includes('打书')
+    ) {
+      noticeModal({ title: '宠物操作', text: msg });
+      return;
+    }
     showToast(msg, ok ? 1400 : 1800);
   });
   socket.on('character_action_result', (payload) => {
@@ -9365,7 +9461,7 @@ function enterGame(name) {
       }
     }
     const msg = String(payload?.msg || (ok ? '角色操作成功。' : '角色操作失败。'));
-    showToast(msg, ok ? 2200 : 2600);
+    noticeModal({ title: inferImportantNoticeTitle(msg) || '角色操作', text: msg });
   });
   socket.on('activity_rank_data', (payload) => {
     renderActivityRankModal(payload || {});
@@ -9492,12 +9588,14 @@ function enterGame(name) {
   });
   socket.on('mail_claim_result', (payload) => {
     if (!payload) return;
-    showToast(payload.msg || '领取完成');
+    const msg = String(payload.msg || '领取完成');
+    noticeModal({ title: inferImportantNoticeTitle(msg) || '邮件领取', text: msg });
     if (payload.ok) requestCurrentMailList();
   });
   socket.on('mail_delete_result', (payload) => {
     if (!payload) return;
-    showToast(payload.msg || '删除完成');
+    const msg = String(payload.msg || '删除完成');
+    noticeModal({ title: inferImportantNoticeTitle(msg) || '邮件操作', text: msg });
     if (payload.ok) {
       selectedMailId = null;
       requestCurrentMailList();

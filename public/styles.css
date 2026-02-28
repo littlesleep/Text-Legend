@@ -6762,6 +6762,13 @@ body.dark .pet-book-entry {
   line-height: 1.45;
 }
 
+.pet-equip-entry .line-rarity-ultimate,
+.pet-equip-entry .line-rarity-ultimate * {
+  animation: none !important;
+  background-image: none !important;
+  text-shadow: none !important;
+}
+
 .pet-entry.active {
   border-color: rgba(229, 176, 99, 0.75);
   background:
