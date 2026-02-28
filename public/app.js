@@ -2877,7 +2877,7 @@ function renderPetModal() {
   if (petUi.setRest) petUi.setRest.disabled = !selected;
   if (petUi.rename) petUi.rename.disabled = !selected;
   if (petUi.gift) {
-    const hasPetEquip = selected ? Object.values(normalizePetEquipment(selected.equipment)).some(Boolean) : false;
+    const hasPetEquip = Boolean(selected && Array.isArray(selected.equippedItems) && selected.equippedItems.length > 0);
     const canGift = Boolean(selected) && petState?.activePetId !== selected?.id && !hasPetEquip;
     petUi.gift.disabled = !canGift;
   }
@@ -10746,7 +10746,7 @@ if (petUi.gift) {
     const pet = getPetByStateId(petId);
     if (!petId || !pet) return showToast('请先选择宠物');
     const isActive = lastState?.pet?.activePetId === pet.id;
-    const hasEquip = Object.values(normalizePetEquipment(pet.equipment)).some(Boolean);
+    const hasEquip = Array.isArray(pet.equippedItems) && pet.equippedItems.length > 0;
     if (isActive) return showToast('出战中的宠物不能赠送');
     if (hasEquip) return showToast('已穿戴装备的宠物不能赠送');
     const cardQty = Math.max(
