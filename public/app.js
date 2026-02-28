@@ -2983,6 +2983,14 @@ function renderPetModal() {
     bracelet_left: '左手镯',
     bracelet_right: '右手镯'
   };
+  const getPetEquipSlotLabel = (item) => {
+    const slotKey = String(item?.slot || '').trim().toLowerCase();
+    if (slotKey && petEquipSlotLabels[slotKey]) return petEquipSlotLabels[slotKey];
+    if (slotKey && ITEM_SLOT_LABELS[slotKey]) return ITEM_SLOT_LABELS[slotKey];
+    const fallbackLabel = String(item?.slotLabel || '').trim();
+    if (fallbackLabel && !/^[a-z_]+$/i.test(fallbackLabel)) return fallbackLabel;
+    return '装备';
+  };
   if (petUi.equipList) {
     petUi.equipList.innerHTML = '';
     const equippedItems = Array.isArray(selected?.equippedItems) ? selected.equippedItems : [];
@@ -3000,7 +3008,7 @@ function renderPetModal() {
       equippedItems.forEach((item) => {
         const row = document.createElement('div');
         row.className = 'pet-book-entry pet-equip-entry';
-        const slotLabel = petEquipSlotLabels[item.slot] || item.slot || '装备';
+        const slotLabel = getPetEquipSlotLabel(item);
         const head = document.createElement('div');
         head.className = 'pet-equip-entry-head';
         const slotChip = document.createElement('span');
@@ -3059,7 +3067,7 @@ function renderPetModal() {
         head.className = 'pet-equip-entry-head';
         const typeChip = document.createElement('span');
         typeChip.className = 'pet-equip-slot-chip';
-        typeChip.textContent = item.slotLabel || item.slot || '装备';
+        typeChip.textContent = getPetEquipSlotLabel(item);
         head.appendChild(typeChip);
         if (Number(item.refine_level || 0) > 0) {
           const refineChip = document.createElement('span');
@@ -3090,41 +3098,6 @@ function renderPetModal() {
       });
     }
   }
-  if (petUi.equipItem) {
-    petUi.equipItem.innerHTML = '';
-    const emptyOpt = document.createElement('option');
-    emptyOpt.value = '';
-    emptyOpt.textContent = '选择背包装备';
-    petUi.equipItem.appendChild(emptyOpt);
-    const equipables = (Array.isArray(lastState?.items) ? lastState.items : [])
-      .filter((item) => item && item.slot)
-      .filter((item) => Number(item.qty || 0) > 0)
-      .slice()
-      .sort(sortPetBagEquipByQualityDesc);
-    equipables.forEach((item) => {
-      const opt = document.createElement('option');
-      opt.value = item.key || item.id;
-      opt.textContent = `${formatItemName(item)} x${Number(item.qty || 1)}`;
-      petUi.equipItem.appendChild(opt);
-    });
-    if (petUi.equipBtn) petUi.equipBtn.disabled = !selected || equipables.length <= 0;
-  }
-  if (petUi.unequipSlot) {
-    petUi.unequipSlot.innerHTML = '';
-    const emptyOpt = document.createElement('option');
-    emptyOpt.value = '';
-    emptyOpt.textContent = '选择卸下部位';
-    petUi.unequipSlot.appendChild(emptyOpt);
-    const equippedItems = Array.isArray(selected?.equippedItems) ? selected.equippedItems : [];
-    equippedItems.forEach((item) => {
-      const opt = document.createElement('option');
-      opt.value = item.slot || '';
-      opt.textContent = `${petEquipSlotLabels[item.slot] || item.slot}: ${item.name}`;
-      petUi.unequipSlot.appendChild(opt);
-    });
-    if (petUi.unequipBtn) petUi.unequipBtn.disabled = !selected || equippedItems.length <= 0;
-  }
-
   if (petUi.bookList) {
     petUi.bookList.innerHTML = '';
     if (!ownedBooks.length) {
@@ -3256,6 +3229,7 @@ async function openPetUseBookDialog() {
       label: `${book.name || book.id} x${Number(book.qty || 0)}`,
       description: String(book.effect || '暂无技能说明')
     })),
+    optionsClassName: 'pet-book-choice-options',
     selectedValues: [],
     singleSelect: true
   });
@@ -3290,6 +3264,7 @@ async function openPetTrainDialog() {
     title: '选择修炼属性',
     text: '请选择本次宠物修炼属性',
     options: attrOptions.map((item) => ({ value: item.value, label: item.label })),
+    optionsClassName: 'pet-train-attr-options',
     selectedValues: [String(petUi.trainAttr?.value || 'atk')],
     singleSelect: true
   });
@@ -3317,10 +3292,19 @@ async function openPetSynthesizeDialog() {
     showToast('至少需要两只宠物');
     return;
   }
+  const buildSynthesisOption = (pet) => ({
+    value: String(pet.id || ''),
+    label: `${pet.name} · ${pet.rarityLabel || pet.rarity || '-'}`,
+    description:
+      `等级 ${Number(pet.level || 1)} ｜ 成长 ${Number(pet.growth || 1).toFixed(3)} ｜ ` +
+      `技能 ${Array.isArray(pet.skills) ? pet.skills.length : 0}/${Number(pet.skillSlots || 0)} ｜ ` +
+      `${pet.role || pet.description || '通用'}`
+  });
   const mainPicked = await promptMultiSelectModal({
     title: '选择主宠',
     text: '请选择保留外形的主宠',
-    options: pets.map((pet) => ({ value: String(pet.id || ''), label: `${pet.name} (${pet.rarityLabel || pet.rarity || '-'})` })),
+    options: pets.map(buildSynthesisOption),
+    optionsClassName: 'pet-synth-choice-options',
     selectedValues: [String(selectedPetId || petState.activePetId || pets[0]?.id || '')],
     singleSelect: true
   });
@@ -3334,7 +3318,8 @@ async function openPetSynthesizeDialog() {
   const subPicked = await promptMultiSelectModal({
     title: '选择副宠',
     text: '请选择被消耗的副宠',
-    options: subCandidates.map((pet) => ({ value: String(pet.id || ''), label: `${pet.name} (${pet.rarityLabel || pet.rarity || '-'})` })),
+    options: subCandidates.map(buildSynthesisOption),
+    optionsClassName: 'pet-synth-choice-options',
     selectedValues: [],
     singleSelect: true
   });
@@ -10467,22 +10452,6 @@ if (petUi.release) {
     });
     if (!ok) return;
     sendPetAction('release', { petId });
-  });
-}
-if (petUi.equipBtn) {
-  petUi.equipBtn.addEventListener('click', () => {
-    const petId = selectedPetId;
-    const itemKey = String(petUi.equipItem?.value || '');
-    if (!petId || !itemKey) return;
-    sendPetAction('equip_item', { petId, itemKey });
-  });
-}
-if (petUi.unequipBtn) {
-  petUi.unequipBtn.addEventListener('click', () => {
-    const petId = selectedPetId;
-    const slot = String(petUi.unequipSlot?.value || '');
-    if (!petId || !slot) return;
-    sendPetAction('unequip_item', { petId, slot });
   });
 }
 if (petUi.openEquipModalBtn) {

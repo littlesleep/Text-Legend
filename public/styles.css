@@ -2421,6 +2421,103 @@ body.dark .chat-name-btn.sponsor-player-name:hover {
   color: rgba(236, 221, 203, 0.82);
 }
 
+.prompt-options.pet-book-choice-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.prompt-options.pet-book-choice-options .prompt-option.prompt-option-rich {
+  width: 100%;
+}
+
+.prompt-options.pet-train-attr-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.prompt-options.pet-train-attr-options .prompt-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  width: 100%;
+  padding: 0 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(230, 182, 122, 0.14);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    linear-gradient(180deg, rgba(41, 25, 14, 0.94), rgba(24, 16, 10, 0.96));
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f1dbc0;
+  text-align: center;
+}
+
+.prompt-options.pet-train-attr-options .prompt-option:hover {
+  border-color: rgba(230, 182, 122, 0.3);
+  transform: translateY(-1px);
+}
+
+.prompt-options.pet-train-attr-options .prompt-option.active {
+  border-color: rgba(246, 190, 112, 0.48);
+  background:
+    linear-gradient(135deg, rgba(240, 176, 92, 0.16), rgba(255, 255, 255, 0.03)),
+    linear-gradient(180deg, rgba(58, 33, 17, 0.98), rgba(31, 19, 11, 0.98));
+  box-shadow:
+    inset 0 0 0 1px rgba(246, 190, 112, 0.12),
+    0 8px 16px rgba(0, 0, 0, 0.16);
+}
+
+.prompt-options.pet-synth-choice-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.prompt-options.pet-synth-choice-options .prompt-option.prompt-option-rich {
+  width: 100%;
+  min-height: 88px;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(230, 182, 122, 0.16);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    linear-gradient(180deg, rgba(39, 24, 14, 0.96), rgba(23, 15, 9, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 241, 220, 0.04),
+    0 14px 28px rgba(0, 0, 0, 0.18);
+}
+
+.prompt-options.pet-synth-choice-options .prompt-option.prompt-option-rich:hover {
+  border-color: rgba(236, 188, 118, 0.28);
+  transform: translateY(-1px);
+}
+
+.prompt-options.pet-synth-choice-options .prompt-option .prompt-option-title {
+  font-size: 0.96rem;
+  color: #fff4e2;
+}
+
+.prompt-options.pet-synth-choice-options .prompt-option .prompt-option-desc {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: rgba(239, 222, 199, 0.8);
+}
+
+.prompt-options.pet-synth-choice-options .prompt-option.active {
+  border-color: rgba(246, 190, 112, 0.5);
+  background:
+    linear-gradient(135deg, rgba(240, 176, 92, 0.15), rgba(255, 255, 255, 0.03)),
+    linear-gradient(180deg, rgba(58, 33, 17, 0.98), rgba(30, 19, 11, 0.98));
+  box-shadow:
+    inset 0 0 0 1px rgba(246, 190, 112, 0.12),
+    0 16px 30px rgba(0, 0, 0, 0.22);
+}
+
 .prompt-options .prompt-option.active {
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.18);
@@ -7084,6 +7181,18 @@ body.dark .pet-book-entry {
 
 /* 手机设备优化 */
 @media (max-width: 480px) {
+  .prompt-options.pet-book-choice-options {
+    grid-template-columns: 1fr;
+  }
+
+  .prompt-options.pet-train-attr-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .prompt-options.pet-synth-choice-options {
+    grid-template-columns: 1fr;
+  }
+
   .sponsor-list-scroll {
     max-height: 150px;
   }
