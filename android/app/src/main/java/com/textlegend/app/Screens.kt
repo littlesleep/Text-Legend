@@ -4100,6 +4100,12 @@ private fun ActivityCenterDialog(vm: GameViewModel, onDismiss: () -> Unit) {
     val harvestBlessingClaimed = harvest?.get("blessingClaimed")?.jsonPrimitive?.contentOrNull == "true"
     val harvestSupplyClaimed = harvest?.get("supplyClaimed")?.jsonPrimitive?.contentOrNull == "true"
     val harvestBlessingName = (harvest?.get("blessing") as? JsonObject)?.get("name")?.jsonPrimitive?.contentOrNull.orEmpty()
+    val harvestChest = harvest?.get("timedChest") as? JsonObject
+    val harvestChestName = harvestChest?.get("name")?.jsonPrimitive?.contentOrNull.orEmpty()
+    val harvestChestActive = harvestChest?.get("active")?.jsonPrimitive?.contentOrNull == "true"
+    val harvestChestClaimed = harvestChest?.get("claimed")?.jsonPrimitive?.contentOrNull == "true"
+    val harvestChestStart = harvestChest?.get("startText")?.jsonPrimitive?.contentOrNull.orEmpty()
+    val harvestChestEnd = harvestChest?.get("endText")?.jsonPrimitive?.contentOrNull.orEmpty()
 
     if (showPointShop) {
         ActivityPointShopDialog(
@@ -4124,11 +4130,6 @@ private fun ActivityCenterDialog(vm: GameViewModel, onDismiss: () -> Unit) {
         Text("常用活动功能", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(modifier = Modifier.weight(1f), onClick = { vm.requestState("activity_center") }) { Text("刷新状态") }
-            Button(modifier = Modifier.weight(1f), onClick = { vm.sendCmd("活动 claim") }) { Text("领取奖励") }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(modifier = Modifier.weight(1f), onClick = { vm.claimHarvestSign() }) { Text("丰收签到") }
             Button(
                 modifier = Modifier.weight(1f),
@@ -4143,12 +4144,17 @@ private fun ActivityCenterDialog(vm: GameViewModel, onDismiss: () -> Unit) {
             ) { Text("收菜补给") }
             Button(
                 modifier = Modifier.weight(1f),
-                onClick = {
-                    showPointShop = true
-                    vm.requestActivityPointShop()
-                }
-            ) { Text("积分商城") }
+                onClick = { vm.sendCmd("活动 丰收宝箱") }
+            ) { Text("丰收宝箱") }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                showPointShop = true
+                vm.requestActivityPointShop()
+            }
+        ) { Text("积分商城") }
         Spacer(modifier = Modifier.height(8.dp))
         Button(
             modifier = Modifier.fillMaxWidth(),
@@ -4158,8 +4164,16 @@ private fun ActivityCenterDialog(vm: GameViewModel, onDismiss: () -> Unit) {
             }
         ) { Text("神兽碎片兑换") }
         Spacer(modifier = Modifier.height(12.dp))
+        val chestText = if (harvestChestActive) {
+            "${if (harvestChestName.isNotBlank()) harvestChestName else "丰收宝箱"}${if (harvestChestClaimed) "已领取" else "可领取"}"
+        } else {
+            listOf(harvestChestName, listOf(harvestChestStart, harvestChestEnd).filter { it.isNotBlank() }.joinToString("-"))
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .ifBlank { "待开启" }
+        }
         Text(
-            "丰收季：签到${if (harvestLoginClaimed) "已领取" else "未领取"} / 赐福${if (harvestBlessingName.isNotBlank()) harvestBlessingName else if (harvestBlessingClaimed) "已领取" else "未领取"} / 补给${if (harvestSupplyClaimed) "已领取" else "未领取"} / 挂机 ${harvestMinutes} 分钟 / 巡礼 ${harvestPatrol}（奖励统一计入活动积分）",
+            "丰收季：签到${if (harvestLoginClaimed) "已领取" else "未领取"} / 赐福${if (harvestBlessingName.isNotBlank()) harvestBlessingName else if (harvestBlessingClaimed) "已领取" else "未领取"} / 补给${if (harvestSupplyClaimed) "已领取" else "未领取"} / 宝箱$chestText / 挂机 ${harvestMinutes} 分钟 / 巡礼 ${harvestPatrol}（奖励统一计入活动积分）",
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         pointShop?.let {

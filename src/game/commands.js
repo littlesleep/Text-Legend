@@ -27,6 +27,7 @@ import {
   claimHarvestLoginRewardByMail,
   claimHarvestBlessing,
   claimHarvestSupplyByMail,
+  claimHarvestTimedChestByMail,
   getRefineMaterialCountForActivity,
   recordRefineActivity,
   recordTreasurePetFestivalActivity
@@ -3699,6 +3700,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           秘境: 'double',
           bounty: 'bounty',
           悬赏: 'bounty',
+          harvest: 'harvest',
+          丰收: 'harvest',
+          收菜: 'harvest',
           petcarnival: 'pet_carnival',
           宠物狂欢: 'pet_carnival',
           treasuresprint: 'treasure_sprint',
@@ -3726,7 +3730,8 @@ export async function handleCommand({ player, players, allCharacters, playersByN
             { req: 'treasure_sprint', key: 'treasure_sprint_day', title: '法宝冲刺日积分榜', unit: '分' },
             { req: 'refine', key: 'refine_carnival', title: '锻造狂欢次数榜', unit: '次' },
             { req: 'cross', key: 'cross_hunter', title: '跨服猎王榜', unit: '分' },
-            { req: 'treasure', key: 'treasure_pet_festival', title: '宝藏奇缘活跃榜', unit: '点' }
+            { req: 'treasure', key: 'treasure_pet_festival', title: '宝藏奇缘活跃榜', unit: '点' },
+            { req: 'harvest', key: 'harvest_season', title: '收菜活跃榜', unit: '点' }
           ];
           const sections = sectionDefs
             .filter((def) => rankType === 'all' || rankType === def.req)
@@ -3791,6 +3796,20 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         }
         return;
       }
+      if (sub === 'harvestchest' || sub === '丰收宝箱' || sub === '宝箱') {
+        const result = await claimHarvestTimedChestByMail(player, {
+          sendMail: mailApi?.sendMail,
+          realmId: realmId || player.realmId || 1
+        });
+        if (result?.ok) {
+          player.forceStateRefresh = true;
+          const pointText = Number(result?.points || 0) > 0 ? `，并获得活动积分 ${Number(result.points || 0)}` : '';
+          send(`${result?.slot?.name || '丰收宝箱'}领取成功，奖励已发送到邮件${pointText}。`);
+        } else {
+          send(result?.error || '领取丰收宝箱失败。');
+        }
+        return;
+      }
       if (sub === 'shop' || sub === '商城' || sub === 'pointshop' || sub === '积分商城') {
         const config = normalizeActivityPointShopConfig(await activityApi?.getPointShopConfig?.());
         const now = Date.now();
@@ -3835,7 +3854,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           const limitText = (it.limitType && it.limitType !== 'none' && limit > 0) ? ` 限制:${it.limitType} ${redeemed}/${limit}` : '';
           send(`[${it.id}] ${it.name} - ${it.cost}积分 - ${describeActivityPointShopReward(it.reward)}${limitText}`);
         });
-        send('输入 `活动 兑换 商品ID` 进行兑换。');
+        send('请在活动中心界面内点击商品进行兑换。');
         return;
       }
       const isBeastExchangeList =

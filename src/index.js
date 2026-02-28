@@ -105,6 +105,7 @@ import {
   recordBossKillActivities,
   recordTreasurePetFestivalActivity,
   recordHarvestOnlineMinute,
+  claimActivityRewardsByMail,
   normalizeHarvestSeasonRewardConfig,
   setHarvestSeasonRewardConfig,
   normalizeHarvestSeasonSignConfig,
@@ -198,6 +199,27 @@ const HARVEST_SEASON_SIGN_SETTING_KEY = 'harvest_season_sign_config_v1';
 const FIRST_RECHARGE_WELFARE_SETTING_KEY = 'first_recharge_welfare_config_v1';
 const INVITE_REWARD_SETTING_KEY = 'invite_reward_config_v1';
 const INVITE_RECHARGE_BONUS_RATE = 0.2;
+
+async function autoClaimActivityRewardsForPlayer(player, now = Date.now()) {
+  if (!player || !player.userId) return;
+  if (!player.flags) player.flags = {};
+  const lastAt = Math.max(0, Math.floor(Number(player.flags.activityAutoClaimAt || 0)));
+  if ((now - lastAt) < 10000) return;
+  player.flags.activityAutoClaimAt = now;
+  try {
+    const result = await claimActivityRewardsByMail(player, {
+      sendMail,
+      realmId: player.realmId || 1,
+      now
+    });
+    if (result?.ok && Number(result?.sent || 0) > 0) {
+      player.forceStateRefresh = true;
+    }
+  } catch (_) {
+    // 自动补发失败时静默跳过，下次轮询重试
+  }
+}
+
 const DEFAULT_FIRST_RECHARGE_WELFARE_CONFIG = Object.freeze({
   enabled: true,
   grantDivineBeast: true,
@@ -16896,6 +16918,7 @@ async function combatTick() {
     updateRedNameAutoClear(player);
     updateAutoDailyUsage(player);
     recordHarvestOnlineMinute(player);
+    autoClaimActivityRewardsForPlayer(player, now).catch(() => {});
     tryRestoreAutoFullAfterManualDowngrade(player);
     downgradeAutoFullInZhuxianTower(player);
     normalizeZhuxianTowerProgress(player);

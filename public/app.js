@@ -5741,6 +5741,11 @@ function showAutoFullBossModal() {
       showToast('已请求领取收菜补给');
       return;
     }
+    if (action === 'harvest_chest') {
+      socket.emit('cmd', { text: '活动 丰收宝箱', source: 'ui' });
+      showToast('已请求领取丰收宝箱');
+      return;
+    }
     if (action === 'beast_exchange') {
       socket.emit('cmd', { text: '活动 神兽兑换', source: 'ui' });
       showToast('已请求神兽碎片兑换');
@@ -5818,6 +5823,12 @@ function showAutoFullBossModal() {
       showToast('已请求法宝冲刺日榜');
       return;
     }
+    if (action === 'rank_harvest') {
+      renderActivityRankModalLoading('收菜活跃榜');
+      socket.emit('cmd', { text: '活动 rank 丰收', source: 'ui' });
+      showToast('已请求收菜活跃榜');
+      return;
+    }
   }
 
   async function showActivityCenterModal() {
@@ -5837,6 +5848,7 @@ function showAutoFullBossModal() {
     const treasurePet = progress.treasure_pet_festival || {};
     const lucky = progress.lucky_drop_day || {};
     const harvest = progress.harvest_season || {};
+    const harvestChest = harvest.timedChest || {};
     const refine = progress.refine_carnival || {};
     const milestone = refine.milestones || {};
     const ddMeta = meta.double_dungeon || {};
@@ -5858,7 +5870,7 @@ function showAutoFullBossModal() {
     const summaryLines = [
       activeList.length ? `当前活动：${activeList.map((a) => a.name).join('、')}` : '当前没有进行中的限时活动',
       `活动积分：${Number(currency.activity_points || 0)}（累计获得 ${Number(currency.activity_points_earned || 0)} / 消费 ${Number(currency.activity_points_spent || 0)}）`,
-      `丰收季（每日全天）：签到 ${harvest.loginClaimed ? '已领取' : '未领取'} / 赐福 ${harvest.blessing?.name || (harvest.blessingClaimed ? '已领取' : '未领取')} / 补给 ${harvest.supplyClaimed ? '已领取' : '未领取'} / 挂机 ${Number(harvest.onlineMinutes || 0)} 分钟 / 巡礼 ${Number(harvest.patrolPoints || 0)}（全部统一计入活动积分）`,
+      `丰收季（每日全天）：签到 ${harvest.loginClaimed ? '已领取' : '未领取'} / 赐福 ${harvest.blessing?.name || (harvest.blessingClaimed ? '已领取' : '未领取')} / 补给 ${harvest.supplyClaimed ? '已领取' : '未领取'} / 宝箱 ${harvestChest.active ? `${harvestChest.name}${harvestChest.claimed ? '（已领）' : '（可领）'}` : `${harvestChest.name || '待开启'} ${harvestChest.startText || ''}${harvestChest.endText ? `-${harvestChest.endText}` : ''}`.trim()} / 挂机 ${Number(harvest.onlineMinutes || 0)} 分钟 / 巡礼 ${Number(harvest.patrolPoints || 0)}（全部统一计入活动积分）`,
       `新手追赶计划（${scheduleText.newbie}）`,
       `双倍秘境（${scheduleText.double}）：${ddMeta.zoneName || doubleDungeon.zoneId || '-'}（击杀 ${Number(doubleDungeon.kills || 0)}）`,
       `世界BOSS悬赏（${scheduleText.bounty}）：${bountyMeta.mobName || bounty.mobId || '-'}（积分 ${Number(bounty.points || 0)} / 击杀 ${Number(bounty.kills || 0)}）`,
@@ -5871,20 +5883,20 @@ function showAutoFullBossModal() {
       `宝藏奇缘（${scheduleText.treasurePet}）：${Number(treasurePet.score || 0)} 点（法宝升${Number(treasurePet.treasureUpgrades || 0)} / 升段${Number(treasurePet.treasureAdvances || 0)} / 打书${Number(treasurePet.petBookUses || 0)} / 合宠${Number(treasurePet.petSyntheses || 0)}）`,
       `幸运掉落日（${scheduleText.lucky}）：${Number(lucky.points || 0)} 分（击杀 ${Number(lucky.bossKills || 0)}）`,
       `锻造狂欢（${scheduleText.refine}）：${Number(refine.attempts || 0)} 次（+10 ${milestone['10'] ? '已达成' : '未达成'} / +20 ${milestone['20'] ? '已达成' : '未达成'} / +30 ${milestone['30'] ? '已达成' : '未达成'}）`,
-      '点击下方按钮会立即执行（查看排行榜会切换到榜单窗口）'
+      '点击下方按钮会立即执行'
     ];
     await promptMultiSelectModal({
       title: '活动中心',
       text: summaryLines.join('\n'),
       options: [
-        { value: 'refresh', label: '刷新活动状态', className: 'activity-action-primary' },
         { value: 'harvest_sign', label: '丰收签到', className: 'activity-action-primary' },
         { value: 'harvest_bless', label: '丰收赐福', className: 'activity-action-primary' },
         { value: 'harvest_supply', label: '收菜补给', className: 'activity-action-primary' },
-        { value: 'claim', label: '领取活动奖励', className: 'activity-action-primary' },
+        { value: 'harvest_chest', label: '丰收宝箱', className: 'activity-action-primary' },
         { value: 'shop', label: '积分商城', className: 'activity-action-shop' },
         { value: 'beast_exchange', label: '神兽碎片兑换', className: 'activity-action-shop' },
         { value: 'rank_all', label: '查看全部排行榜', className: 'activity-action-rank all-rank' },
+        { value: 'rank_harvest', label: '查看收菜榜' },
         { value: 'rank_double', label: '查看双倍秘境榜' },
         { value: 'rank_bounty', label: '查看悬赏榜' },
         { value: 'rank_pet_carnival', label: '查看宠物狂欢榜' },
@@ -5900,10 +5912,7 @@ function showAutoFullBossModal() {
       selectedValues: [],
       singleSelect: true,
       submitOnSelect: true,
-      closeOnSelect: (value) => {
-        const raw = String(value || '');
-        return raw.startsWith('rank_') || raw === 'shop';
-      },
+      closeOnSelect: true,
       hideOk: true,
       cancelText: '关闭',
       optionsClassName: 'activity-center-options',
