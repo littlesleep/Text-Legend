@@ -766,7 +766,7 @@ export function recordRefineActivity(player, { success = false, newLevel = 0 } =
   const ap = normalizeActivityProgress(player, now);
   const carnival = ap.refineCarnival || (ap.refineCarnival = { _weekKey: getChinaDate(now).weekKey, attempts: 0, milestones: {} });
   carnival.attempts = Math.max(0, Number(carnival.attempts || 0)) + 1;
-  addActivityPoints(player, 1, now);
+  if (success) addActivityPoints(player, 1, now);
   const msgs = [];
   if (success && [10, 20, 30].includes(Number(newLevel || 0)) && !carnival.milestones?.[String(newLevel)]) {
     if (!carnival.milestones) carnival.milestones = {};
@@ -823,9 +823,9 @@ export function recordTreasurePetFestivalActivity(player, {
     const ts = ap.treasureSprint || (ap.treasureSprint = { treasureUpgrades: 0, treasureAdvances: 0, score: 0 });
     ts.treasureUpgrades = Math.max(0, Number(ts.treasureUpgrades || 0)) + Math.max(0, Number(treasureUpgrades || 0));
     ts.treasureAdvances = Math.max(0, Number(ts.treasureAdvances || 0)) + Math.max(0, Number(treasureAdvances || 0));
-    const deltaScore = Math.max(0, Number(treasureUpgrades || 0)) * 2 + Math.max(0, Number(treasureAdvances || 0)) * 4;
+    const deltaScore = Math.max(0, Number(treasureUpgrades || 0)) + Math.max(0, Number(treasureAdvances || 0));
     ts.score = Math.max(0, Number(ts.score || 0)) + deltaScore;
-    if (deltaScore > 0) addActivityPoints(player, Math.max(1, Math.floor(deltaScore / 10)), now);
+    if (deltaScore > 0) addActivityPoints(player, deltaScore, now);
     msgs.push(`法宝冲刺日：积分 +${deltaScore}（当前 ${ts.score}）`);
   }
 

@@ -14502,20 +14502,21 @@ io.on('connection', (socket) => {
   socket.on('pet_action', async (payload) => {
     const player = players.get(socket.id);
     if (!player) return;
-    const { clean } = sanitizePayload(
-      payload,
-      ['action', 'petId', 'name', 'bookId', 'qty', 'mainPetId', 'subPetId', 'itemKey', 'slot', 'attr', 'count', 'targetName'],
-      'pet_action'
-    );
-    const action = String(clean?.action || '').trim().toLowerCase();
-    const petState = normalizePetState(player);
-    const getPetById = (id) => petState.pets.find((pet) => pet.id === String(id || '').trim());
     const emitResult = (ok, msg) => socket.emit('pet_result', { ok, msg });
-    const fail = (msg) => emitResult(false, msg);
-    let dirty = false;
-    const divineAdvanceCost = 500;
-    const petRarityIndex = (rarity) => PET_RARITY_ORDER.indexOf(String(rarity || ''));
-    const synthesizePetPair = (mainPet, subPet) => {
+    try {
+      const { clean } = sanitizePayload(
+        payload,
+        ['action', 'petId', 'name', 'bookId', 'qty', 'mainPetId', 'subPetId', 'itemKey', 'slot', 'attr', 'count', 'targetName'],
+        'pet_action'
+      );
+      const action = String(clean?.action || '').trim().toLowerCase();
+      const petState = normalizePetState(player);
+      const getPetById = (id) => petState.pets.find((pet) => pet.id === String(id || '').trim());
+      const fail = (msg) => emitResult(false, msg);
+      let dirty = false;
+      const divineAdvanceCost = 500;
+      const petRarityIndex = (rarity) => PET_RARITY_ORDER.indexOf(String(rarity || ''));
+      const synthesizePetPair = (mainPet, subPet) => {
       if (!mainPet || !subPet) return { ok: false, msg: '宠物不存在' };
       if (mainPet.id === subPet.id) return { ok: false, msg: '主宠和副宠不能相同' };
       if (player.gold < PET_SYNTHESIS_COST_GOLD) return { ok: false, msg: '金币不足' };
@@ -14624,7 +14625,7 @@ io.on('connection', (socket) => {
       return { ok: true, pet: basePet, slotText };
     };
 
-    if (!action) return fail('无效宠物操作');
+      if (!action) return fail('无效宠物操作');
 
     if (action === 'set_active') {
       const pet = getPetById(clean?.petId);
@@ -15070,10 +15071,14 @@ io.on('connection', (socket) => {
       return fail('未知宠物操作');
     }
 
-    if (!dirty) return;
-    normalizePetState(player);
-    await sendState(player);
-    await savePlayer(player);
+      if (!dirty) return;
+      normalizePetState(player);
+      await sendState(player);
+      await savePlayer(player);
+    } catch (err) {
+      console.error('[pet_action] failed:', err);
+      emitResult(false, String(err?.message || '宠物操作失败。'));
+    }
   });
 
   socket.on('character_action', async (payload) => {
