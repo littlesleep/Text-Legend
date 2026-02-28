@@ -613,6 +613,7 @@ const petUi = {
   setActive: document.getElementById('pet-set-active'),
   setRest: document.getElementById('pet-set-rest'),
   rename: document.getElementById('pet-rename'),
+  gift: document.getElementById('pet-gift'),
   reset: document.getElementById('pet-reset'),
   release: document.getElementById('pet-release'),
   divineAdvanceBtn: document.getElementById('pet-divine-advance-btn'),
@@ -2875,6 +2876,11 @@ function renderPetModal() {
   if (petUi.setActive) petUi.setActive.disabled = !selected;
   if (petUi.setRest) petUi.setRest.disabled = !selected;
   if (petUi.rename) petUi.rename.disabled = !selected;
+  if (petUi.gift) {
+    const hasPetEquip = selected ? Object.values(normalizePetEquipment(selected.equipment)).some(Boolean) : false;
+    const canGift = Boolean(selected) && petState?.activePetId !== selected?.id && !hasPetEquip;
+    petUi.gift.disabled = !canGift;
+  }
   if (petUi.reset) {
     const canReset = Boolean(selected) && !isDivineBeastPet(selected);
     petUi.reset.disabled = !canReset;
@@ -10732,6 +10738,33 @@ if (petUi.rename) {
     });
     if (!name) return;
     sendPetAction('rename', { petId: selectedPetId, name: String(name).trim() });
+  });
+}
+if (petUi.gift) {
+  petUi.gift.addEventListener('click', async () => {
+    const petId = String(selectedPetId || '').trim();
+    const pet = getPetByStateId(petId);
+    if (!petId || !pet) return showToast('请先选择宠物');
+    const isActive = lastState?.pet?.activePetId === pet.id;
+    const hasEquip = Object.values(normalizePetEquipment(pet.equipment)).some(Boolean);
+    if (isActive) return showToast('出战中的宠物不能赠送');
+    if (hasEquip) return showToast('已穿戴装备的宠物不能赠送');
+    const cardQty = Math.max(
+      0,
+      Math.floor(
+        Number(
+          (Array.isArray(lastState?.items) ? lastState.items : []).find((item) => String(item?.id || '') === 'pet_gift_card')?.qty || 0
+        )
+      )
+    );
+    const targetName = await promptModal({
+      title: '赠送宠物',
+      text: `请输入目标玩家名\n将把 ${pet.name} 直接赠送到对方宠物栏\n消耗：宠物赠送卡 x1（当前 ${cardQty}）`,
+      placeholder: '目标玩家名'
+    });
+    const finalName = String(targetName || '').trim();
+    if (!finalName) return;
+    sendPetAction('gift', { petId, targetName: finalName });
   });
 }
 if (petUi.reset) {

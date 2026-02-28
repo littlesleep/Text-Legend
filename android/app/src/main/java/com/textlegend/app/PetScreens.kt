@@ -140,10 +140,14 @@ private fun PetListTab(
     var showBatchSynthesizeConfirm by remember { mutableStateOf(false) }
     var showDetailDialog by remember { mutableStateOf(false) }
     var showDivineAdvanceDialog by remember { mutableStateOf(false) }
+    var showGiftDialog by remember { mutableStateOf(false) }
     var selectedPetId by remember { mutableStateOf<String?>(null) }
     val selectedPet = pets.find { it.id == selectedPetId }
     val divineFragmentQty = remember(bagItems) {
         bagItems.find { it.id == "divine_beast_fragment" }?.qty ?: 0
+    }
+    val petGiftCardQty = remember(bagItems) {
+        bagItems.find { it.id == "pet_gift_card" }?.qty ?: 0
     }
 
     if (pets.isEmpty()) {
@@ -198,6 +202,17 @@ private fun PetListTab(
                     onEquip = {
                         selectedPetId = pet.id
                         showEquipDialog = true
+                    },
+                    onGift = {
+                        val hasEquip = pet.equippedItems.isNotEmpty()
+                        if (pet.id == activePet?.id) {
+                            vm.showToast("出战中的宠物不能赠送")
+                        } else if (hasEquip) {
+                            vm.showToast("已穿戴装备的宠物不能赠送")
+                        } else {
+                        selectedPetId = pet.id
+                        showGiftDialog = true
+                        }
                     },
                     onDivineAdvance = {
                         selectedPetId = pet.id
@@ -322,6 +337,21 @@ private fun PetListTab(
             }
         )
     }
+    if (showGiftDialog && selectedPet != null) {
+        PetGiftDialog(
+            pet = selectedPet!!,
+            ownedCards = petGiftCardQty,
+            onConfirm = { targetName ->
+                vm.petGift(selectedPet!!.id, targetName)
+                showGiftDialog = false
+                selectedPetId = null
+            },
+            onDismiss = {
+                showGiftDialog = false
+                selectedPetId = null
+            }
+        )
+    }
     if (showDetailDialog && selectedPet != null) {
         PetDetailDialog(
             pet = selectedPet!!,
@@ -383,6 +413,52 @@ private fun PetResetDialog(
     )
 }
 
+@Composable
+private fun PetGiftDialog(
+    pet: PetInfo,
+    ownedCards: Int,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var targetName by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "赠送宠物", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(text = "请输入目标玩家名，${pet.name} 将直接进入对方宠物栏。")
+                Text(
+                    text = "消耗：宠物赠送卡 x1（当前 $ownedCards）",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = targetName,
+                    onValueChange = { targetName = it.take(24) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("目标玩家名") },
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(targetName.trim()) },
+                enabled = targetName.trim().isNotEmpty()
+            ) {
+                Text("确认赠送")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
 // 宠物卡片
 @Composable
 private fun PetCard(
@@ -393,6 +469,7 @@ private fun PetCard(
     onReset: () -> Unit,
     onTrain: () -> Unit,
     onEquip: () -> Unit,
+    onGift: () -> Unit,
     onDivineAdvance: () -> Unit,
     showReset: Boolean,
     showDivineAdvance: Boolean,
@@ -589,6 +666,13 @@ private fun PetCard(
                 ) {
                     Text("装备")
                 }
+                OutlinedButton(
+                    onClick = onGift,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isActive && pet.equippedItems.isEmpty()
+                ) {
+                    Text("赠送")
+                }
                 if (showDivineAdvance) {
                     OutlinedButton(
                         onClick = onDivineAdvance,
@@ -596,10 +680,7 @@ private fun PetCard(
                     ) {
                         Text("进阶")
                     }
-                } else {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-                if (showReset) {
+                } else if (showReset) {
                     Button(
                         onClick = onReset,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),

@@ -362,6 +362,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun petEquipItem(petId: String, itemKey: String) = socket.petEquipItem(petId, itemKey)
     fun petUnequipItem(petId: String, slot: String) = socket.petUnequipItem(petId, slot)
     fun petDivineAdvance(petId: String) = socket.petDivineAdvance(petId)
+    fun petGift(petId: String, targetName: String) = socket.petGift(petId, targetName)
     fun requestActivityPointShop() = sendCmd("活动 shop")
     fun requestActivityDivineBeastExchange() = sendCmd("活动 神兽兑换")
     fun claimHarvestSign() = sendCmd("活动 丰收签到")

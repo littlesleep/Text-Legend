@@ -14397,7 +14397,7 @@ io.on('connection', (socket) => {
     if (!player) return;
     const { clean } = sanitizePayload(
       payload,
-      ['action', 'petId', 'name', 'bookId', 'qty', 'mainPetId', 'subPetId', 'itemKey', 'slot', 'attr', 'count'],
+      ['action', 'petId', 'name', 'bookId', 'qty', 'mainPetId', 'subPetId', 'itemKey', 'slot', 'attr', 'count', 'targetName'],
       'pet_action'
     );
     const action = String(clean?.action || '').trim().toLowerCase();
@@ -14553,6 +14553,64 @@ io.on('connection', (socket) => {
       pet.name = name;
       dirty = true;
       emitResult(true, `宠物改名成功：${pet.name}`);
+    } else if (action === 'gift') {
+      const pet = getPetById(clean?.petId);
+      if (!pet) return fail('宠物不存在');
+      pet.equipment = normalizePetEquipmentState(pet.equipment);
+      if (petState.activePetId === pet.id) return fail('出战中的宠物不能赠送');
+      if (Object.values(pet.equipment).some(Boolean)) return fail('已穿戴装备的宠物不能赠送');
+      const targetName = String(clean?.targetName || clean?.name || '').trim();
+      if (!targetName) return fail('请输入目标玩家名');
+      if (targetName === String(player.name || '').trim()) return fail('不能赠送给自己');
+      const targetRow = await findCharacterByNameInRealm(targetName, player.realmId || 1);
+      if (!targetRow) return fail('未找到目标玩家');
+      const onlineTarget = playersByName(targetName, player.realmId || 1);
+      const targetPlayer = onlineTarget || await loadCharacter(targetRow.user_id, targetRow.name, targetRow.realm_id || 1);
+      if (!targetPlayer) return fail('目标玩家数据加载失败');
+      const targetPetState = normalizePetState(targetPlayer);
+      const targetCount = Array.isArray(targetPetState?.pets) ? targetPetState.pets.length : 0;
+      if (targetCount >= PET_MAX_OWNED) {
+        return fail(`目标玩家宠物已达上限（${PET_MAX_OWNED}）`);
+      }
+      const giftCardOwned = Math.max(0, Math.floor(Number((player.inventory || []).find((i) => i?.id === 'pet_gift_card')?.qty || 0)));
+      if (giftCardOwned < 1) return fail('宠物赠送卡不足，需要宠物赠送卡 x1');
+      if (!removeItem(player, 'pet_gift_card', 1)) return fail('宠物赠送卡扣除失败');
+
+      const clonedPet = JSON.parse(JSON.stringify(pet));
+      const targetPetIds = new Set((targetPetState.pets || []).map((entry) => String(entry?.id || '').trim()).filter(Boolean));
+      let nextPetId = String(clonedPet.id || '').trim();
+      if (!nextPetId || targetPetIds.has(nextPetId)) {
+        do {
+          nextPetId = `pet_${Date.now()}_${randInt(100, 999)}`;
+        } while (targetPetIds.has(nextPetId));
+      }
+      clonedPet.id = nextPetId;
+      targetPetState.pets.push(clonedPet);
+
+      petState.pets = petState.pets.filter((entry) => entry.id !== pet.id);
+      if (petState.activePetId === pet.id) {
+        petState.activePetId = null;
+        computeDerived(player);
+      }
+
+      if (onlineTarget) {
+        onlineTarget.forceStateRefresh = true;
+        await sendState(onlineTarget);
+        await savePlayer(onlineTarget);
+      } else {
+        await saveCharacter(targetPlayer);
+      }
+
+      await sendMail(
+        targetRow.user_id,
+        targetRow.realm_id || 1,
+        '宠物赠送通知',
+        `${player.name} 向你赠送了宠物：${clonedPet.name}。\n请前往宠物系统查看。`,
+        []
+      );
+
+      dirty = true;
+      emitResult(true, `宠物赠送成功：${pet.name} -> ${targetName}`);
     } else if (action === 'equip_item') {
       const pet = getPetById(clean?.petId);
       if (!pet) return fail('宠物不存在');
