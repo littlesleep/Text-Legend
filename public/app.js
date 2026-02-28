@@ -1031,6 +1031,7 @@ function show(section) {
 
 function openRegisterOverlay() {
   if (!registerOverlay) return;
+  registerOverlay.style.display = 'flex';
   registerOverlay.classList.remove('hidden');
   setTimeout(() => {
     const input = document.getElementById('register-username');
@@ -1039,6 +1040,9 @@ function openRegisterOverlay() {
 }
 
 function closeRegisterOverlay() {
+  if (registerOverlay) {
+    registerOverlay.style.display = 'none';
+  }
   registerOverlay?.classList.add('hidden');
 }
 
@@ -9046,6 +9050,7 @@ const remembered = localStorage.getItem('rememberedUser');
 if (remembered) {
   loginUserInput.value = remembered;
 }
+closeRegisterOverlay();
 (async () => {
   // 加载赞助者名单，确保刷新页面后特效依然有效
   await loadSponsors();
