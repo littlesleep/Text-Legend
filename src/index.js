@@ -3943,15 +3943,12 @@ app.post('/admin/realms/merge', async (req, res) => {
 
   await refreshRealmCache();
 
-    // 仅清除源区与目标区的session，强制相关玩家重新登录
-    await clearRealmSessions([sourceId, targetId]);
-
   // 返回结果，不包含备份数据（数据量太大，前端通过单独接口下载）
   res.json({
     ok: true,
     sourceId,
     targetId,
-      message: `合区完成。角色: ${stats.characters}, 行会: ${stats.guilds}, 邮件: ${stats.mails}, 寄售: ${stats.consignments}, 寄售历史: ${stats.consignmentHistory}, 沙巴克报名: ${stats.sabakRegistrations}。区服ID保持原值不重排。源区与目标区玩家已强制下线，请重新登录。`,
+      message: `合区完成。角色: ${stats.characters}, 行会: ${stats.guilds}, 邮件: ${stats.mails}, 寄售: ${stats.consignments}, 寄售历史: ${stats.consignmentHistory}, 沙巴克报名: ${stats.sabakRegistrations}。区服ID保持原值不重排。源区与目标区玩家连接已断开，请重新进入游戏。`,
     backupAvailable: true
   });
 });
