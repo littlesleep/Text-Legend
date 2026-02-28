@@ -2876,17 +2876,17 @@ function renderPetModal() {
   if (petUi.setActive) petUi.setActive.disabled = !selected;
   if (petUi.setRest) petUi.setRest.disabled = !selected;
   if (petUi.rename) petUi.rename.disabled = !selected;
-  if (petUi.gift) {
-    const hasPetEquip = Boolean(selected && Array.isArray(selected.equippedItems) && selected.equippedItems.length > 0);
-    const canGift = Boolean(selected) && petState?.activePetId !== selected?.id && !hasPetEquip;
-    petUi.gift.disabled = !canGift;
-  }
+  if (petUi.gift) petUi.gift.disabled = !selected;
   if (petUi.reset) {
     const canReset = Boolean(selected) && !isDivineBeastPet(selected);
     petUi.reset.disabled = !canReset;
     petUi.reset.style.display = canReset ? '' : 'none';
   }
-  if (petUi.release) petUi.release.disabled = !selected;
+  if (petUi.release) {
+    const canRelease = Boolean(selected) && !isDivineBeastPet(selected);
+    petUi.release.disabled = !canRelease;
+    petUi.release.style.display = canRelease ? '' : 'none';
+  }
   if (petUi.trainBtn) petUi.trainBtn.disabled = !selected;
   if (petUi.openEquipModalBtn) petUi.openEquipModalBtn.disabled = !selected;
   if (petUi.openBookModalBtn) petUi.openBookModalBtn.disabled = !selected;

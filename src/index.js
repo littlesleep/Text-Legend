@@ -14603,6 +14603,7 @@ io.on('connection', (socket) => {
     } else if (action === 'release') {
       const pet = getPetById(clean?.petId);
       if (!pet) return fail('宠物不存在');
+      if (isDivineBeastSpeciesName(pet.role || pet.species || '')) return fail('生肖神兽不允许放生');
       pet.equipment = normalizePetEquipmentState(pet.equipment);
       if (Object.values(pet.equipment).some(Boolean)) return fail('宠物已穿戴装备，无法放生');
       petState.pets = petState.pets.filter((entry) => entry.id !== pet.id);
