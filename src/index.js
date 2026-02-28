@@ -12,7 +12,7 @@ import config from './config.js';
 import { validatePlayerName } from './game/validator.js';
 import knex from './db/index.js';
 import { createUser, verifyUser, createSession, getSession, getUserByName, setAdminFlag, verifyUserPassword, updateUserPassword, clearUserSessions, clearRealmSessions } from './db/users.js';
-import { listCharacters, loadCharacter, saveCharacter, findCharacterByName, findCharacterByNameInRealm, listAllCharacters, deleteCharacter } from './db/characters.js';
+import { listCharacters, loadCharacter, saveCharacter, findCharacterByName, findCharacterByNameInRealm, listAllCharacters, deleteCharacter, restoreDeletedCharacter } from './db/characters.js';
 import { addGuildMember, createGuild, getGuildByName, getGuildByNameInRealm, getGuildById, getGuildMember, getSabakOwner, isGuildLeader, isGuildLeaderOrVice, setGuildMemberRole, listGuildMembers, listSabakRegistrations, registerSabak, hasSabakRegistrationToday, hasAnySabakRegistrationToday, removeGuildMember, leaveGuild, setSabakOwner, clearSabakRegistrations, transferGuildLeader, ensureSabakState, applyToGuild, listGuildApplications, removeGuildApplication, approveGuildApplication, getApplicationByUser, listAllGuilds } from './db/guilds.js';
 import { createAdminSession, listUsers, verifyAdminSession, deleteUser } from './db/admin.js';
 import { sendMail, listMail, listSentMail, markMailRead, markMailClaimed, deleteMail } from './db/mail.js';
@@ -1581,6 +1581,20 @@ app.post('/admin/characters/migrate', async (req, res) => {
     });
   } catch (err) {
     return res.status(400).json({ error: String(err?.message || err || '迁移失败') });
+  }
+});
+
+app.post('/admin/characters/restore', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  const charName = String(req.body?.charName || '').trim();
+  const realmId = Math.max(1, Math.floor(Number(req.body?.realmId || 1) || 1));
+  if (!charName) return res.status(400).json({ error: '缺少角色名。' });
+  try {
+    const result = await restoreDeletedCharacter(charName, realmId);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    return res.status(400).json({ error: String(err?.message || err || '恢复失败') });
   }
 });
 
@@ -14697,10 +14711,14 @@ io.on('connection', (socket) => {
 
       await sendMail(
         targetRow.user_id,
-        targetRow.realm_id || 1,
+        targetRow.name || targetName,
+        '系统',
+        null,
         '宠物赠送通知',
         `${player.name} 向你赠送了宠物：${clonedPet.name}。\n请前往宠物系统查看。`,
-        []
+        null,
+        0,
+        targetRow.realm_id || 1
       );
 
       dirty = true;

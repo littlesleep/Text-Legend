@@ -5003,6 +5003,404 @@ body.dark #mail-modal .modal-actions {
   cursor: not-allowed;
 }
 
+#treasure-modal .modal-card {
+  width: min(940px, 94vw);
+  max-height: 86vh;
+}
+
+#treasure-modal .modal-list-wrapper {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.treasure-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.treasure-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(0, 2.1fr);
+  gap: 10px;
+}
+
+.treasure-summary-card {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(118, 70, 22, 0.16);
+  background: linear-gradient(135deg, rgba(247, 226, 198, 0.96), rgba(255, 245, 232, 0.94));
+  line-height: 1.55;
+}
+
+.treasure-summary-wide {
+  min-height: 100%;
+}
+
+.treasure-section-title {
+  margin: 2px 0 0;
+  padding: 0 2px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #e7c591;
+}
+
+.treasure-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 14px;
+}
+
+.treasure-column {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.treasure-panel-section {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(37, 23, 13, 0.88), rgba(23, 15, 10, 0.94));
+  border: 1px solid rgba(226, 173, 103, 0.14);
+}
+
+.treasure-detail-section {
+  height: 100%;
+}
+
+#treasure-modal .forge-list {
+  gap: 10px;
+  margin-bottom: 0;
+  margin-top: 10px;
+}
+
+#treasure-modal .forge-item {
+  padding: 12px 13px 11px;
+  border-radius: 16px;
+  text-align: left;
+  background:
+    radial-gradient(circle at top right, rgba(255, 214, 160, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.05));
+}
+
+#treasure-modal .forge-item:hover {
+  filter: none;
+  transform: translateY(-1px);
+}
+
+#treasure-modal .forge-item.selected {
+  box-shadow:
+    0 0 0 2px rgba(236, 177, 96, 0.78),
+    0 0 22px rgba(217, 146, 48, 0.18),
+    inset 0 1px 0 rgba(255, 227, 182, 0.08);
+  border-color: rgba(236, 177, 96, 0.52);
+}
+
+.treasure-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.treasure-slot-badge,
+.treasure-level-chip,
+.treasure-stat-pill,
+.treasure-empty-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(118, 70, 22, 0.16);
+  background: rgba(255, 244, 228, 0.9);
+  font-size: 0.74rem;
+  line-height: 1;
+  color: #7e5526;
+}
+
+.treasure-level-chip {
+  font-weight: 700;
+}
+
+.treasure-empty-chip {
+  color: #9a7650;
+}
+
+.treasure-card-name {
+  font-family: var(--font-display);
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.treasure-card-subtitle {
+  margin-top: 4px;
+  font-size: 0.74rem;
+  color: #b98c58;
+  letter-spacing: 0.2px;
+}
+
+.treasure-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.treasure-stat-pill {
+  padding-inline: 9px;
+}
+
+#treasure-modal .forge-item-meta {
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+#treasure-modal .treasure-passive-meta {
+  min-height: 2.4em;
+}
+
+#treasure-modal .treasure-actions {
+  margin-top: 10px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+#treasure-modal .treasure-actions button {
+  padding: 5px 12px;
+  background: linear-gradient(180deg, #f6e8d2, #ebc995);
+  border-color: rgba(118, 70, 22, 0.18);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.treasure-detail-panel {
+  min-height: 420px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(20, 13, 8, 0.92), rgba(29, 18, 11, 0.96));
+  border: 1px solid rgba(220, 168, 96, 0.12);
+  line-height: 1.68;
+  color: #efd9bb;
+}
+
+.treasure-detail-hero {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.treasure-detail-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.treasure-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.treasure-detail-chip {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(230, 182, 122, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 176, 0.03);
+}
+
+.treasure-detail-chip em {
+  font-style: normal;
+  font-size: 0.72rem;
+  color: #caa578;
+}
+
+.treasure-detail-chip strong {
+  font-size: 0.86rem;
+  color: #f2ddbf;
+}
+
+.treasure-detail-block {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(230, 182, 122, 0.09);
+}
+
+.treasure-detail-block-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f0ca97;
+}
+
+.treasure-passive-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.treasure-passive-block:hover {
+  border-color: rgba(230, 182, 122, 0.16);
+}
+
+.treasure-detail-line {
+  font-size: 0.82rem;
+  color: #e4ceb2;
+  line-height: 1.6;
+}
+
+.treasure-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.treasure-detail-actions button {
+  border-radius: 999px;
+  border: 1px solid rgba(118, 70, 22, 0.18);
+  background: linear-gradient(180deg, #f0b261, #d88a2f);
+  color: #2f1a09;
+  padding: 7px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.treasure-detail-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+body.dark #treasure-modal .modal-card {
+  background: linear-gradient(180deg, #241d19, #1a1512);
+  border-color: #4b392c;
+}
+
+body.dark .treasure-summary-card {
+  background: linear-gradient(135deg, rgba(73, 55, 42, 0.9), rgba(41, 31, 24, 0.94));
+  border-color: rgba(199, 148, 90, 0.16);
+}
+
+body.dark #treasure-modal .forge-item {
+  background:
+    radial-gradient(circle at top right, rgba(214, 157, 84, 0.08), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(0, 0, 0, 0.08));
+  border-color: rgba(199, 148, 90, 0.16);
+}
+
+body.dark #treasure-modal .forge-item.selected {
+  box-shadow:
+    0 0 0 2px rgba(236, 177, 96, 0.72),
+    0 0 26px rgba(217, 146, 48, 0.16),
+    inset 0 1px 0 rgba(255, 227, 182, 0.06);
+  border-color: rgba(236, 177, 96, 0.48);
+}
+
+body.dark .treasure-panel-section {
+  background: linear-gradient(180deg, rgba(40, 28, 20, 0.9), rgba(24, 18, 14, 0.95));
+  border-color: rgba(199, 148, 90, 0.12);
+}
+
+body.dark .treasure-slot-badge,
+body.dark .treasure-level-chip,
+body.dark .treasure-stat-pill,
+body.dark .treasure-empty-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(199, 148, 90, 0.12);
+  color: #cbb28d;
+}
+
+body.dark .treasure-card-subtitle {
+  color: #b89a72;
+}
+
+body.dark #treasure-modal .treasure-actions button {
+  background: linear-gradient(180deg, #f0b261, #d88a2f);
+  color: #2f1a09;
+}
+
+body.dark .treasure-detail-chip,
+body.dark .treasure-detail-block {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(199, 148, 90, 0.08);
+}
+
+.prompt-options.treasure-material-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.prompt-options.treasure-material-options .prompt-option.prompt-option-rich {
+  text-align: left;
+  min-height: 104px;
+  justify-content: center;
+}
+
+.prompt-options.treasure-material-options .prompt-option .prompt-option-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.treasure-material-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(238, 187, 109, 0.12);
+  border: 1px solid rgba(214, 146, 58, 0.18);
+  color: #c87f27;
+  font-size: 0.76rem;
+}
+
+#prompt-modal.treasure-material-prompt .modal-card {
+  width: min(760px, 94vw);
+}
+
+@media (max-width: 768px) {
+  .prompt-options.treasure-material-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  #treasure-modal .modal-card {
+    width: calc(100vw - 16px);
+  }
+
+  .treasure-summary {
+    grid-template-columns: 1fr;
+  }
+
+  #treasure-modal .forge-list {
+    grid-template-columns: 1fr;
+  }
+
+  .treasure-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .treasure-detail-panel {
+    min-height: 0;
+  }
+
+  .treasure-detail-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 .bag-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

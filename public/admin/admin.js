@@ -53,6 +53,9 @@ const charMigrateCharInput = document.getElementById('char-migrate-char');
 const charMigrateRealmInput = document.getElementById('char-migrate-realm');
 const charMigrateTargetUserInput = document.getElementById('char-migrate-target-user');
 const charMigrateBtn = document.getElementById('char-migrate-btn');
+const charRestoreNameInput = document.getElementById('char-restore-name');
+const charRestoreRealmInput = document.getElementById('char-restore-realm');
+const charRestoreBtn = document.getElementById('char-restore-btn');
 const charMigrateMsg = document.getElementById('char-migrate-msg');
 const vipSelfClaimStatus = document.getElementById('vip-self-claim-status');
 const vipSelfClaimMsg = document.getElementById('vip-self-claim-msg');
@@ -3738,6 +3741,27 @@ async function migrateCharacterToAnotherAccount() {
     setTimeout(() => setCharMigrateMsg(''), 3000);
   } catch (err) {
     setCharMigrateMsg(`迁移失败: ${err.message}`, 'red');
+  }
+}
+
+async function restoreDeletedCharacterByAdmin() {
+  if (!charMigrateMsg) return;
+  const charName = String(charRestoreNameInput?.value || '').trim();
+  const realmId = Math.max(1, Math.floor(Number(charRestoreRealmInput?.value || 1) || 1));
+  if (!charName) {
+    setCharMigrateMsg('请输入要恢复的已删除角色名', 'red');
+    return;
+  }
+  if (!window.confirm(`确认恢复角色【${charName}】(区服${realmId}) 吗？将恢复最近一次删除归档。`)) {
+    return;
+  }
+  setCharMigrateMsg('恢复中...');
+  try {
+    const data = await api('/admin/characters/restore', 'POST', { charName, realmId });
+    setCharMigrateMsg(`恢复成功：${data?.name || charName}（区服${realmId}）`, 'green');
+    setTimeout(() => setCharMigrateMsg(''), 3000);
+  } catch (err) {
+    setCharMigrateMsg(`恢复失败: ${err.message}`, 'red');
   }
 }
 
@@ -7507,6 +7531,7 @@ if (firstRechargeReissueAllBtn) firstRechargeReissueAllBtn.addEventListener('cli
 if (inviteRewardLoadBtn) inviteRewardLoadBtn.addEventListener('click', loadInviteRewardSettings);
 if (inviteRewardSaveBtn) inviteRewardSaveBtn.addEventListener('click', saveInviteRewardSettings);
 if (charMigrateBtn) charMigrateBtn.addEventListener('click', migrateCharacterToAnotherAccount);
+if (charRestoreBtn) charRestoreBtn.addEventListener('click', restoreDeletedCharacterByAdmin);
 if (vipCodesPrev) {
   vipCodesPrev.addEventListener('click', () => {
     vipCodesPageIndex = Math.max(0, vipCodesPageIndex - 1);

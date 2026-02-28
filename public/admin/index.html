@@ -820,6 +820,17 @@
                     <button id="char-migrate-btn" class="btn-small">迁移角色</button>
                   </div>
                   <p class="muted" style="margin-top: 6px;">支持在线迁移；迁移成功后会自动强制下线。会同步迁移该角色关联的行会成员、行会申请、邮件归属等账号字段。</p>
+                  <div style="border-top: 1px solid #ddd; margin-top: 12px; padding-top: 10px;">
+                    <h4 style="margin: 0 0 10px;">恢复已删角色</h4>
+                    <div class="char-migrate-pair-row">
+                      <input id="char-restore-name" type="text" placeholder="已删除角色名">
+                      <input id="char-restore-realm" type="number" min="1" value="1" placeholder="区服">
+                    </div>
+                    <div class="row" style="margin-top: 8px;">
+                      <button id="char-restore-btn" class="btn-small" style="background: #2e7d32;">恢复角色</button>
+                    </div>
+                    <p class="muted" style="margin-top: 6px;">按“角色名 + 区服”恢复最近一次删除的归档角色。若当前区服已有同名角色，则不会恢复。</p>
+                  </div>
                   <div id="char-migrate-msg" class="msg"></div>
                 </div>
               </div>

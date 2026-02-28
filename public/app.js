@@ -444,9 +444,12 @@ const treasureUi = {
   randomAttr: document.getElementById('treasure-random-attr'),
   equippedList: document.getElementById('treasure-equipped-list'),
   bagList: document.getElementById('treasure-bag-list'),
+  detail: document.getElementById('treasure-detail'),
   refresh: document.getElementById('treasure-refresh'),
   close: document.getElementById('treasure-close')
 };
+let selectedTreasureEntry = { source: '', key: '' };
+let selectedTreasurePassiveState = { key: '', expanded: false };
 const chat = {
   log: document.getElementById('chat-log'),
   input: document.getElementById('chat-input'),
@@ -4474,7 +4477,7 @@ function getTreasureBagItems() {
 }
 
 function renderTreasureModal() {
-  if (!treasureUi.equippedList || !treasureUi.bagList || !treasureUi.exp) return;
+  if (!treasureUi.equippedList || !treasureUi.bagList || !treasureUi.exp || !treasureUi.detail) return;
   const data = lastState?.treasure || {
     slotCount: 6,
     maxLevel: 999999,
@@ -4518,6 +4521,15 @@ function renderTreasureModal() {
     if (raw.length <= 28) return raw;
     return `${raw.slice(0, 28)}...`;
   };
+  const getTreasureRoleText = (text) => {
+    const raw = String(text || '');
+    if (!raw) return '通用法宝';
+    if (/打怪经验|法力上限/.test(raw)) return '成长型';
+    if (/生命|防御|魔御|减伤/.test(raw)) return '防护型';
+    if (/攻击|魔法|道术|伤害|破防|破魔/.test(raw)) return '输出型';
+    if (/综合属性|攻\/魔\/道|气血\/法力/.test(raw)) return '全能型';
+    return '通用法宝';
+  };
   const bindTreasurePassiveTooltip = (node, text) => {
     const raw = String(text || '').trim();
     if (!node || !raw) return;
@@ -4543,126 +4555,83 @@ function renderTreasureModal() {
   const treasureMaterials = Array.from(treasureMaterialMap.values());
   const occupiedIds = new Set(equipped.map((entry) => entry.id));
   const hasEmptySlot = equipped.length < slotCount;
+  const attrLabels = { hp: '生命上限', mp: '魔法上限', atk: '攻击', def: '防御', mag: '魔法', mdef: '魔御', spirit: '道术', dex: '敏捷' };
+  const formatAttrSummary = (attrs) => {
+    const parts = Object.entries(attrs || {})
+      .filter(([, v]) => Number(v || 0) > 0)
+      .map(([k, v]) => `${attrLabels[k] || k}+${Math.floor(Number(v || 0))}`);
+    return parts.length ? parts.join('，') : '无';
+  };
+  const ensureSelectedTreasure = () => {
+    const source = String(selectedTreasureEntry?.source || '');
+    const key = String(selectedTreasureEntry?.key || '');
+    const valid =
+      (source === 'equipped' && equipped.some((entry) => String(entry.slot) === key)) ||
+      (source === 'bag' && bagItems.some((item) => String(item.id) === key));
+    if (valid) return;
+    if (equipped.length) {
+      selectedTreasureEntry = { source: 'equipped', key: String(equipped[0].slot) };
+      return;
+    }
+    if (bagItems.length) {
+      selectedTreasureEntry = { source: 'bag', key: String(bagItems[0].id) };
+      return;
+    }
+    selectedTreasureEntry = { source: '', key: '' };
+  };
 
   treasureUi.exp.textContent = `法宝经验丹: ${Math.floor(Number(data.expMaterial || 0))}`;
   if (treasureUi.randomAttr) {
-    const labels = { hp: '生命上限', mp: '魔法上限', atk: '攻击', def: '防御', mag: '魔法', mdef: '魔御', spirit: '道术', dex: '敏捷' };
-    const attrParts = Object.entries(data.randomAttr || {})
-      .filter(([, v]) => Number(v || 0) > 0)
-      .map(([k, v]) => `${labels[k] || k}+${Math.floor(Number(v || 0))}`);
-    treasureUi.randomAttr.textContent = `随机属性累计: ${attrParts.length ? attrParts.join('，') : '无'}`;
+    treasureUi.randomAttr.textContent = `随机属性累计: ${formatAttrSummary(data.randomAttr || {})}`;
   }
   treasureUi.equippedList.innerHTML = '';
   treasureUi.bagList.innerHTML = '';
+  ensureSelectedTreasure();
 
   for (let slot = 1; slot <= slotCount; slot += 1) {
     const entry = equipped.find((item) => Number(item.slot) === slot);
-    const card = document.createElement('div');
-    card.className = 'forge-item';
+      const card = document.createElement('div');
+      card.className = `forge-item treasure-equipped-card${selectedTreasureEntry.source === 'equipped' && selectedTreasureEntry.key === String(slot) ? ' selected' : ''}`;
     if (!entry) {
-      card.innerHTML = `<div>槽位 ${slot}</div><div class="forge-item-meta">未装备</div>`;
+      card.innerHTML = `
+        <div class="treasure-card-topline">
+          <span class="treasure-slot-badge">槽位 ${slot}</span>
+          <span class="treasure-empty-chip">未装备</span>
+        </div>
+        <div class="treasure-card-name">当前槽位为空</div>
+        <div class="forge-item-meta">从下方背包法宝中选择后可直接装备</div>
+      `;
       treasureUi.equippedList.appendChild(card);
       continue;
     }
+    applyRarityClass(card, entry);
     const passiveText = treasurePassiveById.get(entry.id) || '被动：暂无说明';
+    const roleText = getTreasureRoleText(passiveText);
+    const nameRarityKey = normalizeRarityKey(entry.rarity);
+    const stage = Math.floor(Number(entry.stage || 0));
+    const segment = Math.floor(Number(entry.advanceCount || 0));
+    const effectBonus = Number(entry.effectBonusPct || 0).toFixed(1);
     card.innerHTML = `
-      <div>${entry.name || entry.id}</div>
-      <div class="forge-item-meta treasure-passive-meta">${compactTreasurePassiveText(passiveText)}</div>
-      <div class="forge-item-meta">Lv${entry.level}/${maxLevel} | 阶${Math.floor(Number(entry.stage || 0))} 段${Math.floor(Number(entry.advanceCount || 0))}</div>
-      <div class="forge-item-meta">效果加成 +${Number(entry.effectBonusPct || 0).toFixed(1)}%</div>
-      <div class="forge-item-meta">${(() => {
-        const labels = { hp: '生命上限', mp: '魔法上限', atk: '攻击', def: '防御', mag: '魔法', mdef: '魔御', spirit: '道术', dex: '敏捷' };
-        const attrs = entry.randomAttr || {};
-        const parts = Object.entries(attrs)
-          .filter(([, v]) => Number(v || 0) > 0)
-          .map(([k, v]) => `${labels[k] || k}+${Math.floor(Number(v || 0))}`);
-        return parts.length ? `绑定属性: ${parts.join('，')}` : '绑定属性: 无';
-      })()}</div>
-      <div class="treasure-actions">
-        <button type="button" data-action="upgrade" data-slot="${slot}">升级</button>
-        <button type="button" data-action="advance" data-slot="${slot}">升段</button>
-        <button type="button" data-action="unequip" data-slot="${slot}">卸下</button>
+      <div class="treasure-card-topline">
+        <span class="treasure-slot-badge">槽位 ${slot}</span>
+        <span class="treasure-level-chip">Lv${entry.level}/${maxLevel}</span>
       </div>
+      <div class="treasure-card-name${nameRarityKey ? ` rarity-${nameRarityKey}` : ''}${nameRarityKey === 'ultimate' ? ' ultimate-text' : ''}">${entry.name || entry.id}</div>
+      <div class="treasure-card-subtitle">${roleText}</div>
+      <div class="forge-item-meta treasure-passive-meta">${compactTreasurePassiveText(passiveText)}</div>
+      <div class="treasure-stat-row">
+        <span class="treasure-stat-pill">阶 ${stage}</span>
+        <span class="treasure-stat-pill">段 ${segment}</span>
+        <span class="treasure-stat-pill">加成 +${effectBonus}%</span>
+      </div>
+      <div class="forge-item-meta">绑定属性: ${formatAttrSummary(entry.randomAttr || {})}</div>
     `;
-    bindTreasurePassiveTooltip(card.querySelector('.treasure-passive-meta'), passiveText);
-    const upgradeBtn = card.querySelector('button[data-action="upgrade"]');
-    const advanceBtn = card.querySelector('button[data-action="advance"]');
-    const unequipBtn = card.querySelector('button[data-action="unequip"]');
-    if (upgradeBtn) {
-      const level = Math.max(1, Math.floor(Number(entry.level || 1)));
-      const maxByLevel = Math.max(0, maxLevel - level);
-      const maxByMat = Math.floor(expMaterial / upgradeConsume);
-      const maxUpgradeTimes = Math.max(0, Math.min(maxByLevel, maxByMat));
-      upgradeBtn.disabled = maxUpgradeTimes <= 0;
-      upgradeBtn.title = `每次消耗法宝经验丹 x${upgradeConsume}，最多可升 ${maxUpgradeTimes} 次`;
-      upgradeBtn.addEventListener('click', async () => {
-        if (!socket) return;
-        if (maxUpgradeTimes <= 0) return;
-        const timesText = await promptModal({
-          title: '法宝一键升级',
-          text: `${entry.name || entry.id} 当前 Lv${level}，每次消耗法宝经验丹 x${upgradeConsume}，最多可升 ${maxUpgradeTimes} 次`,
-          placeholder: '升级次数',
-          value: String(maxUpgradeTimes),
-          type: 'number'
-        });
-        if (timesText == null) return;
-        let times = Math.floor(Number(timesText || maxUpgradeTimes));
-        if (!Number.isFinite(times) || times <= 0) return;
-        times = Math.min(times, maxUpgradeTimes);
-        for (let i = 0; i < times; i += 1) {
-          socket.emit('cmd', { text: `treasure upgrade ${slot}`, source: 'ui' });
-        }
-      });
-    }
-    if (advanceBtn) {
-      const totalQty = treasureMaterials.reduce((sum, mat) => sum + mat.qty, 0);
-      const canAdvance = totalQty >= advanceConsume;
-      advanceBtn.disabled = !canAdvance;
-      advanceBtn.title = `消耗任意法宝 x${advanceConsume}，每${advancePerStage}段提升1阶`;
-      advanceBtn.addEventListener('click', async () => {
-        if (!socket) return;
-        if (!canAdvance) return;
-
-        const materialListText = treasureMaterials.length
-          ? treasureMaterials
-            .map((mat, idx) => `${idx + 1}. ${mat.name || mat.id} x${mat.qty}`)
-            .join('\n')
-          : '无';
-        const selectedIds = await promptMultiSelectModal({
-          title: '选择升段材料',
-          text: `可选法宝：\n${materialListText}\n点击选择要消耗的法宝（可多选）`,
-          options: treasureMaterials.map((mat, idx) => ({
-            value: mat.id,
-            label: `${idx + 1}. ${mat.name || mat.id} x${mat.qty}`
-          })),
-          selectedValues: treasureMaterials.map((mat) => mat.id)
-        });
-        if (selectedIds == null) return;
-        if (!selectedIds.length) {
-          showToast('请至少选择一个法宝材料');
-          return;
-        }
-
-        const selectedQty = treasureMaterials
-          .filter((mat) => selectedIds.includes(mat.id))
-          .reduce((sum, mat) => sum + mat.qty, 0);
-        const maxBySelected = Math.floor(selectedQty / advanceConsume);
-        if (maxBySelected <= 0) {
-          showToast('所选法宝数量不足');
-          return;
-        }
-        socket.emit('cmd', {
-          text: `treasure advance ${slot}|${selectedIds.join(',')}|1`,
-          source: 'ui'
-        });
-      });
-    }
-    if (unequipBtn) {
-      unequipBtn.addEventListener('click', () => {
-        if (!socket) return;
-        socket.emit('cmd', { text: `treasure unequip ${slot}`, source: 'ui' });
-      });
-    }
+      bindTreasurePassiveTooltip(card.querySelector('.treasure-passive-meta'), passiveText);
+    card.addEventListener('click', () => {
+      selectedTreasureEntry = { source: 'equipped', key: String(slot) };
+      selectedTreasurePassiveState = { key: '', expanded: false };
+      renderTreasureModal();
+    });
     treasureUi.equippedList.appendChild(card);
   }
 
@@ -4671,33 +4640,237 @@ function renderTreasureModal() {
     empty.className = 'forge-item';
     empty.textContent = '背包暂无法宝';
     treasureUi.bagList.appendChild(empty);
-    return;
+  } else {
+    bagItems.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = `forge-item treasure-bag-card${selectedTreasureEntry.source === 'bag' && selectedTreasureEntry.key === String(item.id) ? ' selected' : ''}`;
+      applyRarityClass(card, item);
+      const equippedAlready = occupiedIds.has(item.id);
+      const passiveText = treasurePassiveById.get(item.id) || '被动：暂无说明';
+      const roleText = getTreasureRoleText(passiveText);
+      const nameRarityKey = normalizeRarityKey(item.rarity);
+      const qty = Math.floor(Number(item.qty || 0));
+      card.innerHTML = `
+        <div class="treasure-card-topline">
+          <span class="treasure-slot-badge">法宝</span>
+          <span class="treasure-level-chip">库存 x${qty}</span>
+        </div>
+        <div class="treasure-card-name${nameRarityKey ? ` rarity-${nameRarityKey}` : ''}${nameRarityKey === 'ultimate' ? ' ultimate-text' : ''}">${formatItemName(item)}</div>
+        <div class="treasure-card-subtitle">${roleText}</div>
+        <div class="forge-item-meta treasure-passive-meta">${compactTreasurePassiveText(passiveText)}</div>
+        <div class="forge-item-meta">${equippedAlready ? '已装备在槽位中' : hasEmptySlot ? '点击查看详情并装备' : '槽位已满，需先卸下'}</div>
+      `;
+      bindTreasurePassiveTooltip(card.querySelector('.treasure-passive-meta'), passiveText);
+      card.addEventListener('click', () => {
+        selectedTreasureEntry = { source: 'bag', key: String(item.id) };
+        selectedTreasurePassiveState = { key: '', expanded: false };
+        renderTreasureModal();
+      });
+      treasureUi.bagList.appendChild(card);
+    });
   }
 
-  bagItems.forEach((item) => {
-    const card = document.createElement('div');
-    card.className = 'forge-item';
-    applyRarityClass(card, item);
-    const equippedAlready = occupiedIds.has(item.id);
-    const passiveText = treasurePassiveById.get(item.id) || '被动：暂无说明';
-    card.innerHTML = `
-      <div>${formatItemName(item)} x${Math.floor(Number(item.qty || 0))}</div>
-      <div class="forge-item-meta treasure-passive-meta">${compactTreasurePassiveText(passiveText)}</div>
-      <div class="treasure-actions">
-        <button type="button" data-action="equip" data-id="${item.id}">装备</button>
-      </div>
-    `;
-    bindTreasurePassiveTooltip(card.querySelector('.treasure-passive-meta'), passiveText);
-    const equipBtn = card.querySelector('button[data-action="equip"]');
-    if (equipBtn) {
-      equipBtn.disabled = equippedAlready || !hasEmptySlot;
-      equipBtn.addEventListener('click', () => {
-        if (!socket) return;
-        socket.emit('cmd', { text: `treasure equip ${item.id}`, source: 'ui' });
-      });
-    }
-    treasureUi.bagList.appendChild(card);
+  treasureUi.detail.innerHTML = '';
+  const selectedEquipped =
+    selectedTreasureEntry.source === 'equipped'
+      ? equipped.find((entry) => String(entry.slot) === selectedTreasureEntry.key)
+      : null;
+  const selectedBag =
+    selectedTreasureEntry.source === 'bag'
+      ? bagItems.find((item) => String(item.id) === selectedTreasureEntry.key)
+      : null;
+  if (!selectedEquipped && !selectedBag) {
+    treasureUi.detail.textContent = '请选择一件法宝';
+    return;
+  }
+  const createDetailBlock = (title, lines = []) => {
+    const block = document.createElement('div');
+    block.className = 'treasure-detail-block';
+    const header = document.createElement('div');
+    header.className = 'treasure-detail-block-title';
+    header.textContent = title;
+    block.appendChild(header);
+    lines.forEach((text) => {
+      const line = document.createElement('div');
+      line.className = 'treasure-detail-line';
+      line.textContent = text;
+      block.appendChild(line);
+    });
+    return block;
+  };
+  const detailHero = document.createElement('div');
+  detailHero.className = 'treasure-detail-hero';
+  const heroName = document.createElement('div');
+  heroName.className = 'treasure-detail-name';
+  heroName.textContent = selectedEquipped ? (selectedEquipped.name || selectedEquipped.id) : formatItemName(selectedBag);
+  const detailRarityKey = normalizeRarityKey(selectedEquipped?.rarity || selectedBag?.rarity);
+  if (detailRarityKey) {
+    heroName.classList.add(`rarity-${detailRarityKey}`);
+    if (detailRarityKey === 'ultimate') heroName.classList.add('ultimate-text');
+  }
+  detailHero.appendChild(heroName);
+  const detailMetrics = document.createElement('div');
+  detailMetrics.className = 'treasure-detail-metrics';
+  if (selectedEquipped) {
+    const chips = [
+      ['槽位', selectedTreasureEntry.key],
+      ['等级', `${Number(selectedEquipped.level || 1)}/${maxLevel}`],
+      ['阶段', `阶${Math.floor(Number(selectedEquipped.stage || 0))} 段${Math.floor(Number(selectedEquipped.advanceCount || 0))}`],
+      ['加成', `+${Number(selectedEquipped.effectBonusPct || 0).toFixed(1)}%`]
+    ];
+    chips.forEach(([label, value]) => {
+      const chip = document.createElement('span');
+      chip.className = 'treasure-detail-chip';
+      chip.innerHTML = `<em>${label}</em><strong>${value}</strong>`;
+      detailMetrics.appendChild(chip);
+    });
+  } else if (selectedBag) {
+    const chips = [
+      ['库存', `x${Math.floor(Number(selectedBag.qty || 0))}`],
+      ['状态', occupiedIds.has(selectedBag.id) ? '已装备' : hasEmptySlot ? '可装备' : '槽位已满']
+    ];
+    chips.forEach(([label, value]) => {
+      const chip = document.createElement('span');
+      chip.className = 'treasure-detail-chip';
+      chip.innerHTML = `<em>${label}</em><strong>${value}</strong>`;
+      detailMetrics.appendChild(chip);
+    });
+  }
+  detailHero.appendChild(detailMetrics);
+  treasureUi.detail.appendChild(detailHero);
+
+  const selectedPassiveText =
+    treasurePassiveById.get(selectedEquipped?.id || selectedBag?.id) || '被动：暂无说明';
+  const detailKey = `${selectedTreasureEntry.source}:${selectedTreasureEntry.key}`;
+  if (selectedTreasurePassiveState.key !== detailKey) {
+    selectedTreasurePassiveState = { key: detailKey, expanded: false };
+  }
+  const passiveBlock = document.createElement('div');
+  passiveBlock.className = 'treasure-detail-block treasure-passive-block';
+  const passiveHeader = document.createElement('div');
+  passiveHeader.className = 'treasure-detail-block-title treasure-passive-toggle';
+  passiveHeader.textContent = selectedTreasurePassiveState.expanded ? '被动效果（点击收起）' : '被动效果（点击展开）';
+  const passiveLine = document.createElement('div');
+  passiveLine.className = 'treasure-detail-line';
+  passiveLine.textContent = selectedTreasurePassiveState.expanded ? selectedPassiveText : compactTreasurePassiveText(selectedPassiveText);
+  passiveBlock.appendChild(passiveHeader);
+  passiveBlock.appendChild(passiveLine);
+  bindTreasurePassiveTooltip(passiveBlock, selectedPassiveText);
+  passiveBlock.addEventListener('click', () => {
+    selectedTreasurePassiveState = { key: detailKey, expanded: !selectedTreasurePassiveState.expanded };
+    renderTreasureModal();
   });
+  treasureUi.detail.appendChild(passiveBlock);
+
+  if (selectedEquipped) {
+    treasureUi.detail.appendChild(createDetailBlock('法宝信息', [
+      `槽位: ${selectedTreasureEntry.key}`,
+      `绑定属性: ${formatAttrSummary(selectedEquipped.randomAttr || {})}`,
+      `升级消耗: 法宝经验丹 x${upgradeConsume} / 次`,
+      `升段消耗: 任意法宝 x${advanceConsume}，每${advancePerStage}段提升1阶`
+    ]));
+    const actionRow = document.createElement('div');
+    actionRow.className = 'treasure-detail-actions';
+
+    const level = Math.max(1, Math.floor(Number(selectedEquipped.level || 1)));
+    const maxByLevel = Math.max(0, maxLevel - level);
+    const maxByMat = Math.floor(expMaterial / upgradeConsume);
+    const maxUpgradeTimes = Math.max(0, Math.min(maxByLevel, maxByMat));
+    const totalQty = treasureMaterials.reduce((sum, mat) => sum + mat.qty, 0);
+    const canAdvance = totalQty >= advanceConsume;
+
+    const upgradeBtn = document.createElement('button');
+    upgradeBtn.type = 'button';
+    upgradeBtn.textContent = '升级';
+    upgradeBtn.disabled = maxUpgradeTimes <= 0;
+    upgradeBtn.addEventListener('click', async () => {
+      if (!socket || maxUpgradeTimes <= 0) return;
+      const timesText = await promptModal({
+        title: '法宝一键升级',
+        text: `${selectedEquipped.name || selectedEquipped.id} 当前 Lv${level}，每次消耗法宝经验丹 x${upgradeConsume}，最多可升 ${maxUpgradeTimes} 次`,
+        placeholder: '升级次数',
+        value: String(maxUpgradeTimes),
+        type: 'number'
+      });
+      if (timesText == null) return;
+      let times = Math.floor(Number(timesText || maxUpgradeTimes));
+      if (!Number.isFinite(times) || times <= 0) return;
+      times = Math.min(times, maxUpgradeTimes);
+      for (let i = 0; i < times; i += 1) {
+        socket.emit('cmd', { text: `treasure upgrade ${selectedTreasureEntry.key}`, source: 'ui' });
+      }
+    });
+
+    const advanceBtn = document.createElement('button');
+    advanceBtn.type = 'button';
+    advanceBtn.textContent = '升段';
+    advanceBtn.disabled = !canAdvance;
+    advanceBtn.addEventListener('click', async () => {
+      if (!socket || !canAdvance) return;
+      const selectedIds = await promptMultiSelectModal({
+        title: '选择升段材料',
+        text: `请选择要消耗的法宝材料\n每次升段消耗法宝 x${advanceConsume}，已拥有材料总数 ${totalQty}`,
+        options: treasureMaterials.map((mat, idx) => ({
+          value: mat.id,
+          labelHtml: `${mat.name || mat.id} <span class="treasure-material-qty">x${mat.qty}</span>`,
+          description: `材料序号 ${idx + 1} · 当前可用于升段`,
+          className: 'treasure-material-option'
+        })),
+        selectedValues: treasureMaterials.map((mat) => mat.id),
+        optionsClassName: 'pet-synth-choice-options treasure-material-options',
+        modalClassName: 'treasure-material-prompt'
+      });
+      if (selectedIds == null) return;
+      if (!selectedIds.length) {
+        showToast('请至少选择一个法宝材料');
+        return;
+      }
+      const selectedQty = treasureMaterials
+        .filter((mat) => selectedIds.includes(mat.id))
+        .reduce((sum, mat) => sum + mat.qty, 0);
+      const maxBySelected = Math.floor(selectedQty / advanceConsume);
+      if (maxBySelected <= 0) {
+        showToast('所选法宝数量不足');
+        return;
+      }
+      socket.emit('cmd', {
+        text: `treasure advance ${selectedTreasureEntry.key}|${selectedIds.join(',')}|1`,
+        source: 'ui'
+      });
+    });
+
+    const unequipBtn = document.createElement('button');
+    unequipBtn.type = 'button';
+    unequipBtn.textContent = '卸下';
+    unequipBtn.addEventListener('click', () => {
+      if (!socket) return;
+      socket.emit('cmd', { text: `treasure unequip ${selectedTreasureEntry.key}`, source: 'ui' });
+    });
+
+    actionRow.appendChild(upgradeBtn);
+    actionRow.appendChild(advanceBtn);
+    actionRow.appendChild(unequipBtn);
+    treasureUi.detail.appendChild(actionRow);
+  } else if (selectedBag) {
+    const equippedAlready = occupiedIds.has(selectedBag.id);
+    treasureUi.detail.appendChild(createDetailBlock('法宝信息', [
+      `数量: x${Math.floor(Number(selectedBag.qty || 0))}`,
+      `当前状态: ${equippedAlready ? '已装备在槽位中' : hasEmptySlot ? '可直接装备' : '槽位已满，需先卸下法宝'}`,
+      `说明: ${equippedAlready ? '已在已装备列表中，可切换查看详细信息' : '点击下方按钮可直接装备'}`
+    ]));
+    const actionRow = document.createElement('div');
+    actionRow.className = 'treasure-detail-actions';
+    const equipBtn = document.createElement('button');
+    equipBtn.type = 'button';
+    equipBtn.textContent = '装备';
+    equipBtn.disabled = equippedAlready || !hasEmptySlot;
+    equipBtn.addEventListener('click', () => {
+      if (!socket) return;
+      socket.emit('cmd', { text: `treasure equip ${selectedBag.id}`, source: 'ui' });
+    });
+    actionRow.appendChild(equipBtn);
+    treasureUi.detail.appendChild(actionRow);
+  }
 }
 
 function showTreasureModal() {

@@ -141,5 +141,51 @@ export async function saveCharacter(userId, player, realmId = 1) {
 }
 
 export async function deleteCharacter(userId, name, realmId = 1) {
-  return knex('characters').where({ user_id: userId, name, realm_id: realmId }).del();
+  const row = await knex('characters').where({ user_id: userId, name, realm_id: realmId }).first();
+  if (!row) return 0;
+  await knex('deleted_characters').insert({
+    source_character_id: row.id ?? null,
+    user_id: row.user_id,
+    realm_id: row.realm_id || realmId,
+    name: row.name,
+    payload_json: JSON.stringify(row)
+  });
+  return knex('characters').where({ id: row.id }).del();
+}
+
+export async function restoreDeletedCharacter(name, realmId = 1) {
+  const deleted = await knex('deleted_characters')
+    .where({ name, realm_id: realmId })
+    .whereNull('restored_at')
+    .orderBy('deleted_at', 'desc')
+    .first();
+  if (!deleted) {
+    throw new Error('未找到可恢复的已删角色。');
+  }
+  const payload = parseJson(deleted.payload_json, null);
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('已删角色数据损坏，无法恢复。');
+  }
+  const sameNameExists = await knex('characters').where({ name, realm_id: realmId }).first();
+  if (sameNameExists) {
+    throw new Error('当前区服已存在同名角色，无法恢复。');
+  }
+  const insertRow = { ...payload };
+  delete insertRow.id;
+  insertRow.realm_id = realmId;
+  insertRow.updated_at = knex.fn.now();
+  const [restoredId] = await knex('characters').insert(insertRow);
+  await knex('deleted_characters')
+    .where({ id: deleted.id })
+    .update({
+      restored_at: knex.fn.now(),
+      restored_character_id: restoredId
+    });
+  return {
+    deletedId: deleted.id,
+    restoredId,
+    userId: Number(insertRow.user_id || 0),
+    name: String(insertRow.name || name),
+    realmId
+  };
 }
