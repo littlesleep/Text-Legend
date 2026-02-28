@@ -5847,7 +5847,7 @@ body.dark .changeclass-options .chip:disabled {
   font-size: 0.85rem;
   white-space: pre-line;
   pointer-events: none;
-  z-index: 30;
+  z-index: 80;
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 0.12s ease, transform 0.12s ease;
