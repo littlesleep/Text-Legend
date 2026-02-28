@@ -14024,6 +14024,16 @@ io.on('connection', (socket) => {
 
     let loaded = await loadCharacter(session.user_id, name, realmInfo.realmId);
     if (!loaded) {
+      const fallbackRow = await knex('characters')
+        .where({ user_id: session.user_id, name: String(name || '').trim() })
+        .orderBy('updated_at', 'desc')
+        .first();
+      if (fallbackRow) {
+        realmInfo = { realmId: fallbackRow.realm_id || 1 };
+        loaded = await loadCharacter(session.user_id, fallbackRow.name, fallbackRow.realm_id || 1);
+      }
+    }
+    if (!loaded) {
       socket.emit('auth_error', { error: '角色不存在。' });
       socket.disconnect();
       return;

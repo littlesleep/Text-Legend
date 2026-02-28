@@ -9482,9 +9482,10 @@ function enterGame(name) {
     await loadTrainingConfig();
   });
   socket.on('auth_error', (payload) => {
-    appendLine(`认证失败: ${payload.error}`);
+    const errText = String(payload?.error || '认证失败');
+    appendLine(`认证失败: ${errText}`);
     // 如果是"新区不存在"错误,清除旧的realmId并提示用户
-    if (payload.error && payload.error.includes('新区不存在')) {
+    if (errText.includes('新区不存在')) {
       const username = localStorage.getItem('rememberedUser');
       if (username) {
         const key = getUserStorageKey('lastRealm', username);
@@ -9493,12 +9494,12 @@ function enterGame(name) {
       showToast('服务器已合并,已自动清除旧服务器信息,请重新选择服务器');
       exitGame();
     } else {
-      if (payload.error && payload.error.includes('设备已在线')) {
+      if (errText.includes('设备已在线')) {
         showToast('该设备已在线，无法重复登录。');
-      } else if (payload.error && payload.error.includes('设备指纹缺失')) {
+      } else if (errText.includes('设备指纹缺失')) {
         showToast('设备指纹缺失，无法登录。');
       } else {
-        showToast('登录已过期，请重新登录。');
+        showToast(errText);
       }
       exitGame();
     }
