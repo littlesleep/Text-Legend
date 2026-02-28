@@ -14039,6 +14039,26 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // 清理同账号下“无连接”的托管/残留角色，避免误判为多角色同时登录
+    for (const [onlineSocketId, onlinePlayer] of Array.from(players.entries())) {
+      if (!onlinePlayer) continue;
+      if ((onlinePlayer.userId || 0) !== session.user_id) continue;
+      if (onlinePlayer.socket) continue;
+      if (onlinePlayer.name === loaded.name) continue;
+      if (!onlinePlayer.flags) onlinePlayer.flags = {};
+      onlinePlayer.flags.offlineAt = Date.now();
+      delete onlinePlayer.flags.offlineManagedAuto;
+      delete onlinePlayer.flags.offlineManagedAt;
+      delete onlinePlayer.flags.offlineManagedPending;
+      delete onlinePlayer.flags.offlineManagedStartAt;
+      onlinePlayer.deviceKey = null;
+      onlinePlayer.send = () => {};
+      await savePlayer(onlinePlayer);
+      getRealmState(onlinePlayer.realmId || 1).lastSaveTime.delete(onlinePlayer.name);
+      onlinePlayerRankTitles.delete(onlinePlayer.name);
+      players.delete(onlineSocketId);
+    }
+
     // 同账号仅允许一个角色在线：允许同角色重登（走下面的顶号逻辑），禁止其他角色并发登录
     const hasOtherCharacterOnline = Array.from(players.values()).some((onlinePlayer) => {
       if (!onlinePlayer) return false;
