@@ -450,6 +450,7 @@ const treasureUi = {
 };
 let selectedTreasureEntry = { source: '', key: '' };
 let selectedTreasurePassiveState = { key: '', expanded: false };
+let mailItemOptionsSignature = '';
 const chat = {
   log: document.getElementById('chat-log'),
   input: document.getElementById('chat-input'),
@@ -5264,11 +5265,26 @@ function renderMailList(mails) {
     renderMailDetail(null);
     return;
   }
+  const setSelectedMail = (mail, markRead = true) => {
+    if (!mail) return;
+    selectedMailId = mail.id;
+    if (mailUi.list) {
+      Array.from(mailUi.list.querySelectorAll('.mail-item')).forEach((node) => {
+        node.classList.toggle('active', String(node.dataset.mailId || '') === String(mail.id));
+      });
+    }
+    renderMailDetail(mail);
+    if (markRead && currentMailFolder === 'inbox' && socket) {
+      socket.emit('mail_read', { mailId: mail.id });
+    }
+  };
+  const frag = document.createDocumentFragment();
   mailCache.forEach((mail) => {
     const row = document.createElement('div');
     const unread = !mail.read_at;
     const claimed = mail.claimed_at;
     row.className = `mail-item${unread ? ' unread' : ''}${mail.id === selectedMailId ? ' active' : ''}`;
+    row.dataset.mailId = String(mail.id);
     const flags = [];
     if (unread && currentMailFolder === 'inbox') flags.push('\u672A\u8BFB');
     if (claimed && currentMailFolder === 'inbox') flags.push('\u5DF2\u9886');
@@ -5278,30 +5294,35 @@ function renderMailList(mails) {
       row.textContent = `${mail.title || '\u65E0\u6807\u9898'} -> ${mail.to_name || '\u65E0'}${flags.length ? ` (${flags.join('/')})` : ''}`;
     }
     row.addEventListener('click', () => {
-      selectedMailId = mail.id;
-      renderMailList(mailCache);
-      renderMailDetail(mail);
-      if (currentMailFolder === 'inbox' && socket) socket.emit('mail_read', { mailId: mail.id });
+      setSelectedMail(mail);
     });
-    mailUi.list.appendChild(row);
+    frag.appendChild(row);
   });
+  mailUi.list.appendChild(frag);
   const active = mailCache.find((m) => m.id === selectedMailId) || mailCache[0];
-  selectedMailId = active?.id || null;
-  renderMailDetail(active);
+  if (active) setSelectedMail(active, false);
 }
 
-function refreshMailItemOptions() {
+function refreshMailItemOptions(force = false) {
   if (!mailUi.item) return;
+  const items = (lastState?.items || [])
+    .filter((item) => item.type !== 'currency' && !item.unmail)
+    .slice()
+    .sort(sortPetBagEquipByQualityDesc);
+  const nextSignature = items
+    .map((item) => `${String(item.key || item.id || '')}:${Number(item.qty || 0)}:${String(item.rarity || '')}`)
+    .join('|');
+  if (!force && nextSignature === mailItemOptionsSignature) {
+    updateMailQtyLimit();
+    return;
+  }
+  mailItemOptionsSignature = nextSignature;
   const currentValue = mailUi.item.value;
   mailUi.item.innerHTML = '';
   const empty = document.createElement('option');
   empty.value = '';
   empty.textContent = '\u4E0D\u8D60\u9001\u9644\u4EF6';
   mailUi.item.appendChild(empty);
-  const items = (lastState?.items || [])
-    .filter((item) => item.type !== 'currency' && !item.unmail)
-    .slice()
-    .sort(sortPetBagEquipByQualityDesc);
   items.forEach((item) => {
     const opt = document.createElement('option');
     opt.value = item.key || item.id;
@@ -5344,7 +5365,8 @@ function openMailModal() {
   if (mailUi.item) mailUi.item.value = '';
   if (mailUi.qty) mailUi.qty.value = '';
   if (mailUi.gold) mailUi.gold.value = '';
-  refreshMailItemOptions();
+  mailItemOptionsSignature = '';
+  refreshMailItemOptions(true);
   mailUi.modal.classList.remove('hidden');
   requestCurrentMailList();
 }
