@@ -1083,12 +1083,18 @@ async function switchCharacter() {
   activeChar = null;
   lastState = null;
   const username = localStorage.getItem('rememberedUser');
-  const charsKey = getUserStorageKey('savedCharacters', username, currentRealmId);
+  const requestedRealmId = currentRealmId;
+  const charsKey = getUserStorageKey('savedCharacters', username, requestedRealmId);
   let savedChars = [];
   try {
     const data = await apiGet(`/api/characters?realmId=${currentRealmId}`, true);
     savedChars = Array.isArray(data.characters) ? data.characters : [];
-    localStorage.setItem(charsKey, JSON.stringify(savedChars));
+    const actualRealmId = normalizeRealmId(data.realmId, requestedRealmId);
+    if (actualRealmId !== currentRealmId) {
+      setCurrentRealmId(actualRealmId, username);
+    }
+    const actualCharsKey = getUserStorageKey('savedCharacters', username, actualRealmId);
+    localStorage.setItem(actualCharsKey, JSON.stringify(savedChars));
   } catch {
     try {
       savedChars = JSON.parse(localStorage.getItem(charsKey) || '[]');
@@ -1106,10 +1112,17 @@ function getUserStorageKey(key, username, realmId) {
   return user ? `${key}_${user}${realmSuffix}` : key;
 }
 
-function normalizeRealmId(value, count) {
-  const parsed = Math.max(1, Math.floor(Number(value) || 1));
-  if (!count || count < 1) return 1;
-  return Math.min(parsed, count);
+function normalizeRealmId(value, fallback) {
+  const available = Array.isArray(realmList) && realmList.length
+    ? realmList
+        .map((realm) => Math.max(1, Math.floor(Number(realm?.id) || 0)))
+        .filter((id, index, list) => id > 0 && list.indexOf(id) === index)
+    : [1];
+  const parsed = Math.max(1, Math.floor(Number(value) || 0));
+  if (available.includes(parsed)) return parsed;
+  const fallbackRealmId = Math.max(1, Math.floor(Number(fallback) || 0));
+  if (available.includes(fallbackRealmId)) return fallbackRealmId;
+  return available[0] || 1;
 }
 
 function getStoredRealmId(username) {
@@ -1158,13 +1171,12 @@ async function loadRealms() {
     });
   }
   const username = localStorage.getItem('rememberedUser');
-  const count = realmList.length;
   const stored = getStoredRealmId(username);
   // 确保设置的realmId在当前服务器列表中存在
   const storedRealm = realmList.find(r => r.id === stored);
   const validRealmId = storedRealm ? storedRealm.id : Math.max(1, realmList[0]?.id || 1);
   console.log(`loadRealms: username=${username}, stored=${stored}, storedRealm=${storedRealm?.id}, validRealmId=${validRealmId}, realmList=${JSON.stringify(realmList.map(r => r.id))}`);
-  setCurrentRealmId(normalizeRealmId(validRealmId, count), username);
+  setCurrentRealmId(normalizeRealmId(validRealmId, realmList[0]?.id || 1), username);
 }
 
 function ensureRealmsLoaded() {
@@ -1176,7 +1188,8 @@ function ensureRealmsLoaded() {
 
 async function refreshCharactersForRealm() {
   const username = localStorage.getItem('rememberedUser');
-  const charsKey = getUserStorageKey('savedCharacters', username, currentRealmId);
+  const requestedRealmId = currentRealmId;
+  const charsKey = getUserStorageKey('savedCharacters', username, requestedRealmId);
   if (!token) {
     renderCharacters([]);
     return;
@@ -1184,7 +1197,12 @@ async function refreshCharactersForRealm() {
   try {
     const data = await apiGet(`/api/characters?realmId=${currentRealmId}`, true);
     const list = Array.isArray(data.characters) ? data.characters : [];
-    localStorage.setItem(charsKey, JSON.stringify(list));
+    const actualRealmId = normalizeRealmId(data.realmId, requestedRealmId);
+    if (actualRealmId !== currentRealmId) {
+      setCurrentRealmId(actualRealmId, username);
+    }
+    const actualCharsKey = getUserStorageKey('savedCharacters', username, actualRealmId);
+    localStorage.setItem(actualCharsKey, JSON.stringify(list));
     renderCharacters(list);
   } catch (err) {
     let cached = [];
@@ -9214,8 +9232,7 @@ async function login() {
     realmInitPromise = null;
     await ensureRealmsLoaded();
     // 使用后端返回的realmId,而不是localStorage中的
-    const count = realmList.length || 1;
-    const preferredRealmId = data.realmId || normalizeRealmId(1, count);
+    const preferredRealmId = normalizeRealmId(data.realmId, realmList[0]?.id || 1);
     setCurrentRealmId(preferredRealmId, username);
     if (preferredRealmId === data.realmId && Array.isArray(data.characters)) {
       const charsKey = getUserStorageKey('savedCharacters', username, preferredRealmId);
@@ -9238,8 +9255,7 @@ async function login() {
       realmList = [];
       realmInitPromise = null;
       await ensureRealmsLoaded();
-      const count = realmList.length || 1;
-      const newRealmId = normalizeRealmId(1, count);
+      const newRealmId = normalizeRealmId(realmList[0]?.id || 1, realmList[0]?.id || 1);
       setCurrentRealmId(newRealmId, username);
       // 使用新的realmId重新登录
       try {
@@ -9248,7 +9264,7 @@ async function login() {
         token = data.token;
         const storageKey = getUserStorageKey('savedToken', username);
         localStorage.setItem(storageKey, token);
-        const preferredRealmId = data.realmId || normalizeRealmId(1, count);
+        const preferredRealmId = normalizeRealmId(data.realmId, realmList[0]?.id || newRealmId);
         setCurrentRealmId(preferredRealmId, username);
         if (preferredRealmId === data.realmId && Array.isArray(data.characters)) {
           const charsKey = getUserStorageKey('savedCharacters', username, preferredRealmId);
@@ -10118,8 +10134,7 @@ if (exitGameBtn) {
 if (realmSelect) {
   realmSelect.addEventListener('change', () => {
     const username = localStorage.getItem('rememberedUser');
-    const count = realmList.length || 1;
-    const nextRealm = normalizeRealmId(realmSelect.value, count);
+    const nextRealm = normalizeRealmId(realmSelect.value, currentRealmId);
     setCurrentRealmId(nextRealm, username);
     if (!characterSection.classList.contains('hidden')) {
       refreshCharactersForRealm();
