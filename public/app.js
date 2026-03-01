@@ -1094,6 +1094,9 @@ async function switchCharacter() {
       setCurrentRealmId(actualRealmId, username);
     }
     const actualCharsKey = getUserStorageKey('savedCharacters', username, actualRealmId);
+    if (actualCharsKey !== charsKey) {
+      localStorage.removeItem(charsKey);
+    }
     localStorage.setItem(actualCharsKey, JSON.stringify(savedChars));
   } catch {
     try {
@@ -1128,6 +1131,27 @@ function normalizeRealmId(value, fallback) {
 function getStoredRealmId(username) {
   const key = getUserStorageKey('lastRealm', username);
   return Number(localStorage.getItem(key) || 1);
+}
+
+function cleanupStaleSavedCharacterCaches(username) {
+  if (!username) return;
+  const validRealmIds = new Set(
+    (Array.isArray(realmList) ? realmList : [])
+      .map((realm) => Math.max(1, Math.floor(Number(realm?.id) || 0)))
+      .filter((id) => id > 0)
+  );
+  const prefix = `savedCharacters_${username}_r`;
+  const staleKeys = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const rawRealmId = key.slice(prefix.length);
+    const realmId = Math.max(1, Math.floor(Number(rawRealmId) || 0));
+    if (!validRealmIds.has(realmId)) {
+      staleKeys.push(key);
+    }
+  }
+  staleKeys.forEach((key) => localStorage.removeItem(key));
 }
 
 function setCurrentRealmId(realmId, username) {
@@ -1171,6 +1195,7 @@ async function loadRealms() {
     });
   }
   const username = localStorage.getItem('rememberedUser');
+  cleanupStaleSavedCharacterCaches(username);
   const stored = getStoredRealmId(username);
   // 确保设置的realmId在当前服务器列表中存在
   const storedRealm = realmList.find(r => r.id === stored);
@@ -1202,6 +1227,9 @@ async function refreshCharactersForRealm() {
       setCurrentRealmId(actualRealmId, username);
     }
     const actualCharsKey = getUserStorageKey('savedCharacters', username, actualRealmId);
+    if (actualCharsKey !== charsKey) {
+      localStorage.removeItem(charsKey);
+    }
     localStorage.setItem(actualCharsKey, JSON.stringify(list));
     renderCharacters(list);
   } catch (err) {
