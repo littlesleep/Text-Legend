@@ -14681,10 +14681,6 @@ io.on('connection', (socket) => {
       const targetPlayer = onlineTarget || await loadCharacter(targetRow.user_id, targetRow.name, targetRow.realm_id || 1);
       if (!targetPlayer) return fail('目标玩家数据加载失败');
       const targetPetState = normalizePetState(targetPlayer);
-      const targetCount = Array.isArray(targetPetState?.pets) ? targetPetState.pets.length : 0;
-      if (targetCount >= PET_MAX_OWNED) {
-        return fail(`目标玩家宠物已达上限（${PET_MAX_OWNED}）`);
-      }
       const giftCardOwned = Math.max(0, Math.floor(Number((player.inventory || []).find((i) => i?.id === 'pet_gift_card')?.qty || 0)));
       if (giftCardOwned < 1) return fail('宠物赠送卡不足，需要宠物赠送卡 x1');
       if (!removeItem(player, 'pet_gift_card', 1)) return fail('宠物赠送卡扣除失败');
