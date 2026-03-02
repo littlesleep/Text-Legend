@@ -6093,12 +6093,18 @@ function showAutoFullBossModal() {
           return `<span${cls}>${reward?.name || reward?.id || ''} x${Math.max(1, Math.floor(Number(reward?.qty || 1)))}</span>`;
         }).join('、')
         : (it.rewardText || '');
+      const primaryQty = Math.max(1, Math.floor(Number(primaryReward?.qty || 1)));
+      const isSingleRewardDuplicate = rewardItems.length === 1
+        && primaryReward
+        && String(primaryReward.name || primaryReward.id || '').trim() === String(it.name || '').trim()
+        && primaryQty === 1;
+      const detailHtml = isSingleRewardDuplicate ? '' : rewardHtml;
       return {
         value: `redeem:${it.id}`,
         label: `${it.name}（${Number(it.cost || 0)}积分）`,
         labelHtml: titleRarityKey ? `<span class="rarity-${titleRarityKey}">${titleLabel}</span>` : titleLabel,
         description: `${it.rewardText || ''}${extra}${it.desc ? ` | ${it.desc}` : ''}`,
-        descriptionHtml: `${rewardHtml}${extra ? ` <span>${extra}</span>` : ''}${it.desc ? ` <span> | ${it.desc}</span>` : ''}`,
+        descriptionHtml: `${detailHtml}${extra ? `${detailHtml ? ' ' : ''}<span>${extra}</span>` : ''}${it.desc ? `${detailHtml || extra ? ' ' : ''}<span>${detailHtml || extra ? '| ' : ''}${it.desc}</span>` : ''}`,
         className: 'activity-action-shop'
       };
     });
