@@ -13609,14 +13609,18 @@ function getMagicDefenseMultiplier(target) {
   const debuffs = target.status?.debuffs || {};
   const now = Date.now();
   let multiplier = 1;
-  const buff = target.status?.buffs?.mdefBuff;
-  if (buff) {
+  const buffs = target.status?.buffs || {};
+  const applyMdefBuffMultiplier = (key) => {
+    const buff = buffs[key];
+    if (!buff) return;
     if (buff.expiresAt && buff.expiresAt < now) {
-      delete target.status.buffs.mdefBuff;
-    } else {
-      multiplier *= buff.mdefMultiplier || 1;
+      delete buffs[key];
+      return;
     }
-  }
+    multiplier *= buff.mdefMultiplier || 1;
+  };
+  applyMdefBuffMultiplier('mdefBuff');
+  applyMdefBuffMultiplier('moonFairyMdefBuff');
   const poison = debuffs.poison;
   if (poison) {
     if (poison.expiresAt && poison.expiresAt < now) {
@@ -15909,8 +15913,8 @@ function applyMoonFairyAura(player, online) {
     if (!target || target.hp <= 0) return;
     const heal = Math.max(1, Math.floor((target.max_hp || 0) * 0.01));
     applyHealing(target, heal);
-    applyBuff(target, { key: 'defBuff', expiresAt: now + 1500, defMultiplier: 1.2 });
-    applyBuff(target, { key: 'mdefBuff', expiresAt: now + 1500, mdefMultiplier: 1.2 });
+    applyBuff(target, { key: 'moonFairyDefBuff', expiresAt: now + 1500, defMultiplier: 1.2 });
+    applyBuff(target, { key: 'moonFairyMdefBuff', expiresAt: now + 1500, mdefMultiplier: 1.2 });
   });
 }
 

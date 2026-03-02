@@ -14,14 +14,18 @@ export function getDefenseMultiplier(target) {
   const debuffs = target.status?.debuffs || {};
   const now = Date.now();
   let multiplier = 1;
-  const buff = target.status?.buffs?.defBuff;
-  if (buff) {
+  const buffs = target.status?.buffs || {};
+  const applyDefBuffMultiplier = (key) => {
+    const buff = buffs[key];
+    if (!buff) return;
     if (buff.expiresAt && buff.expiresAt < now) {
-      delete target.status.buffs.defBuff;
+      delete buffs[key];
     } else {
       multiplier *= buff.defMultiplier || 1;
     }
-  }
+  };
+  applyDefBuffMultiplier('defBuff');
+  applyDefBuffMultiplier('moonFairyDefBuff');
   const poison = debuffs.poison;
   if (poison) {
     if (poison.expiresAt && poison.expiresAt < now) {
