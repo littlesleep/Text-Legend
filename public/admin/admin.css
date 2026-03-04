@@ -612,23 +612,23 @@ body.theme-dark .admin-switch input:checked + .admin-switch-slider {
 }
 
 .guild-system-compact table.equipment-recycle-table {
-  min-width: 0;
+  min-width: 460px;
   table-layout: fixed;
 }
 
 .guild-system-compact table.equipment-recycle-table th:nth-child(1),
 .guild-system-compact table.equipment-recycle-table td:nth-child(1) {
-  width: 50%;
+  width: 44%;
 }
 
 .guild-system-compact table.equipment-recycle-table th:nth-child(2),
 .guild-system-compact table.equipment-recycle-table td:nth-child(2) {
-  width: 14%;
+  width: 16%;
 }
 
 .guild-system-compact table.equipment-recycle-table th:nth-child(3),
 .guild-system-compact table.equipment-recycle-table td:nth-child(3) {
-  width: 20%;
+  width: 24%;
 }
 
 .guild-system-compact table.equipment-recycle-table th:nth-child(4),
@@ -639,6 +639,23 @@ body.theme-dark .admin-switch input:checked + .admin-switch-slider {
 .guild-system-compact #guild-system-shop-list td:first-child select {
   max-width: none;
   width: 100%;
+}
+
+.guild-system-compact #guild-system-shop-list td:nth-child(2),
+.guild-system-compact #guild-system-shop-list td:nth-child(3),
+.guild-system-compact #guild-system-shop-list th:nth-child(2),
+.guild-system-compact #guild-system-shop-list th:nth-child(3) {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.guild-system-compact #guild-system-shop-list input[data-k='qty'],
+.guild-system-compact #guild-system-shop-list input[data-k='cost'] {
+  width: 100%;
+  min-width: 56px;
+  max-width: 88px;
+  margin: 0 auto;
+  text-align: center;
 }
 
 .harvest-reward-config-container {
