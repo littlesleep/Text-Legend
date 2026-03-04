@@ -13529,6 +13529,35 @@ async function buildState(player) {
       guild_build_battle_bonus_pct: guildBuilding?.battleBonusPct || 0,
       guild_build_hp_bonus_pct: guildBuilding?.hpBonusPct || 0,
       set_bonus: Boolean(player.flags?.setBonusActive),
+      exp_bonus_pct: (() => {
+        const totalPartyCount = partyMembersTotalCount(party) || 1;
+        const partyMult = totalPartyCount > 1 ? (1 + Math.min(0.2 * totalPartyCount, 1.0)) : 1;
+        const cultivationMult = cultivationRewardMultiplier(player);
+        const rewardMult = totalRewardMultiplier({
+          vipActive: isVipActive(player),
+          svipActive: isSvipActive(player),
+          guildActive: Boolean(player.guild),
+          guildBuildRewardPct: Number(player.guild?.buildExpBonusPct || player.guild?.buildRewardBonusPct || 0),
+          cultivationMult,
+          partyMult,
+          treasureExpPct: Number(player.flags?.treasureExpBonusPct || 0)
+        });
+        return Math.max(0, Math.round((rewardMult - 1) * 100));
+      })(),
+      gold_bonus_pct: (() => {
+        const totalPartyCount = partyMembersTotalCount(party) || 1;
+        const partyMult = totalPartyCount > 1 ? (1 + Math.min(0.2 * totalPartyCount, 1.0)) : 1;
+        const cultivationMult = cultivationRewardMultiplier(player);
+        const goldMult = totalGoldRewardMultiplier({
+          vipActive: isVipActive(player),
+          svipActive: isSvipActive(player),
+          guildActive: Boolean(player.guild),
+          guildBuildGoldPct: Number(player.guild?.buildGoldBonusPct || 0),
+          cultivationMult,
+          partyMult
+        });
+        return Math.max(0, Math.round((goldMult - 1) * 100));
+      })(),
       exp_gold_bonus_pct: (() => {
         const totalPartyCount = partyMembersTotalCount(party) || 1;
         const partyMult = totalPartyCount > 1 ? (1 + Math.min(0.2 * totalPartyCount, 1.0)) : 1;
@@ -13550,7 +13579,9 @@ async function buildState(player) {
           cultivationMult,
           partyMult
         });
-        return Math.max(0, Math.round((Math.max(rewardMult, goldMult) - 1) * 100));
+        const expPct = Math.max(0, Math.round((rewardMult - 1) * 100));
+        const goldPct = Math.max(0, Math.round((goldMult - 1) * 100));
+        return Math.max(expPct, goldPct);
       })()
     },
     summon: summonPayloads[0] || null,
@@ -17705,7 +17736,6 @@ async function processMobDeath(player, mob, online) {
   let ultimateDropCount = 0;
 
     partyMembersForReward.forEach((member) => {
-      const partyMult = totalPartyCount > 1 ? (1 + Math.min(0.2 * totalPartyCount, 1.0)) : 1;
       const cultivationMult = cultivationRewardMultiplier(member);
       const rewardMult = totalRewardMultiplier({
         vipActive: isVipActive(member),
@@ -17713,7 +17743,6 @@ async function processMobDeath(player, mob, online) {
         guildActive: Boolean(member.guild),
         guildBuildRewardPct: Number(member.guild?.buildExpBonusPct || member.guild?.buildRewardBonusPct || 0),
         cultivationMult,
-        partyMult,
         treasureExpPct: Number(member.flags?.treasureExpBonusPct || 0)
       });
       const goldRewardMult = totalGoldRewardMultiplier({
@@ -17721,8 +17750,7 @@ async function processMobDeath(player, mob, online) {
         svipActive: isSvipActive(member),
         guildActive: Boolean(member.guild),
         guildBuildGoldPct: Number(member.guild?.buildGoldBonusPct || 0),
-        cultivationMult,
-        partyMult
+        cultivationMult
       });
       const activityBonus = getMobRewardActivityBonus(member, template, Date.now(), { zoneId: mobZoneId, roomId: mobRoomId });
       const finalExp = Math.floor(shareExp * rewardMult * (activityBonus.expMult || 1));

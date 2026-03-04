@@ -295,21 +295,21 @@ export function isActivityActive(id, now = Date.now()) {
     case 'demon_slayer_order':
       return inWindow(t.minuteOfDay, 20 * 60, 20 * 60 + 30);
     case 'cultivation_rush_week':
-      return t.weekday === 6 || t.weekday === 0; // Sat/Sun
+      return t.weekday === 1; // Mon
     case 'refine_carnival':
       return t.weekday === 5 || t.weekday === 6 || t.weekday === 0; // Fri-Sun
     case 'guild_boss_assault':
       return inWindow(t.minuteOfDay, 21 * 60, 22 * 60) && (t.weekday === 2 || t.weekday === 6); // Tue/Sat
     case 'cross_hunter':
-      return t.weekday === 6 && inWindow(t.minuteOfDay, 19 * 60 + 30, 20 * 60 + 30); // Sat 19:30-20:30
+      return t.weekday === 3; // Wed
     case 'treasure_pet_festival':
-      return t.weekday === 0; // Sun
+      return t.weekday === 4; // Thu
     case 'double_dungeon':
       return inWindow(t.minuteOfDay, 18 * 60, 24 * 60); // daily evening
     case 'pet_carnival_day':
       return t.weekday === 5; // Fri
     case 'treasure_sprint_day':
-      return t.weekday === 6; // Sat
+      return t.weekday === 2; // Tue
     case 'world_boss_bounty':
       return true;
     case 'newbie_catchup':

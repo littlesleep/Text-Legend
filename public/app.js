@@ -6869,12 +6869,12 @@ async function showCommissionBoardModal() {
       double: '每日 18:00-24:00',
       bounty: '每日 全天',
       petCarnival: '每周五 全天',
-      treasureSprint: '每周六 全天',
+      treasureSprint: '周二 全天',
       demon: '每日 20:00-20:30',
-      cult: '周六/周日 全天',
+      cult: '周一 全天',
       guild: '周二/周六 21:00-22:00',
-      cross: '周六 19:30-20:30',
-      treasurePet: '周日 全天',
+      cross: '周三 全天',
+      treasurePet: '周四 全天',
       lucky: '周三 19:00-24:00',
       refine: '周五-周日 全天'
     };
@@ -8832,8 +8832,9 @@ function renderState(state) {
     ui.vip.textContent = formatVipDisplay(state.stats);
     if (ui.bonusLine) {
       const setText = state.stats.set_bonus ? '已激活' : '无';
-      const bonusPct = Math.max(0, Math.round(Number(state.stats?.exp_gold_bonus_pct || 0)));
-      ui.bonusLine.textContent = `套装加成：${setText} | 经验/金币加成：${bonusPct}%`;
+      const expBonusPct = Math.max(0, Math.round(Number(state.stats?.exp_bonus_pct ?? state.stats?.exp_gold_bonus_pct ?? 0)));
+      const goldBonusPct = Math.max(0, Math.round(Number(state.stats?.gold_bonus_pct ?? state.stats?.exp_gold_bonus_pct ?? 0)));
+      ui.bonusLine.textContent = `套装加成：${setText} | 经验加成：${expBonusPct}% | 金币加成：${goldBonusPct}%`;
     }
     if (ui.luckyLine) {
       const lucky = state.daily_lucky;
