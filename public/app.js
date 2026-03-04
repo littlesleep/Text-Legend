@@ -497,13 +497,20 @@ const guildUi = {
   modal: document.getElementById('guild-modal'),
   title: document.getElementById('guild-title'),
   list: document.getElementById('guild-list'),
-  page: document.getElementById('guild-page'),
-  prev: document.getElementById('guild-prev'),
-  next: document.getElementById('guild-next'),
+  membersToggle: document.getElementById('guild-members-toggle'),
   invite: document.getElementById('guild-invite'),
   applications: document.getElementById('guild-applications'),
   leave: document.getElementById('guild-leave'),
   close: document.getElementById('guild-close')
+};
+const guildMembersUi = {
+  modal: document.getElementById('guild-members-modal'),
+  title: document.getElementById('guild-members-title'),
+  list: document.getElementById('guild-members-list'),
+  page: document.getElementById('guild-members-page'),
+  prev: document.getElementById('guild-members-prev'),
+  next: document.getElementById('guild-members-next'),
+  close: document.getElementById('guild-members-close')
 };
 const guildListUi = {
   modal: document.getElementById('guild-list-modal'),
@@ -7577,6 +7584,12 @@ function renderGuildModal() {
   if (guildUi.leave) {
     guildUi.leave.classList.remove('hidden');
   }
+  if (guildUi.membersToggle) {
+    const memberLimit = Math.max(0, Number(guildBuildingState?.memberLimit || lastState?.guild?.buildMemberLimit || 0));
+    guildUi.membersToggle.textContent = memberLimit > 0
+      ? `成员列表 ${guildMembers.length}/${memberLimit}`
+      : `成员列表 ${guildMembers.length}`;
+  }
 
   if (guildBuildingState) {
     const canManageBuild = lastState?.guild_role === 'leader' || lastState?.guild_role === 'vice_leader';
@@ -7702,38 +7715,28 @@ function renderGuildModal() {
     guildUi.list.appendChild(buildCard);
   }
 
-  // 计算分页
+  guildUi.modal.classList.remove('hidden');
+}
+
+function renderGuildMembersModal() {
+  if (!guildMembersUi.modal || !guildMembersUi.list) return;
+  guildMembersUi.list.innerHTML = '';
   const totalPages = Math.max(1, Math.ceil(guildMembers.length / GUILD_PAGE_SIZE));
   guildPage = Math.min(Math.max(0, guildPage), totalPages - 1);
   const start = guildPage * GUILD_PAGE_SIZE;
   const pageMembers = guildMembers.slice(start, start + GUILD_PAGE_SIZE);
-  const memberPanel = document.createElement('section');
-  memberPanel.className = 'guild-member-panel';
-  const memberPanelHead = document.createElement('div');
-  memberPanelHead.className = 'guild-member-panel-head';
-  const memberPanelTitle = document.createElement('div');
-  memberPanelTitle.className = 'guild-member-panel-title';
   const memberLimit = Math.max(0, Number(guildBuildingState?.memberLimit || lastState?.guild?.buildMemberLimit || 0));
-  memberPanelTitle.textContent = memberLimit > 0
-    ? `成员列表 ${guildMembers.length}/${memberLimit}`
-    : `成员列表 ${guildMembers.length}`;
-  const memberPanelSub = document.createElement('div');
-  memberPanelSub.className = 'guild-member-panel-sub';
-  memberPanelSub.textContent = guildMembers.length > 0
-    ? `当前显示 ${start + 1}-${Math.min(guildMembers.length, start + pageMembers.length)}`
-    : '当前无成员信息';
-  memberPanelHead.appendChild(memberPanelTitle);
-  memberPanelHead.appendChild(memberPanelSub);
-  memberPanel.appendChild(memberPanelHead);
-  const memberPanelBody = document.createElement('div');
-  memberPanelBody.className = 'guild-member-panel-body';
-  memberPanel.appendChild(memberPanelBody);
+  if (guildMembersUi.title) {
+    guildMembersUi.title.textContent = memberLimit > 0
+      ? `成员列表 ${guildMembers.length}/${memberLimit}`
+      : `成员列表 ${guildMembers.length}`;
+  }
 
   if (!guildMembers.length) {
     const empty = document.createElement('div');
     empty.className = 'sabak-empty';
     empty.textContent = '暂无成员信息。';
-    memberPanelBody.appendChild(empty);
+    guildMembersUi.list.appendChild(empty);
   } else {
     pageMembers.forEach((member) => {
       const row = document.createElement('div');
@@ -7747,7 +7750,6 @@ function renderGuildModal() {
       tag.className = 'tag';
       tag.textContent = roleLabel;
       row.appendChild(tag);
-      // 会长和副会长的权限控制
       const isLeader = lastState?.guild_role === 'leader';
       const isVice = lastState?.guild_role === 'vice_leader';
       const isLeaderOrVice = isLeader || isVice;
@@ -7771,7 +7773,6 @@ function renderGuildModal() {
         }
       }
 
-      // 会长和副会长都可以踢出普通成员
       if (isLeaderOrVice && member.role === 'member') {
         const kickBtn = document.createElement('button');
         kickBtn.textContent = '踢出';
@@ -7780,26 +7781,18 @@ function renderGuildModal() {
         });
         row.appendChild(kickBtn);
       }
-      memberPanelBody.appendChild(row);
+      guildMembersUi.list.appendChild(row);
     });
   }
 
-  // 更新分页信息
-  if (guildUi.page) guildUi.page.textContent = `第 ${guildPage + 1}/${totalPages} 页`;
-  if (guildUi.prev) guildUi.prev.disabled = guildPage === 0;
-  if (guildUi.next) guildUi.next.disabled = guildPage >= totalPages - 1;
-  const memberPanelPager = document.createElement('div');
-  memberPanelPager.className = 'guild-member-panel-pager';
-  if (guildUi.page) {
-    guildUi.page.classList.add('guild-member-inline-page');
-    memberPanelPager.appendChild(guildUi.page);
+  if (guildMembersUi.page) {
+    guildMembersUi.page.textContent = guildMembers.length > 0
+      ? `当前显示 ${start + 1}-${Math.min(guildMembers.length, start + pageMembers.length)} · 第 ${guildPage + 1}/${totalPages} 页`
+      : `第 ${guildPage + 1}/${totalPages} 页`;
   }
-  if (guildUi.prev) memberPanelPager.appendChild(guildUi.prev);
-  if (guildUi.next) memberPanelPager.appendChild(guildUi.next);
-  memberPanel.appendChild(memberPanelPager);
-  guildUi.list.appendChild(memberPanel);
-
-  guildUi.modal.classList.remove('hidden');
+  if (guildMembersUi.prev) guildMembersUi.prev.disabled = guildPage === 0;
+  if (guildMembersUi.next) guildMembersUi.next.disabled = guildPage >= totalPages - 1;
+  guildMembersUi.modal.classList.remove('hidden');
 }
 
 function renderGuildListModal(guilds) {
@@ -10268,6 +10261,9 @@ function enterGame(name) {
       if (guildUi.modal && !guildUi.modal.classList.contains('hidden')) {
         renderGuildModal();
       }
+      if (guildMembersUi.modal && !guildMembersUi.modal.classList.contains('hidden')) {
+        renderGuildMembersModal();
+      }
       return;
     }
     guildMembers = payload.members || [];
@@ -10275,6 +10271,9 @@ function enterGame(name) {
     if (lastState) lastState.guild_building = guildBuildingState;
     if (guildUi.modal && !guildUi.modal.classList.contains('hidden')) {
       renderGuildModal();
+    }
+    if (guildMembersUi.modal && !guildMembersUi.modal.classList.contains('hidden')) {
+      renderGuildMembersModal();
     }
   });
   socket.on('guild_list', (payload) => {
@@ -11958,21 +11957,26 @@ if (observeUi.modal) {
     }
   });
 }
-if (guildUi.prev) {
-  guildUi.prev.addEventListener('click', () => {
+if (guildMembersUi.prev) {
+  guildMembersUi.prev.addEventListener('click', () => {
     if (guildPage > 0) {
       guildPage -= 1;
-      renderGuildModal();
+      renderGuildMembersModal();
     }
   });
 }
-if (guildUi.next) {
-  guildUi.next.addEventListener('click', () => {
+if (guildMembersUi.next) {
+  guildMembersUi.next.addEventListener('click', () => {
     const totalPages = Math.max(1, Math.ceil(guildMembers.length / GUILD_PAGE_SIZE));
     if (guildPage < totalPages - 1) {
       guildPage += 1;
-      renderGuildModal();
+      renderGuildMembersModal();
     }
+  });
+}
+if (guildUi.membersToggle) {
+  guildUi.membersToggle.addEventListener('click', () => {
+    renderGuildMembersModal();
   });
 }
 if (guildUi.invite) {
@@ -12001,6 +12005,19 @@ if (guildUi.leave) {
 if (guildUi.close) {
   guildUi.close.addEventListener('click', () => {
     if (guildUi.modal) guildUi.modal.classList.add('hidden');
+    if (guildMembersUi.modal) guildMembersUi.modal.classList.add('hidden');
+  });
+}
+if (guildMembersUi.close) {
+  guildMembersUi.close.addEventListener('click', () => {
+    if (guildMembersUi.modal) guildMembersUi.modal.classList.add('hidden');
+  });
+}
+if (guildMembersUi.modal) {
+  guildMembersUi.modal.addEventListener('click', (e) => {
+    if (e.target === guildMembersUi.modal) {
+      guildMembersUi.modal.classList.add('hidden');
+    }
   });
 }
 if (guildUi.applications) {

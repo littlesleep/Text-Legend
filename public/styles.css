@@ -6078,6 +6078,63 @@ body.dark .rank-tab.active {
   gap: 10px;
 }
 
+#guild-members-modal .modal-card {
+  width: min(760px, calc(100vw - 24px));
+  max-height: min(82vh, 860px);
+  border-radius: 22px;
+  border: 1px solid rgba(214, 151, 75, 0.24);
+  background:
+    radial-gradient(circle at top right, rgba(255, 185, 94, 0.14), transparent 32%),
+    radial-gradient(circle at top left, rgba(255, 214, 160, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(42, 29, 20, 0.985), rgba(28, 20, 15, 0.985));
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.4);
+  padding: 18px;
+}
+
+#guild-members-modal .modal-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  margin-bottom: 8px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(233, 213, 184, 0.96), rgba(216, 196, 166, 0.92));
+  color: #4c3018;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+#guild-members-modal .modal-text {
+  margin-bottom: 10px;
+  padding: 0 4px;
+  color: #d2b48c;
+  font-size: 0.82rem;
+}
+
+#guild-members-modal .modal-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#guild-members-modal .guild-list {
+  gap: 10px;
+  max-height: min(58vh, 560px);
+  overflow-y: auto;
+  padding: 12px;
+  padding-right: 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(233, 210, 175, 0.16);
+  background: linear-gradient(180deg, rgba(232, 219, 198, 0.94), rgba(217, 200, 176, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 0 0 1px rgba(79, 51, 25, 0.06);
+}
+
+#guild-members-modal .guild-list .sabak-empty {
+  color: #7d5a37;
+  font-style: normal;
+}
+
 .guild-member-panel {
   display: grid;
   gap: 10px;

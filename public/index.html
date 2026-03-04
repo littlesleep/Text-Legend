@@ -945,15 +945,26 @@
     <div class="modal-card">
       <div class="modal-title">行会管理</div>
       <div class="modal-text" id="guild-title"></div>
-      <div class="modal-text" id="guild-page">第 1/1 页</div>
       <div id="guild-list" class="guild-list"></div>
       <div class="modal-actions">
-        <button id="guild-prev">上一页</button>
-        <button id="guild-next">下一页</button>
+        <button id="guild-members-toggle">成员列表</button>
         <button id="guild-invite">邀请成员</button>
         <button id="guild-applications" class="hidden">查看申请</button>
         <button id="guild-leave">退出行会</button>
         <button id="guild-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guild-members-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-title" id="guild-members-title">成员列表</div>
+      <div class="modal-text" id="guild-members-page">第 1/1 页</div>
+      <div id="guild-members-list" class="guild-list"></div>
+      <div class="modal-actions">
+        <button id="guild-members-prev">上一页</button>
+        <button id="guild-members-next">下一页</button>
+        <button id="guild-members-close">关闭</button>
       </div>
     </div>
   </div>

@@ -5492,6 +5492,34 @@ function getMobPersistSnapshot(mob) {
   ]);
 }
 
+function getPlayerHealthBreakdown() {
+  const summary = {
+    total: players.size,
+    connected: 0,
+    managedAuto: 0,
+    managedPending: 0,
+    detached: 0
+  };
+  players.forEach((player) => {
+    const socketConnected = Boolean(player?.socket?.connected);
+    const hasSocketHandle = Boolean(player?.socket?.emit);
+    if (socketConnected || hasSocketHandle) {
+      summary.connected += 1;
+      return;
+    }
+    if (player?.flags?.offlineManagedAuto) {
+      summary.managedAuto += 1;
+      return;
+    }
+    if (player?.flags?.offlineManagedPending) {
+      summary.managedPending += 1;
+      return;
+    }
+    summary.detached += 1;
+  });
+  return summary;
+}
+
 async function logRuntimeHealth(expectedAt = Date.now()) {
   const now = Date.now();
   const loopLagMs = Math.max(0, now - expectedAt);
@@ -5509,11 +5537,12 @@ async function logRuntimeHealth(expectedAt = Date.now()) {
   const externalMb = (memory.external / (1024 * 1024)).toFixed(1);
   const arrayBuffersMb = (memory.arrayBuffers / (1024 * 1024)).toFixed(1);
   const onlineCount = Number(io?.engine?.clientsCount || 0);
-  const playerCount = players.size;
+  const playerHealth = getPlayerHealthBreakdown();
   const realmStateCount = realmStates.size;
   console.log(
     `[health] lag=${loopLagMs}ms rss=${rssMb}MB heap=${heapUsedMb}/${heapTotalMb}MB ext=${externalMb}MB ab=${arrayBuffersMb}MB `
-    + `online=${onlineCount} players=${playerCount} realms=${realmStateCount} pendingSaves=${pendingPlayerSaves.size} `
+    + `online=${onlineCount} players=${playerHealth.total} conn=${playerHealth.connected} managed=${playerHealth.managedAuto} pending=${playerHealth.managedPending} detached=${playerHealth.detached} `
+    + `realms=${realmStateCount} pendingSaves=${pendingPlayerSaves.size} `
     + `mobCache=${mobStatePersistCache.size} mobRows=${mobRespawnRows}`
   );
 }
