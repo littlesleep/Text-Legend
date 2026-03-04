@@ -587,6 +587,60 @@ body.theme-dark .admin-switch input:checked + .admin-switch-slider {
   padding: 5px 6px;
 }
 
+/* 行会系统配置专用：覆盖通用 6 列回收表规则，改为 4 列紧凑布局 */
+.guild-system-compact .compact-config-table:not(.equipment-recycle-table) th:nth-child(1),
+.guild-system-compact .compact-config-table:not(.equipment-recycle-table) td:nth-child(1) {
+  width: 34%;
+}
+
+.guild-system-compact .compact-config-table:not(.equipment-recycle-table) th:nth-child(2),
+.guild-system-compact .compact-config-table:not(.equipment-recycle-table) td:nth-child(2),
+.guild-system-compact .compact-config-table:not(.equipment-recycle-table) th:nth-child(3),
+.guild-system-compact .compact-config-table:not(.equipment-recycle-table) td:nth-child(3) {
+  width: 33%;
+}
+
+.guild-system-compact #guild-system-limit-gold,
+.guild-system-compact #guild-system-limit-points,
+.guild-system-compact #guild-system-cost-gold,
+.guild-system-compact #guild-system-cost-points,
+.guild-system-compact #guild-system-gain-gold,
+.guild-system-compact #guild-system-gain-points {
+  width: 100% !important;
+  min-width: 0;
+  margin: 0;
+}
+
+.guild-system-compact table.equipment-recycle-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.guild-system-compact table.equipment-recycle-table th:nth-child(1),
+.guild-system-compact table.equipment-recycle-table td:nth-child(1) {
+  width: 50%;
+}
+
+.guild-system-compact table.equipment-recycle-table th:nth-child(2),
+.guild-system-compact table.equipment-recycle-table td:nth-child(2) {
+  width: 14%;
+}
+
+.guild-system-compact table.equipment-recycle-table th:nth-child(3),
+.guild-system-compact table.equipment-recycle-table td:nth-child(3) {
+  width: 20%;
+}
+
+.guild-system-compact table.equipment-recycle-table th:nth-child(4),
+.guild-system-compact table.equipment-recycle-table td:nth-child(4) {
+  width: 16%;
+}
+
+.guild-system-compact #guild-system-shop-list td:first-child select {
+  max-width: none;
+  width: 100%;
+}
+
 .harvest-reward-config-container {
   overflow-x: auto;
 }
