@@ -5243,6 +5243,40 @@ function isManagedHostedPlayer(player) {
   return Boolean(player && !player.socket && (player.flags?.offlineManagedAuto || player.flags?.offlineManagedPending));
 }
 
+const MANAGED_HEAVY_FIELD_KEYS = ['warehouse', 'quests'];
+
+function compactManagedPlayerState(player) {
+  if (!player || !isManagedHostedPlayer(player)) return;
+  let stash = player.__managedHeavy;
+  if (!stash || typeof stash !== 'object') stash = {};
+  let changed = false;
+  for (const key of MANAGED_HEAVY_FIELD_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(player, key)) {
+      stash[key] = player[key];
+      delete player[key];
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  Object.defineProperty(player, '__managedHeavy', {
+    value: stash,
+    writable: true,
+    configurable: true,
+    enumerable: false
+  });
+}
+
+function restoreManagedPlayerState(player) {
+  if (!player || !player.__managedHeavy || typeof player.__managedHeavy !== 'object') return false;
+  const stash = player.__managedHeavy;
+  for (const key of MANAGED_HEAVY_FIELD_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(stash, key)) {
+      player[key] = stash[key];
+    }
+  }
+  return true;
+}
+
 function makeManagedPlayerKey(player) {
   const realmId = Math.max(1, Math.floor(Number(player?.realmId || 1) || 1));
   const userId = Math.max(0, Math.floor(Number(player?.userId || 0) || 0));
@@ -6807,7 +6841,11 @@ function getPlayerSaveKey(player) {
 
 async function savePlayerNow(player) {
   if (!player?.userId) return;
+  const wasCompactedManaged = restoreManagedPlayerState(player);
   await saveCharacter(player.userId, player, player.realmId || 1);
+  if (wasCompactedManaged && isManagedHostedPlayer(player)) {
+    compactManagedPlayerState(player);
+  }
 }
 
 function schedulePendingPlayerSaveFlush(delayMs = PLAYER_SAVE_DEBOUNCE_MS) {
@@ -6947,6 +6985,7 @@ async function recoverManagedHostedPlayersOnStartup() {
       if (loaded.rankTitle) {
         onlinePlayerRankTitles.set(loaded.name, loaded.rankTitle);
       }
+      compactManagedPlayerState(loaded);
       players.set(makeManagedPlayerKey(loaded), loaded);
       spawnMobs(loaded.position.zone, loaded.position.room, loaded.realmId || 1);
       recovered += 1;
@@ -16511,6 +16550,9 @@ io.on('connection', (socket) => {
       clearTrade(trade, `交易已取消（${player.name} 离线）。`, trade.realmId ?? lookup.realmId ?? (player.realmId || 1));
     }
       await savePlayer(player, { immediate: true });
+      if (shouldKeepManagedAuto || shouldKeepManagedPending) {
+        compactManagedPlayerState(player);
+      }
       if (!shouldKeepManagedAuto && !shouldKeepManagedPending) {
         getRealmState(player.realmId || 1).lastSaveTime.delete(player.name); // 清理保存时间记录
       }

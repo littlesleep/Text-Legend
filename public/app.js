@@ -505,6 +505,7 @@ const guildUi = {
 };
 const guildMembersUi = {
   modal: document.getElementById('guild-members-modal'),
+  card: document.querySelector('#guild-members-modal .modal-card'),
   title: document.getElementById('guild-members-title'),
   list: document.getElementById('guild-members-list'),
   page: document.getElementById('guild-members-page'),
@@ -7720,6 +7721,7 @@ function renderGuildModal() {
 
 function renderGuildMembersModal() {
   if (!guildMembersUi.modal || !guildMembersUi.list) return;
+  if (guildUi.modal) guildUi.modal.classList.remove('hidden');
   guildMembersUi.list.innerHTML = '';
   const totalPages = Math.max(1, Math.ceil(guildMembers.length / GUILD_PAGE_SIZE));
   guildPage = Math.min(Math.max(0, guildPage), totalPages - 1);
@@ -11958,7 +11960,9 @@ if (observeUi.modal) {
   });
 }
 if (guildMembersUi.prev) {
-  guildMembersUi.prev.addEventListener('click', () => {
+  guildMembersUi.prev.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (guildPage > 0) {
       guildPage -= 1;
       renderGuildMembersModal();
@@ -11966,7 +11970,9 @@ if (guildMembersUi.prev) {
   });
 }
 if (guildMembersUi.next) {
-  guildMembersUi.next.addEventListener('click', () => {
+  guildMembersUi.next.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     const totalPages = Math.max(1, Math.ceil(guildMembers.length / GUILD_PAGE_SIZE));
     if (guildPage < totalPages - 1) {
       guildPage += 1;
@@ -11975,7 +11981,9 @@ if (guildMembersUi.next) {
   });
 }
 if (guildUi.membersToggle) {
-  guildUi.membersToggle.addEventListener('click', () => {
+  guildUi.membersToggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     renderGuildMembersModal();
   });
 }
@@ -12009,8 +12017,15 @@ if (guildUi.close) {
   });
 }
 if (guildMembersUi.close) {
-  guildMembersUi.close.addEventListener('click', () => {
+  guildMembersUi.close.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (guildMembersUi.modal) guildMembersUi.modal.classList.add('hidden');
+  });
+}
+if (guildMembersUi.card) {
+  guildMembersUi.card.addEventListener('click', (e) => {
+    e.stopPropagation();
   });
 }
 if (guildMembersUi.modal) {
