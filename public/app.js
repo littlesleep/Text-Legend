@@ -7707,11 +7707,33 @@ function renderGuildModal() {
   guildPage = Math.min(Math.max(0, guildPage), totalPages - 1);
   const start = guildPage * GUILD_PAGE_SIZE;
   const pageMembers = guildMembers.slice(start, start + GUILD_PAGE_SIZE);
+  const memberPanel = document.createElement('section');
+  memberPanel.className = 'guild-member-panel';
+  const memberPanelHead = document.createElement('div');
+  memberPanelHead.className = 'guild-member-panel-head';
+  const memberPanelTitle = document.createElement('div');
+  memberPanelTitle.className = 'guild-member-panel-title';
+  const memberLimit = Math.max(0, Number(guildBuildingState?.memberLimit || lastState?.guild?.buildMemberLimit || 0));
+  memberPanelTitle.textContent = memberLimit > 0
+    ? `成员列表 ${guildMembers.length}/${memberLimit}`
+    : `成员列表 ${guildMembers.length}`;
+  const memberPanelSub = document.createElement('div');
+  memberPanelSub.className = 'guild-member-panel-sub';
+  memberPanelSub.textContent = guildMembers.length > 0
+    ? `当前显示 ${start + 1}-${Math.min(guildMembers.length, start + pageMembers.length)}`
+    : '当前无成员信息';
+  memberPanelHead.appendChild(memberPanelTitle);
+  memberPanelHead.appendChild(memberPanelSub);
+  memberPanel.appendChild(memberPanelHead);
+  const memberPanelBody = document.createElement('div');
+  memberPanelBody.className = 'guild-member-panel-body';
+  memberPanel.appendChild(memberPanelBody);
 
   if (!guildMembers.length) {
     const empty = document.createElement('div');
+    empty.className = 'sabak-empty';
     empty.textContent = '暂无成员信息。';
-    guildUi.list.appendChild(empty);
+    memberPanelBody.appendChild(empty);
   } else {
     pageMembers.forEach((member) => {
       const row = document.createElement('div');
@@ -7758,7 +7780,7 @@ function renderGuildModal() {
         });
         row.appendChild(kickBtn);
       }
-      guildUi.list.appendChild(row);
+      memberPanelBody.appendChild(row);
     });
   }
 
@@ -7766,6 +7788,16 @@ function renderGuildModal() {
   if (guildUi.page) guildUi.page.textContent = `第 ${guildPage + 1}/${totalPages} 页`;
   if (guildUi.prev) guildUi.prev.disabled = guildPage === 0;
   if (guildUi.next) guildUi.next.disabled = guildPage >= totalPages - 1;
+  const memberPanelPager = document.createElement('div');
+  memberPanelPager.className = 'guild-member-panel-pager';
+  if (guildUi.page) {
+    guildUi.page.classList.add('guild-member-inline-page');
+    memberPanelPager.appendChild(guildUi.page);
+  }
+  if (guildUi.prev) memberPanelPager.appendChild(guildUi.prev);
+  if (guildUi.next) memberPanelPager.appendChild(guildUi.next);
+  memberPanel.appendChild(memberPanelPager);
+  guildUi.list.appendChild(memberPanel);
 
   guildUi.modal.classList.remove('hidden');
 }

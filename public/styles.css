@@ -6078,6 +6078,55 @@ body.dark .rank-tab.active {
   gap: 10px;
 }
 
+.guild-member-panel {
+  display: grid;
+  gap: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(118, 70, 22, 0.22);
+  background: linear-gradient(180deg, rgba(255, 247, 234, 0.96), rgba(247, 226, 198, 0.9));
+  padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.guild-member-panel-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.guild-member-panel-title {
+  font-weight: 700;
+  color: #4a2c14;
+  font-size: 0.95rem;
+}
+
+.guild-member-panel-sub {
+  font-size: 0.74rem;
+  color: #8b653f;
+}
+
+.guild-member-panel-body {
+  display: grid;
+  gap: 10px;
+}
+
+.guild-member-panel-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+  border-top: 1px solid rgba(118, 70, 22, 0.12);
+}
+
+.guild-member-inline-page {
+  margin-right: auto;
+  margin-bottom: 0;
+  color: #7b5430;
+  font-size: 0.8rem;
+}
+
 .guild-member {
   display: flex;
   align-items: center;
