@@ -18190,9 +18190,14 @@ function updateSpecialBossStatsBasedOnPlayers() {
 }
 
 const COMBAT_STATE_FLUSH_BATCH_SIZE = 24;
+const COMBAT_NON_CRITICAL_INTERVAL_MS = 5000;
+const COMBAT_BOSS_SCALE_INTERVAL_MS = 3000;
+const COMBAT_MANAGED_SHARDS = 3;
 const combatStateDirtyQueue = new Set();
 let combatStateFlushScheduled = false;
 let combatStateFlushRunning = false;
+let combatTickSeq = 0;
+let combatLastBossScaleAt = 0;
 
 function scheduleCombatStateFlush() {
   if (combatStateFlushScheduled) return;
@@ -18237,20 +18242,47 @@ async function flushCombatStateQueue() {
   }
 }
 
+function hashCombatShardKey(text) {
+  const str = String(text || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function shouldProcessManagedPlayerThisTick(player, shardIndex, shardCount = COMBAT_MANAGED_SHARDS) {
+  const size = Math.max(1, Math.floor(Number(shardCount || 1)));
+  if (size <= 1) return true;
+  const key = player?.name || player?.id || '';
+  if (!key) return true;
+  return (hashCombatShardKey(key) % size) === (Math.max(0, shardIndex) % size);
+}
+
 async function combatTick() {
   const markStateDirty = (player) => {
     if (!player) return;
     enqueueCombatStateFlush(player);
   };
+  combatTickSeq += 1;
+  const tickNow = Date.now();
+  const managedShardIndex = combatTickSeq % COMBAT_MANAGED_SHARDS;
   const online = listOnlinePlayers();
   const roomMobsCache = new Map();
   const regenRooms = new Set();
 
-  // 更新特殊BOSS属性
-  updateSpecialBossStatsBasedOnPlayers();
+  // 特殊BOSS人数缩放改为低频执行，避免每秒全图扫描
+  if (tickNow - combatLastBossScaleAt >= COMBAT_BOSS_SCALE_INTERVAL_MS) {
+    updateSpecialBossStatsBasedOnPlayers();
+    combatLastBossScaleAt = tickNow;
+  }
 
   for (const player of online) {
     const now = Date.now();
+    const isManagedPlayer = Boolean(!player?.socket && (player?.flags?.offlineManagedAuto || player?.flags?.offlineManagedPending));
+    if (isManagedPlayer && !shouldProcessManagedPlayerThisTick(player, managedShardIndex)) {
+      continue;
+    }
     if (!player?.socket && player?.flags?.offlineManagedPending) {
       const startAt = Number(player.flags.offlineManagedStartAt || 0);
       if (!isSvipActive(player)) {
@@ -18282,14 +18314,17 @@ async function combatTick() {
     applyMoonFairyAura(player, online);
     processPotionRegen(player);
     updateRedNameAutoClear(player);
-    updateAutoDailyUsage(player);
-    recordHarvestOnlineMinute(player);
-    autoClaimActivityRewardsForPlayer(player, now).catch(() => {});
     tryRestoreAutoFullAfterManualDowngrade(player);
     downgradeAutoFullInZhuxianTower(player);
-    normalizeZhuxianTowerProgress(player);
-    ensureZhuxianTowerPosition(player);
-    ensurePersonalBossPosition(player);
+    if (!player._combatAuxAt || (now - Number(player._combatAuxAt || 0)) >= COMBAT_NON_CRITICAL_INTERVAL_MS) {
+      updateAutoDailyUsage(player);
+      recordHarvestOnlineMinute(player);
+      autoClaimActivityRewardsForPlayer(player, now).catch(() => {});
+      normalizeZhuxianTowerProgress(player);
+      ensureZhuxianTowerPosition(player);
+      ensurePersonalBossPosition(player);
+      player._combatAuxAt = now;
+    }
     const realmId = player.realmId || 1;
     const roomRealmId = getRoomRealmId(player.position.zone, player.position.room, realmId);
     const roomKey = `${roomRealmId}:${player.position.zone}:${player.position.room}`;
