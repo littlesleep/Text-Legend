@@ -5180,7 +5180,7 @@ async function reconnectByRouteSwitch(lineName) {
       clearTimeout(timer);
       resolve(Boolean(ok));
     };
-    const timer = setTimeout(() => done(false), 12000);
+    const timer = setTimeout(() => done(false), 20000);
     enterGame(target, {
       reconnect: true,
       preserveLog: true,
@@ -5237,7 +5237,12 @@ async function openRouteSwitchModal() {
   await ensureRouteLinesLoaded();
   const enabledLines = (Array.isArray(routeLines) ? routeLines : [])
     .filter((line) => line.enabled !== false)
-    .sort((a, b) => (a.priority - b.priority) || String(a.id).localeCompare(String(b.id)));
+    .sort((a, b) => {
+      const aCurrent = String(a.id) === String(activeRouteLine?.id) ? 0 : 1;
+      const bCurrent = String(b.id) === String(activeRouteLine?.id) ? 0 : 1;
+      if (aCurrent !== bCurrent) return aCurrent - bCurrent;
+      return (a.priority - b.priority) || String(a.id).localeCompare(String(b.id));
+    });
   if (enabledLines.length <= 1) {
     showToast('当前仅有一条可用线路');
     return;
@@ -5250,7 +5255,7 @@ async function openRouteSwitchModal() {
   const latencyMap = new Map(probes.map((entry) => [String(entry.line?.id || ''), entry.latency]));
   const picked = await promptMultiSelectModal({
     title: '手动切换线路',
-    text: '点击线路立即切换（会快速重连恢复角色）',
+    text: '先选择线路，再点击“确定”切换（会快速重连恢复角色）',
     options: enabledLines.map((line) => ({
       value: line.id,
       label: String(line.name || line.id),
@@ -5264,9 +5269,9 @@ async function openRouteSwitchModal() {
     })),
     selectedValues: [activeRouteLine?.id],
     singleSelect: true,
-    submitOnSelect: true,
-    closeOnSelect: true,
-    hideOk: true
+    submitOnSelect: false,
+    closeOnSelect: false,
+    hideOk: false
   });
   const lineId = Array.isArray(picked) && picked[0] ? String(picked[0]) : '';
   setLineAutoStatus(`线路：${String(activeRouteLine?.name || '默认线路')}`);
@@ -10503,7 +10508,6 @@ function enterGame(name, options = {}) {
   socket.on('connect_error', (err) => {
     const message = String(err?.message || '连接失败');
     appendLine(`连接失败: ${message}`);
-    notifyFail(message);
   });
   socket.on('disconnect', () => {
     antiKey = '';
