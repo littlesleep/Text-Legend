@@ -5213,7 +5213,7 @@ async function probeRouteSocketLine(line, timeoutMs = 5000) {
     const timer = setTimeout(() => finish(false, '探测超时'), Math.max(1200, Math.floor(Number(timeoutMs || 0))));
     try {
       const opts = {
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'],
         reconnection: false,
         timeout: Math.max(1000, Math.floor(Number(timeoutMs || 0)))
       };
@@ -10510,6 +10510,7 @@ function enterGame(name, options = {}) {
   pendingCmds = [];
   const socketBaseUrl = getSocketBaseUrl();
   const socketOpts = {
+    transports: ['websocket'],
     forceNew: reconnect,
     reconnection: true,
     reconnectionAttempts: reconnect ? 5 : Infinity,
