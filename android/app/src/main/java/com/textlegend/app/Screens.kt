@@ -1413,6 +1413,11 @@ private fun formatCountdown(seconds: Int?): String {
     return "${mins}:${secs.toString().padStart(2, '0')}"
 }
 
+private fun formatGuildPct(value: Double): String {
+    val rounded = kotlin.math.round(value * 10.0) / 10.0
+    return if (rounded % 1.0 == 0.0) rounded.toInt().toString() else rounded.toString()
+}
+
   private fun rarityColor(rarity: String?): Color = when (normalizeRarityKey(rarity)) {
       "common" -> Color(0xFFB68E66)
       "uncommon" -> Color(0xFF5FCB7B)
@@ -2999,8 +3004,9 @@ private fun GuildBuildingPanel(
         "建设值" to building.exp.toString(),
         "成员上限" to building.memberLimit.toString(),
         "个人贡献" to contribution.toString(),
-        "历练" to "+${building.expBonusPct}%",
-        "金币" to "+${building.goldBonusPct}%"
+        "历练" to "+${formatGuildPct(building.expBonusPct)}%",
+        "金币" to "+${formatGuildPct(building.goldBonusPct)}%",
+        "生命" to "+${formatGuildPct(building.hpBonusPct)}%"
     )
 
     Card(
@@ -3038,7 +3044,7 @@ private fun GuildBuildingPanel(
                     border = BorderStroke(1.dp, Color(0x66FFB95E))
                 ) {
                     Text(
-                        "战斗 +${building.battleBonusPct}%",
+                        "战斗 +${formatGuildPct(building.battleBonusPct)}%",
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         fontSize = 12.sp,
                         color = Color(0xFFFFD39A),
@@ -3073,12 +3079,12 @@ private fun GuildBuildingPanel(
                 Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("加成总览", fontWeight = FontWeight.SemiBold, color = Color(0xFFFFDEB2))
                     Text(
-                        "攻+${building.atkBonusPct}% / 法+${building.magBonusPct}% / 道+${building.spiritBonusPct}%",
+                        "命+${formatGuildPct(building.hpBonusPct)}% / 攻+${formatGuildPct(building.atkBonusPct)}% / 法+${formatGuildPct(building.magBonusPct)}%",
                         color = Color(0xFFE7CCAA),
                         fontSize = 12.sp
                     )
                     Text(
-                        "防+${building.defBonusPct}% / 魔御+${building.mdefBonusPct}% / 收益+${building.rewardBonusPct}%",
+                        "道+${formatGuildPct(building.spiritBonusPct)}% / 防+${formatGuildPct(building.defBonusPct)}% / 魔御+${formatGuildPct(building.mdefBonusPct)}% / 收益+${formatGuildPct(building.rewardBonusPct)}%",
                         color = Color(0xFFE7CCAA),
                         fontSize = 12.sp
                     )

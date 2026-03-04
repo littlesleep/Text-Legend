@@ -537,6 +537,7 @@ const guildBuildingMemberBaseInput = document.getElementById('guild-building-mem
 const guildBuildingMemberPerLevelInput = document.getElementById('guild-building-member-per-level');
 const guildBuildingExpPerLevelInput = document.getElementById('guild-building-exp-per-level');
 const guildBuildingGoldPerLevelInput = document.getElementById('guild-building-gold-per-level');
+const guildBuildingHpPerLevelInput = document.getElementById('guild-building-hp-per-level');
 const guildBuildingAtkPerLevelInput = document.getElementById('guild-building-atk-per-level');
 const guildBuildingMagPerLevelInput = document.getElementById('guild-building-mag-per-level');
 const guildBuildingSpiritPerLevelInput = document.getElementById('guild-building-spirit-per-level');
@@ -1450,6 +1451,11 @@ function renderGuildBuildingLevelRows() {
 }
 
 function collectGuildBuildingConfigFromUi() {
+  const readPct = (input, fallback = 0) => {
+    const numeric = Number(input?.value ?? fallback);
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+    return Math.round(numeric * 10) / 10;
+  };
   const thresholds = [];
   const durationsSec = [];
   if (guildBuildingLevelList) {
@@ -1464,13 +1470,14 @@ function collectGuildBuildingConfigFromUi() {
     gains: {
       memberBaseLimit: Math.max(1, Math.floor(Number(guildBuildingMemberBaseInput?.value || 1))),
       memberPerLevel: Math.max(1, Math.floor(Number(guildBuildingMemberPerLevelInput?.value || 1))),
-      expPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingExpPerLevelInput?.value || 0))),
-      goldPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingGoldPerLevelInput?.value || 0))),
-      atkPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingAtkPerLevelInput?.value || 0))),
-      magPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingMagPerLevelInput?.value || 0))),
-      spiritPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingSpiritPerLevelInput?.value || 0))),
-      defPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingDefPerLevelInput?.value || 0))),
-      mdefPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingMdefPerLevelInput?.value || 0)))
+      expPctPerLevel: readPct(guildBuildingExpPerLevelInput),
+      goldPctPerLevel: readPct(guildBuildingGoldPerLevelInput),
+      hpPctPerLevel: readPct(guildBuildingHpPerLevelInput),
+      atkPctPerLevel: readPct(guildBuildingAtkPerLevelInput),
+      magPctPerLevel: readPct(guildBuildingMagPerLevelInput),
+      spiritPctPerLevel: readPct(guildBuildingSpiritPerLevelInput),
+      defPctPerLevel: readPct(guildBuildingDefPerLevelInput),
+      mdefPctPerLevel: readPct(guildBuildingMdefPerLevelInput)
     }
   };
 }
@@ -1491,13 +1498,14 @@ async function loadGuildBuildingConfig() {
     const gains = config.gains || {};
     if (guildBuildingMemberBaseInput) guildBuildingMemberBaseInput.value = Math.max(1, Number(gains.memberBaseLimit || 20));
     if (guildBuildingMemberPerLevelInput) guildBuildingMemberPerLevelInput.value = Math.max(1, Number(gains.memberPerLevel || 5));
-    if (guildBuildingExpPerLevelInput) guildBuildingExpPerLevelInput.value = Math.max(0, Number(gains.expPctPerLevel || 5));
-    if (guildBuildingGoldPerLevelInput) guildBuildingGoldPerLevelInput.value = Math.max(0, Number(gains.goldPctPerLevel || 5));
-    if (guildBuildingAtkPerLevelInput) guildBuildingAtkPerLevelInput.value = Math.max(0, Number(gains.atkPctPerLevel || 3));
-    if (guildBuildingMagPerLevelInput) guildBuildingMagPerLevelInput.value = Math.max(0, Number(gains.magPctPerLevel || 3));
-    if (guildBuildingSpiritPerLevelInput) guildBuildingSpiritPerLevelInput.value = Math.max(0, Number(gains.spiritPctPerLevel || 3));
-    if (guildBuildingDefPerLevelInput) guildBuildingDefPerLevelInput.value = Math.max(0, Number(gains.defPctPerLevel || 3));
-    if (guildBuildingMdefPerLevelInput) guildBuildingMdefPerLevelInput.value = Math.max(0, Number(gains.mdefPctPerLevel || 3));
+    if (guildBuildingExpPerLevelInput) guildBuildingExpPerLevelInput.value = Math.max(0, Number(gains.expPctPerLevel ?? 0.2));
+    if (guildBuildingGoldPerLevelInput) guildBuildingGoldPerLevelInput.value = Math.max(0, Number(gains.goldPctPerLevel ?? 0.2));
+    if (guildBuildingHpPerLevelInput) guildBuildingHpPerLevelInput.value = Math.max(0, Number(gains.hpPctPerLevel ?? 0.2));
+    if (guildBuildingAtkPerLevelInput) guildBuildingAtkPerLevelInput.value = Math.max(0, Number(gains.atkPctPerLevel ?? 0.2));
+    if (guildBuildingMagPerLevelInput) guildBuildingMagPerLevelInput.value = Math.max(0, Number(gains.magPctPerLevel ?? 0.2));
+    if (guildBuildingSpiritPerLevelInput) guildBuildingSpiritPerLevelInput.value = Math.max(0, Number(gains.spiritPctPerLevel ?? 0.2));
+    if (guildBuildingDefPerLevelInput) guildBuildingDefPerLevelInput.value = Math.max(0, Number(gains.defPctPerLevel ?? 0.2));
+    if (guildBuildingMdefPerLevelInput) guildBuildingMdefPerLevelInput.value = Math.max(0, Number(gains.mdefPctPerLevel ?? 0.2));
     guildBuildingMsg.textContent = '加载成功';
     guildBuildingMsg.style.color = 'green';
     setTimeout(() => { guildBuildingMsg.textContent = ''; }, 1500);

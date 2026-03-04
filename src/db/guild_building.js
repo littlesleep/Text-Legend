@@ -8,13 +8,14 @@ const DEFAULT_GUILD_BUILDING_CONFIG = {
   gains: {
     memberBaseLimit: 20,
     memberPerLevel: 5,
-    expPctPerLevel: 5,
-    goldPctPerLevel: 5,
-    atkPctPerLevel: 3,
-    magPctPerLevel: 3,
-    spiritPctPerLevel: 3,
-    defPctPerLevel: 3,
-    mdefPctPerLevel: 3
+    expPctPerLevel: 0.2,
+    goldPctPerLevel: 0.2,
+    hpPctPerLevel: 0.2,
+    atkPctPerLevel: 0.2,
+    magPctPerLevel: 0.2,
+    spiritPctPerLevel: 0.2,
+    defPctPerLevel: 0.2,
+    mdefPctPerLevel: 0.2
   }
 };
 let guildBuildingConfigCache = JSON.parse(JSON.stringify(DEFAULT_GUILD_BUILDING_CONFIG));
@@ -23,6 +24,7 @@ export const GUILD_BUILD_BRANCH_DEFS = [
   { id: 'member', label: '成员殿' },
   { id: 'exp', label: '历练阁' },
   { id: 'gold', label: '财库阁' },
+  { id: 'hp', label: '生命殿' },
   { id: 'atk', label: '武殿' },
   { id: 'mag', label: '法殿' },
   { id: 'spirit', label: '道殿' },
@@ -32,6 +34,17 @@ export const GUILD_BUILD_BRANCH_DEFS = [
 
 function cloneConfig(input) {
   return JSON.parse(JSON.stringify(input));
+}
+
+function normalizePctValue(value, fallback = 0) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.round(numeric * 10) / 10;
+}
+
+function formatPctText(value) {
+  const rounded = normalizePctValue(value, 0);
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded.toFixed(1));
 }
 
 function normalizeGuildBuildingConfig(raw) {
@@ -53,13 +66,14 @@ function normalizeGuildBuildingConfig(raw) {
   const gains = {
     memberBaseLimit: Math.max(1, Math.floor(Number(gainsInput.memberBaseLimit ?? defaults.gains.memberBaseLimit) || defaults.gains.memberBaseLimit)),
     memberPerLevel: Math.max(1, Math.floor(Number(gainsInput.memberPerLevel ?? defaults.gains.memberPerLevel) || defaults.gains.memberPerLevel)),
-    expPctPerLevel: Math.max(0, Math.floor(Number(gainsInput.expPctPerLevel ?? defaults.gains.expPctPerLevel) || defaults.gains.expPctPerLevel)),
-    goldPctPerLevel: Math.max(0, Math.floor(Number(gainsInput.goldPctPerLevel ?? defaults.gains.goldPctPerLevel) || defaults.gains.goldPctPerLevel)),
-    atkPctPerLevel: Math.max(0, Math.floor(Number(gainsInput.atkPctPerLevel ?? defaults.gains.atkPctPerLevel) || defaults.gains.atkPctPerLevel)),
-    magPctPerLevel: Math.max(0, Math.floor(Number(gainsInput.magPctPerLevel ?? defaults.gains.magPctPerLevel) || defaults.gains.magPctPerLevel)),
-    spiritPctPerLevel: Math.max(0, Math.floor(Number(gainsInput.spiritPctPerLevel ?? defaults.gains.spiritPctPerLevel) || defaults.gains.spiritPctPerLevel)),
-    defPctPerLevel: Math.max(0, Math.floor(Number(gainsInput.defPctPerLevel ?? defaults.gains.defPctPerLevel) || defaults.gains.defPctPerLevel)),
-    mdefPctPerLevel: Math.max(0, Math.floor(Number(gainsInput.mdefPctPerLevel ?? defaults.gains.mdefPctPerLevel) || defaults.gains.mdefPctPerLevel))
+    expPctPerLevel: normalizePctValue(gainsInput.expPctPerLevel, defaults.gains.expPctPerLevel),
+    goldPctPerLevel: normalizePctValue(gainsInput.goldPctPerLevel, defaults.gains.goldPctPerLevel),
+    hpPctPerLevel: normalizePctValue(gainsInput.hpPctPerLevel, defaults.gains.hpPctPerLevel),
+    atkPctPerLevel: normalizePctValue(gainsInput.atkPctPerLevel, defaults.gains.atkPctPerLevel),
+    magPctPerLevel: normalizePctValue(gainsInput.magPctPerLevel, defaults.gains.magPctPerLevel),
+    spiritPctPerLevel: normalizePctValue(gainsInput.spiritPctPerLevel, defaults.gains.spiritPctPerLevel),
+    defPctPerLevel: normalizePctValue(gainsInput.defPctPerLevel, defaults.gains.defPctPerLevel),
+    mdefPctPerLevel: normalizePctValue(gainsInput.mdefPctPerLevel, defaults.gains.mdefPctPerLevel)
   };
   return { thresholds, durationsSec, gains };
 }
@@ -98,6 +112,33 @@ function getBuildMaxLevel() {
   return getGuildBuildingConfig().thresholds.length - 1;
 }
 
+function getBuildThreshold(level) {
+  const config = getGuildBuildingConfig();
+  const thresholds = Array.isArray(config.thresholds) ? config.thresholds : [];
+  const safeLevel = Math.max(0, Math.floor(Number(level || 0)));
+  const configuredMaxLevel = Math.max(0, thresholds.length - 1);
+  if (safeLevel <= configuredMaxLevel) {
+    return Math.max(0, Math.floor(Number(thresholds[safeLevel] || 0)));
+  }
+  const lastThreshold = Math.max(0, Math.floor(Number(thresholds[configuredMaxLevel] || 0)));
+  const prevThreshold = configuredMaxLevel > 0
+    ? Math.max(0, Math.floor(Number(thresholds[configuredMaxLevel - 1] || 0)))
+    : 0;
+  const step = Math.max(1, lastThreshold - prevThreshold, lastThreshold || 100000);
+  return lastThreshold + (safeLevel - configuredMaxLevel) * step;
+}
+
+function getBuildDurationSec(level) {
+  const config = getGuildBuildingConfig();
+  const durations = Array.isArray(config.durationsSec) ? config.durationsSec : [];
+  const safeLevel = Math.max(0, Math.floor(Number(level || 0)));
+  const configuredMaxLevel = Math.max(0, durations.length - 1);
+  if (safeLevel <= configuredMaxLevel) {
+    return Math.max(0, Math.floor(Number(durations[safeLevel] || 0)));
+  }
+  return Math.max(0, Math.floor(Number(durations[configuredMaxLevel] || 0)));
+}
+
 function parseGuildBuildTimeMs(value) {
   if (!value) return null;
   if (value instanceof Date) {
@@ -109,14 +150,18 @@ function parseGuildBuildTimeMs(value) {
 }
 
 export function getGuildBuildLevel(buildExp = 0) {
-  const config = getGuildBuildingConfig();
   const exp = Math.max(0, Math.floor(Number(buildExp || 0)));
+  const configuredMaxLevel = getBuildMaxLevel();
   let level = 0;
-  for (let i = 0; i < config.thresholds.length; i += 1) {
-    if (exp >= config.thresholds[i]) level = i;
+  for (let i = 0; i <= configuredMaxLevel; i += 1) {
+    if (exp >= getBuildThreshold(i)) level = i;
     else break;
   }
-  return level;
+  if (exp < getBuildThreshold(configuredMaxLevel)) return level;
+  const lastThreshold = getBuildThreshold(configuredMaxLevel);
+  const nextThreshold = getBuildThreshold(configuredMaxLevel + 1);
+  const step = Math.max(1, nextThreshold - lastThreshold);
+  return configuredMaxLevel + Math.floor((exp - lastThreshold) / step);
 }
 
 function normalizeBranchLevels(raw, fallbackLevel = 0) {
@@ -128,13 +173,13 @@ function normalizeBranchLevels(raw, fallbackLevel = 0) {
       parsed = null;
     }
   }
-  const safeFallback = Math.max(0, Math.min(getBuildMaxLevel(), Math.floor(Number(fallbackLevel || 0))));
+  const safeFallback = Math.max(0, Math.floor(Number(fallbackLevel || 0)));
   const levels = {};
   for (const def of GUILD_BUILD_BRANCH_DEFS) {
     const source = parsed && typeof parsed === 'object' ? parsed[def.id] : undefined;
     const useFallback = source === undefined || source === null || source === '';
     const rawLevel = useFallback ? safeFallback : source;
-    levels[def.id] = Math.max(0, Math.min(getBuildMaxLevel(), Math.floor(Number(rawLevel || 0))));
+    levels[def.id] = Math.max(0, Math.floor(Number(rawLevel || 0)));
   }
   return levels;
 }
@@ -146,39 +191,43 @@ function serializeBranchLevels(levels, fallbackLevel = 0) {
 function getBranchBonus(branchId, level) {
   const config = getGuildBuildingConfig();
   const gains = config.gains || DEFAULT_GUILD_BUILDING_CONFIG.gains;
-  const safeLevel = Math.max(0, Math.min(getBuildMaxLevel(), Math.floor(Number(level || 0))));
+  const safeLevel = Math.max(0, Math.floor(Number(level || 0)));
   switch (branchId) {
     case 'member': {
       const value = Math.max(1, Math.floor(Number(gains.memberBaseLimit || 20))) + safeLevel * Math.max(1, Math.floor(Number(gains.memberPerLevel || 5)));
       return { kind: 'member', value, text: `成员上限 ${value}` };
     }
     case 'exp': {
-      const value = safeLevel * Math.max(0, Math.floor(Number(gains.expPctPerLevel || 0)));
-      return { kind: 'pct', value, text: `经验 +${value}%` };
+      const value = normalizePctValue(safeLevel * Number(gains.expPctPerLevel || 0));
+      return { kind: 'pct', value, text: `经验 +${formatPctText(value)}%` };
     }
     case 'gold': {
-      const value = safeLevel * Math.max(0, Math.floor(Number(gains.goldPctPerLevel || 0)));
-      return { kind: 'pct', value, text: `金币 +${value}%` };
+      const value = normalizePctValue(safeLevel * Number(gains.goldPctPerLevel || 0));
+      return { kind: 'pct', value, text: `金币 +${formatPctText(value)}%` };
+    }
+    case 'hp': {
+      const value = normalizePctValue(safeLevel * Number(gains.hpPctPerLevel || 0));
+      return { kind: 'pct', value, text: `生命 +${formatPctText(value)}%` };
     }
     case 'atk': {
-      const value = safeLevel * Math.max(0, Math.floor(Number(gains.atkPctPerLevel || 0)));
-      return { kind: 'pct', value, text: `攻击 +${value}%` };
+      const value = normalizePctValue(safeLevel * Number(gains.atkPctPerLevel || 0));
+      return { kind: 'pct', value, text: `攻击 +${formatPctText(value)}%` };
     }
     case 'mag': {
-      const value = safeLevel * Math.max(0, Math.floor(Number(gains.magPctPerLevel || 0)));
-      return { kind: 'pct', value, text: `魔法 +${value}%` };
+      const value = normalizePctValue(safeLevel * Number(gains.magPctPerLevel || 0));
+      return { kind: 'pct', value, text: `魔法 +${formatPctText(value)}%` };
     }
     case 'spirit': {
-      const value = safeLevel * Math.max(0, Math.floor(Number(gains.spiritPctPerLevel || 0)));
-      return { kind: 'pct', value, text: `道术 +${value}%` };
+      const value = normalizePctValue(safeLevel * Number(gains.spiritPctPerLevel || 0));
+      return { kind: 'pct', value, text: `道术 +${formatPctText(value)}%` };
     }
     case 'def': {
-      const value = safeLevel * Math.max(0, Math.floor(Number(gains.defPctPerLevel || 0)));
-      return { kind: 'pct', value, text: `防御 +${value}%` };
+      const value = normalizePctValue(safeLevel * Number(gains.defPctPerLevel || 0));
+      return { kind: 'pct', value, text: `防御 +${formatPctText(value)}%` };
     }
     case 'mdef': {
-      const value = safeLevel * Math.max(0, Math.floor(Number(gains.mdefPctPerLevel || 0)));
-      return { kind: 'pct', value, text: `魔御 +${value}%` };
+      const value = normalizePctValue(safeLevel * Number(gains.mdefPctPerLevel || 0));
+      return { kind: 'pct', value, text: `魔御 +${formatPctText(value)}%` };
     }
     default:
       return { kind: 'pct', value: 0, text: '无加成' };
@@ -231,7 +280,7 @@ async function completeGuildBuildingUpgradeIfReady(guildId) {
   const legacyLevel = getGuildBuildLevel(guild.build_exp || 0);
   const levels = normalizeBranchLevels(guild.build_branch_levels, legacyLevel);
   if (Object.prototype.hasOwnProperty.call(levels, branchId)) {
-    levels[branchId] = Math.min(getBuildMaxLevel(), Math.max(0, Number(levels[branchId] || 0)) + 1);
+    levels[branchId] = Math.max(0, Math.floor(Number(levels[branchId] || 0))) + 1;
   }
   await knex('guilds').where({ id: guildId }).update({
     build_branch_levels: serializeBranchLevels(levels, legacyLevel),
@@ -245,8 +294,6 @@ async function completeGuildBuildingUpgradeIfReady(guildId) {
 
 export function buildGuildBuildingPayload(guild) {
   const config = getGuildBuildingConfig();
-  const thresholds = config.thresholds;
-  const durationsSec = config.durationsSec;
   const buildExp = Math.max(0, Math.floor(Number(guild?.build_exp || 0)));
   const buildGold = Math.max(0, Math.floor(Number(guild?.build_gold || 0)));
   const buildPoints = Math.max(0, Math.floor(Number(guild?.build_points || 0)));
@@ -263,6 +310,7 @@ export function buildGuildBuildingPayload(guild) {
     memberLimit: Math.max(1, Math.floor(Number(config.gains?.memberBaseLimit || DEFAULT_GUILD_BUILDING_CONFIG.gains.memberBaseLimit))),
     expPct: 0,
     goldPct: 0,
+    hpPct: 0,
     atkPct: 0,
     magPct: 0,
     spiritPct: 0,
@@ -272,14 +320,15 @@ export function buildGuildBuildingPayload(guild) {
 
   const branches = GUILD_BUILD_BRANCH_DEFS.map((def) => {
     const level = Math.max(0, Math.floor(Number(branchLevels[def.id] || 0)));
-    const currentThreshold = thresholds[level] || 0;
-    const nextThreshold = thresholds[level + 1] || null;
-    const nextNeed = nextThreshold == null ? 0 : Math.max(0, nextThreshold - buildExp);
-    const nextDurationSec = nextThreshold == null ? 0 : Math.max(0, Math.floor(Number(durationsSec[level + 1] || 0)));
+    const currentThreshold = getBuildThreshold(level);
+    const nextThreshold = getBuildThreshold(level + 1);
+    const nextNeed = Math.max(0, nextThreshold - buildExp);
+    const nextDurationSec = getBuildDurationSec(level + 1);
     const bonus = getBranchBonus(def.id, level);
     if (def.id === 'member') bonuses.memberLimit = bonus.value;
     if (def.id === 'exp') bonuses.expPct = bonus.value;
     if (def.id === 'gold') bonuses.goldPct = bonus.value;
+    if (def.id === 'hp') bonuses.hpPct = bonus.value;
     if (def.id === 'atk') bonuses.atkPct = bonus.value;
     if (def.id === 'mag') bonuses.magPct = bonus.value;
     if (def.id === 'spirit') bonuses.spiritPct = bonus.value;
@@ -294,7 +343,7 @@ export function buildGuildBuildingPayload(guild) {
       nextThreshold,
       nextNeed,
       nextDurationSec,
-      readyToUpgrade: !upgrading && nextThreshold != null && buildExp >= nextThreshold,
+      readyToUpgrade: !upgrading && buildExp >= nextThreshold,
       upgrading: branchUpgrading,
       upgradeStartedAt: branchUpgrading ? upgradeStartedAt : null,
       upgradeEndsAt: branchUpgrading ? upgradeEndsAt : null,
@@ -311,9 +360,9 @@ export function buildGuildBuildingPayload(guild) {
     exp: buildExp,
     gold: buildGold,
     points: buildPoints,
-    currentThreshold: thresholds[maxLevel] || 0,
-    nextThreshold: thresholds[maxLevel + 1] || null,
-    nextNeed: (thresholds[maxLevel + 1] || null) == null ? 0 : Math.max(0, (thresholds[maxLevel + 1] || 0) - buildExp),
+    currentThreshold: getBuildThreshold(maxLevel),
+    nextThreshold: getBuildThreshold(maxLevel + 1),
+    nextNeed: Math.max(0, getBuildThreshold(maxLevel + 1) - buildExp),
     nextDurationSec: activeBranch?.nextDurationSec || 0,
     upgrading,
     upgradeStartedAt,
@@ -323,10 +372,11 @@ export function buildGuildBuildingPayload(guild) {
     activeUpgradeBranch,
     activeUpgradeBranchLabel: activeBranch?.label || null,
     rewardBonusPct: bonuses.expPct,
-    battleBonusPct: Math.max(bonuses.atkPct, bonuses.magPct, bonuses.spiritPct, bonuses.defPct, bonuses.mdefPct),
+    battleBonusPct: Math.max(bonuses.hpPct, bonuses.atkPct, bonuses.magPct, bonuses.spiritPct, bonuses.defPct, bonuses.mdefPct),
     memberLimit: bonuses.memberLimit,
     expBonusPct: bonuses.expPct,
     goldBonusPct: bonuses.goldPct,
+    hpBonusPct: bonuses.hpPct,
     atkBonusPct: bonuses.atkPct,
     magBonusPct: bonuses.magPct,
     spiritBonusPct: bonuses.spiritPct,
@@ -354,9 +404,6 @@ export async function startGuildBuildingUpgrade(guildId, branchId = 'exp') {
   if (!branch) {
     return { ok: false, error: '无效建筑分支。', building };
   }
-  if (branch.nextThreshold == null) {
-    return { ok: false, error: `${branch.label}已达到最高等级。`, building };
-  }
   if (building.exp < branch.nextThreshold) {
     return { ok: false, error: `建设值不足，${branch.label}距离下一级还差 ${branch.nextNeed}。`, building };
   }
@@ -376,7 +423,7 @@ export async function startGuildBuildingUpgrade(guildId, branchId = 'exp') {
 export async function addGuildBuildingContribution(guildId, { gold = 0, points = 0 } = {}) {
   const goldValue = Math.max(0, Math.floor(Number(gold || 0)));
   const pointValue = Math.max(0, Math.floor(Number(points || 0)));
-  const expGain = goldValue + pointValue * 10000;
+  const expGain = Math.floor(goldValue * 0.2) + pointValue * 10000;
   if (expGain <= 0) {
     return getGuildBuildingInfo(guildId);
   }

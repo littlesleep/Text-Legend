@@ -1185,7 +1185,11 @@ export function computeDerived(player) {
   const guildSpiritBonusPct = Math.max(0, Number(player?.guild?.buildSpiritBonusPct || 0)) / 100;
   const guildDefBonusPct = Math.max(0, Number(player?.guild?.buildDefBonusPct || 0)) / 100;
   const guildMdefBonusPct = Math.max(0, Number(player?.guild?.buildMdefBonusPct || 0)) / 100;
+  const guildHpBonusPct = Math.max(0, Number(player?.guild?.buildHpBonusPct || 0)) / 100;
   const guildBattleBonusPct = Math.max(0, Number(player?.guild?.buildBattleBonusPct || 0)) / 100;
+  if (guildHpBonusPct > 0) {
+    player.max_hp += Math.floor(baseDerivedStats.max_hp * guildHpBonusPct);
+  }
   if (guildAtkBonusPct > 0) {
     player.atk += Math.floor(baseDerivedStats.atk * guildAtkBonusPct);
   }
@@ -1207,7 +1211,8 @@ export function computeDerived(player) {
     guildMagBonusPct <= 0 &&
     guildSpiritBonusPct <= 0 &&
     guildDefBonusPct <= 0 &&
-    guildMdefBonusPct <= 0
+    guildMdefBonusPct <= 0 &&
+    guildHpBonusPct <= 0
   ) {
     player.atk += Math.floor(baseDerivedStats.atk * guildBattleBonusPct);
     player.def += Math.floor(baseDerivedStats.def * guildBattleBonusPct);

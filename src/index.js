@@ -27,7 +27,8 @@ import {
   clearMobRespawn,
   saveMobState,
   clearInvalidCrossWorldBossRespawns,
-  cleanupExpiredMobRespawns
+  cleanupExpiredMobRespawns,
+  cleanupExpiredMobRespawnsBatch
 } from './db/mobs.js';
 import {
   listConsignments,
@@ -5125,6 +5126,8 @@ let realmCache = [];
 const RUNTIME_HEALTH_INTERVAL_MS = 60 * 1000;
 let runtimeHealthTimer = null;
 let runtimeHealthExpectedAt = 0;
+const STARTUP_MOB_CLEANUP_BATCH_SIZE = 1000;
+const STARTUP_MOB_CLEANUP_DELAY_MS = 250;
 
 function createSabakState() {
   return {
@@ -5503,10 +5506,15 @@ async function logRuntimeHealth(expectedAt = Date.now()) {
   const rssMb = (memory.rss / (1024 * 1024)).toFixed(1);
   const heapUsedMb = (memory.heapUsed / (1024 * 1024)).toFixed(1);
   const heapTotalMb = (memory.heapTotal / (1024 * 1024)).toFixed(1);
+  const externalMb = (memory.external / (1024 * 1024)).toFixed(1);
+  const arrayBuffersMb = (memory.arrayBuffers / (1024 * 1024)).toFixed(1);
   const onlineCount = Number(io?.engine?.clientsCount || 0);
+  const playerCount = players.size;
+  const realmStateCount = realmStates.size;
   console.log(
-    `[health] lag=${loopLagMs}ms rss=${rssMb}MB heap=${heapUsedMb}/${heapTotalMb}MB `
-    + `online=${onlineCount} pendingSaves=${pendingPlayerSaves.size} mobCache=${mobStatePersistCache.size} mobRows=${mobRespawnRows}`
+    `[health] lag=${loopLagMs}ms rss=${rssMb}MB heap=${heapUsedMb}/${heapTotalMb}MB ext=${externalMb}MB ab=${arrayBuffersMb}MB `
+    + `online=${onlineCount} players=${playerCount} realms=${realmStateCount} pendingSaves=${pendingPlayerSaves.size} `
+    + `mobCache=${mobStatePersistCache.size} mobRows=${mobRespawnRows}`
   );
 }
 
@@ -6819,6 +6827,21 @@ async function flushPendingPlayerSaves() {
   }
   if (pendingPlayerSaves.size > 0) {
     schedulePendingPlayerSaveFlush(nextDelayMs || PLAYER_SAVE_DEBOUNCE_MS);
+  }
+}
+
+async function runStartupMobRespawnCleanup() {
+  let totalDeleted = 0;
+  while (true) {
+    const deleted = Number(await cleanupExpiredMobRespawnsBatch(Date.now(), STARTUP_MOB_CLEANUP_BATCH_SIZE) || 0);
+    if (deleted <= 0) break;
+    totalDeleted += deleted;
+    console.log(`[mob_respawns] startup batch cleaned: ${deleted} (total ${totalDeleted})`);
+    if (deleted < STARTUP_MOB_CLEANUP_BATCH_SIZE) break;
+    await new Promise((resolve) => setTimeout(resolve, STARTUP_MOB_CLEANUP_DELAY_MS));
+  }
+  if (totalDeleted > 0) {
+    console.log(`[mob_respawns] startup background cleanup finished: ${totalDeleted}`);
   }
 }
 
@@ -12827,6 +12850,7 @@ function attachGuildMeta(player, guild, role = 'member') {
     buildMemberLimit: building.memberLimit,
     buildExpBonusPct: building.expBonusPct,
     buildGoldBonusPct: building.goldBonusPct,
+    buildHpBonusPct: building.hpBonusPct,
     buildAtkBonusPct: building.atkBonusPct,
     buildMagBonusPct: building.magBonusPct,
     buildSpiritBonusPct: building.spiritBonusPct,
@@ -12855,6 +12879,7 @@ function syncGuildMetaToOnlineMembers(guildId, building) {
     onlinePlayer.guild.buildMemberLimit = building.memberLimit;
     onlinePlayer.guild.buildExpBonusPct = building.expBonusPct;
     onlinePlayer.guild.buildGoldBonusPct = building.goldBonusPct;
+    onlinePlayer.guild.buildHpBonusPct = building.hpBonusPct;
     onlinePlayer.guild.buildAtkBonusPct = building.atkBonusPct;
     onlinePlayer.guild.buildMagBonusPct = building.magBonusPct;
     onlinePlayer.guild.buildSpiritBonusPct = building.spiritBonusPct;
@@ -13162,6 +13187,7 @@ async function buildState(player) {
       guild_build_level: guildBuilding?.level || 0,
       guild_build_reward_bonus_pct: guildBuilding?.rewardBonusPct || 0,
       guild_build_battle_bonus_pct: guildBuilding?.battleBonusPct || 0,
+      guild_build_hp_bonus_pct: guildBuilding?.hpBonusPct || 0,
       set_bonus: Boolean(player.flags?.setBonusActive),
       exp_gold_bonus_pct: (() => {
         const totalPartyCount = partyMembersTotalCount(party) || 1;
@@ -19292,6 +19318,11 @@ async function start() {
   } catch (err) {
     console.warn('Failed to cleanup expired mob respawns on startup:', err);
   }
+  setTimeout(() => {
+    runStartupMobRespawnCleanup().catch((err) => {
+      console.warn('Failed to run startup background mob respawn cleanup:', err);
+    });
+  }, 5000);
 
   // 寄售到期自动下架（每10分钟）
   setInterval(async () => {

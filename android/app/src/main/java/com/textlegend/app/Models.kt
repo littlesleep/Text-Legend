@@ -150,7 +150,7 @@ data class GuildBuildingBranchInfo(
     val upgradeEndsAt: Long? = null,
     val upgradeRemainingSec: Int = 0,
     val bonusKind: String = "",
-    val bonusValue: Int = 0,
+    val bonusValue: Double = 0.0,
     val bonusText: String = ""
 )
 
@@ -171,16 +171,17 @@ data class GuildBuildingInfo(
     val readyToUpgrade: Boolean = false,
     val activeUpgradeBranch: String? = null,
     val activeUpgradeBranchLabel: String? = null,
-    val rewardBonusPct: Int = 0,
-    val battleBonusPct: Int = 0,
+    val rewardBonusPct: Double = 0.0,
+    val battleBonusPct: Double = 0.0,
     val memberLimit: Int = 0,
-    val expBonusPct: Int = 0,
-    val goldBonusPct: Int = 0,
-    val atkBonusPct: Int = 0,
-    val magBonusPct: Int = 0,
-    val spiritBonusPct: Int = 0,
-    val defBonusPct: Int = 0,
-    val mdefBonusPct: Int = 0,
+    val expBonusPct: Double = 0.0,
+    val goldBonusPct: Double = 0.0,
+    val hpBonusPct: Double = 0.0,
+    val atkBonusPct: Double = 0.0,
+    val magBonusPct: Double = 0.0,
+    val spiritBonusPct: Double = 0.0,
+    val defBonusPct: Double = 0.0,
+    val mdefBonusPct: Double = 0.0,
     val donationLimits: GuildDonateLimits? = null,
     val branches: List<GuildBuildingBranchInfo> = emptyList()
 )

@@ -7619,6 +7619,7 @@ function renderGuildModal() {
         <span>个人贡献 ${contribution}</span>
         <span>经验+${Number(guildBuildingState.expBonusPct || 0)}%</span>
         <span>金币+${Number(guildBuildingState.goldBonusPct || 0)}%</span>
+        <span>生命+${Number(guildBuildingState.hpBonusPct || 0)}%</span>
       </div>
       <div class="guild-build-progress-wrap">
         <div class="guild-build-progress-label">
@@ -7629,7 +7630,7 @@ function renderGuildModal() {
       </div>
       <div class="guild-build-next">当前升级：${guildBuildingState.upgrading ? `${guildBuildingState.activeUpgradeBranchLabel || '建筑'}（剩余 ${upgradeTimeText}）` : '当前无升级中的建筑'}</div>
       <div class="guild-build-next">今日捐献剩余：金币 ${Number(goldDonate.remaining || 0)}/${Number(goldDonate.limit || 0)} 次，活动积分 ${Number(pointDonate.remaining || 0)}/${Number(pointDonate.limit || 0)} 次</div>
-      <div class="guild-build-next">战斗建筑：攻击+${Number(guildBuildingState.atkBonusPct || 0)}% / 魔法+${Number(guildBuildingState.magBonusPct || 0)}% / 道术+${Number(guildBuildingState.spiritBonusPct || 0)}% / 防御+${Number(guildBuildingState.defBonusPct || 0)}% / 魔御+${Number(guildBuildingState.mdefBonusPct || 0)}%</div>
+      <div class="guild-build-next">战斗建筑：生命+${Number(guildBuildingState.hpBonusPct || 0)}% / 攻击+${Number(guildBuildingState.atkBonusPct || 0)}% / 魔法+${Number(guildBuildingState.magBonusPct || 0)}% / 道术+${Number(guildBuildingState.spiritBonusPct || 0)}% / 防御+${Number(guildBuildingState.defBonusPct || 0)}% / 魔御+${Number(guildBuildingState.mdefBonusPct || 0)}%</div>
     `;
     const branchWrap = document.createElement('div');
     branchWrap.className = 'guild-build-branches';

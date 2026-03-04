@@ -99,3 +99,30 @@ export async function cleanupExpiredMobRespawns(nowMs = Date.now()) {
       .del()
   );
 }
+
+export async function cleanupExpiredMobRespawnsBatch(nowMs = Date.now(), limit = 1000) {
+  const now = Math.max(0, Math.floor(Number(nowMs) || 0));
+  const batchSize = Math.max(1, Math.min(5000, Math.floor(Number(limit) || 1000)));
+  const rows = await knex('mob_respawns')
+    .where('respawn_at', '<=', now)
+    .andWhere((q) => q.whereNull('current_hp').orWhere('current_hp', '<=', 0))
+    .select('realm_id', 'zone_id', 'room_id', 'slot_index')
+    .limit(batchSize);
+  if (!rows.length) return 0;
+  return withWriteRetry(() =>
+    knex('mob_respawns')
+      .where((q) => {
+        rows.forEach((row, index) => {
+          const clause = {
+            realm_id: row.realm_id,
+            zone_id: row.zone_id,
+            room_id: row.room_id,
+            slot_index: row.slot_index
+          };
+          if (index === 0) q.where(clause);
+          else q.orWhere(clause);
+        });
+      })
+      .del()
+  );
+}
