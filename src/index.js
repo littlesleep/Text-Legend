@@ -206,6 +206,7 @@ const HARVEST_SEASON_SIGN_SETTING_KEY = 'harvest_season_sign_config_v1';
 const FIRST_RECHARGE_WELFARE_SETTING_KEY = 'first_recharge_welfare_config_v1';
 const INVITE_REWARD_SETTING_KEY = 'invite_reward_config_v1';
 const GUILD_SYSTEM_SETTING_KEY = 'guild_system_config_v1';
+const ROUTE_LINES_SETTING_KEY = 'route_lines_config_v1';
 const INVITE_RECHARGE_BONUS_RATE = 0.2;
 
 async function autoClaimActivityRewardsForPlayer(player, now = Date.now()) {
@@ -287,6 +288,98 @@ const DEFAULT_GUILD_SYSTEM_CONFIG = Object.freeze({
   ]
 });
 let GUILD_SYSTEM_CONFIG = JSON.parse(JSON.stringify(DEFAULT_GUILD_SYSTEM_CONFIG));
+const DEFAULT_ROUTE_LINES_CONFIG = Object.freeze([
+  {
+    id: 'default',
+    name: '默认线路',
+    apiBase: '',
+    socketBase: '',
+    enabled: true,
+    priority: 100
+  }
+]);
+let ROUTE_LINES_CONFIG = JSON.parse(JSON.stringify(DEFAULT_ROUTE_LINES_CONFIG));
+
+function normalizeRouteBaseUrl(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text || text === '/') return '';
+  return text.replace(/\/+$/g, '');
+}
+
+function normalizeRouteLineEntry(raw, index = 0) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const fallbackId = `line_${index + 1}`;
+  const id = String(source.id || fallbackId)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '')
+    .slice(0, 24) || fallbackId;
+  const name = String(source.name || `线路${index + 1}`).trim().slice(0, 32) || `线路${index + 1}`;
+  const domain = normalizeRouteBaseUrl(source.domain);
+  const apiBase = normalizeRouteBaseUrl(source.apiBase || domain);
+  const socketBase = normalizeRouteBaseUrl(source.socketBase || source.apiBase || domain);
+  const enabled = source.enabled !== false;
+  const priority = Math.max(1, Math.min(9999, Math.floor(Number(source.priority ?? 100) || 100)));
+  return {
+    id,
+    name,
+    domain: domain || apiBase,
+    apiBase,
+    socketBase,
+    enabled,
+    priority
+  };
+}
+
+function normalizeRouteLinesConfig(raw) {
+  const list = Array.isArray(raw)
+    ? raw
+    : (Array.isArray(raw?.lines) ? raw.lines : []);
+  const seen = new Set();
+  const normalized = list
+    .map((entry, index) => normalizeRouteLineEntry(entry, index))
+    .filter((entry) => {
+      if (!entry.id) return false;
+      if (seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    })
+    .slice(0, 32);
+  if (normalized.length > 0) return normalized;
+  return DEFAULT_ROUTE_LINES_CONFIG.map((entry) => ({ ...entry }));
+}
+
+function getRouteLinesConfigSnapshot() {
+  return normalizeRouteLinesConfig(ROUTE_LINES_CONFIG)
+    .slice()
+    .sort((a, b) => (a.priority - b.priority) || String(a.id).localeCompare(String(b.id)));
+}
+
+function getPublicRouteLinesSnapshot() {
+  return getRouteLinesConfigSnapshot().filter((line) => line.enabled !== false);
+}
+
+async function loadRouteLinesConfig() {
+  try {
+    const raw = await getSetting(ROUTE_LINES_SETTING_KEY, '');
+    if (!raw) {
+      ROUTE_LINES_CONFIG = normalizeRouteLinesConfig(DEFAULT_ROUTE_LINES_CONFIG);
+      return ROUTE_LINES_CONFIG;
+    }
+    ROUTE_LINES_CONFIG = normalizeRouteLinesConfig(JSON.parse(raw));
+  } catch (err) {
+    console.warn('线路配置加载失败，使用默认值:', err?.message || err);
+    ROUTE_LINES_CONFIG = normalizeRouteLinesConfig(DEFAULT_ROUTE_LINES_CONFIG);
+  }
+  return ROUTE_LINES_CONFIG;
+}
+
+async function setRouteLinesConfig(raw) {
+  const normalized = normalizeRouteLinesConfig(raw);
+  await setSetting(ROUTE_LINES_SETTING_KEY, JSON.stringify(normalized));
+  ROUTE_LINES_CONFIG = normalized;
+  return normalized;
+}
 
 function normalizeFirstRechargeWelfareConfig(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
@@ -834,8 +927,8 @@ function grantFirstRechargeWelfareToPlayer(player, config = null) {
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  pingInterval: 20000,
-  pingTimeout: 60000,
+  pingInterval: 25000,
+  pingTimeout: 90000,
   perMessageDeflate: {
     threshold: 1024
   },
@@ -976,6 +1069,20 @@ app.get('/api/captcha', (req, res) => {
 app.get('/api/realms', async (req, res) => {
   const realms = await refreshRealmCache();
   res.json({ ok: true, count: realms.length, realms });
+});
+
+app.get('/api/route-lines', async (req, res) => {
+  if (!Array.isArray(ROUTE_LINES_CONFIG) || ROUTE_LINES_CONFIG.length <= 0) {
+    await loadRouteLinesConfig();
+  }
+  const lines = getPublicRouteLinesSnapshot();
+  res.json({ ok: true, count: lines.length, lines });
+});
+
+app.get('/api/line-ping', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.json({ ok: true, now: Date.now() });
 });
 
 app.get('/api/invite-link', async (req, res) => {
@@ -3875,6 +3982,28 @@ app.post('/admin/realms/create', async (req, res) => {
   res.json({ ok: true, realmId: id, name });
 });
 
+app.get('/admin/route-lines', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  if (!Array.isArray(ROUTE_LINES_CONFIG) || ROUTE_LINES_CONFIG.length <= 0) {
+    await loadRouteLinesConfig();
+  }
+  const lines = getRouteLinesConfigSnapshot();
+  res.json({ ok: true, count: lines.length, lines });
+});
+
+app.post('/admin/route-lines/update', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    const payload = Array.isArray(req.body?.lines) ? req.body.lines : (req.body || []);
+    const lines = await setRouteLinesConfig(payload);
+    res.json({ ok: true, count: lines.length, lines: getRouteLinesConfigSnapshot() });
+  } catch (err) {
+    res.status(400).json({ error: err?.message || '线路配置保存失败' });
+  }
+});
+
 // 临时API：手动修复旧数据的realm_id
 app.post('/admin/fix-realm-id', async (req, res) => {
   const admin = await requireAdmin(req);
@@ -5124,7 +5253,7 @@ const realmStates = new Map();
 const mobStatePersistCache = new Map();
 let realmCache = [];
 const RUNTIME_HEALTH_INTERVAL_MS = 60 * 1000;
-const RUNTIME_CACHE_CLEANUP_COOLDOWN_MS = 30 * 1000;
+const RUNTIME_CACHE_CLEANUP_COOLDOWN_MS = 15 * 1000;
 const RUNTIME_HEAP_WARN_RATIO = 0.92;
 const RUNTIME_HEAP_CRITICAL_RATIO = 0.96;
 const RUNTIME_LAG_WARN_MS = 180;
@@ -5540,15 +5669,15 @@ function cleanupRuntimeCaches(options = {}) {
     }
   };
 
-  const roomDataMaxAge = aggressive ? 2000 : 10000;
-  const roomMetaMaxAge = aggressive ? 5000 : 20000;
-  const roomTickMaxAge = aggressive ? 5000 : 30000;
-  const autoFullMaxAge = aggressive ? AUTO_FULL_ROOM_CACHE_TTL : (AUTO_FULL_ROOM_CACHE_TTL * 4);
-  const allCharsMaxAge = aggressive ? ALL_CHAR_CACHE_TTL_MS : (ALL_CHAR_CACHE_TTL_MS * 8);
-  const dailyLuckyMaxAge = aggressive ? DAILY_LUCKY_CACHE_TTL : (DAILY_LUCKY_CACHE_TTL * 4);
-  const towerRankMaxAge = aggressive ? ZHUXIAN_TOWER_RANK_CACHE_TTL : (ZHUXIAN_TOWER_RANK_CACHE_TTL * 4);
-  const persistAtMaxAge = aggressive ? (2 * 60 * 60 * 1000) : (8 * 60 * 60 * 1000);
-  const stateThrottleMaxAge = aggressive ? (10 * 60 * 1000) : (30 * 60 * 1000);
+  const roomDataMaxAge = aggressive ? 1000 : 10000;
+  const roomMetaMaxAge = aggressive ? 2500 : 20000;
+  const roomTickMaxAge = aggressive ? 2500 : 30000;
+  const autoFullMaxAge = aggressive ? Math.max(3000, Math.floor(AUTO_FULL_ROOM_CACHE_TTL * 0.5)) : (AUTO_FULL_ROOM_CACHE_TTL * 4);
+  const allCharsMaxAge = aggressive ? Math.max(1500, Math.floor(ALL_CHAR_CACHE_TTL_MS * 0.5)) : (ALL_CHAR_CACHE_TTL_MS * 8);
+  const dailyLuckyMaxAge = aggressive ? Math.max(5000, Math.floor(DAILY_LUCKY_CACHE_TTL * 0.5)) : (DAILY_LUCKY_CACHE_TTL * 4);
+  const towerRankMaxAge = aggressive ? Math.max(5000, Math.floor(ZHUXIAN_TOWER_RANK_CACHE_TTL * 0.5)) : (ZHUXIAN_TOWER_RANK_CACHE_TTL * 4);
+  const persistAtMaxAge = aggressive ? (60 * 60 * 1000) : (8 * 60 * 60 * 1000);
+  const stateThrottleMaxAge = aggressive ? (5 * 60 * 1000) : (30 * 60 * 1000);
 
   result.removed.roomStateData = cleanupMapByAge(roomStateDataCache, now, roomDataMaxAge, (entry) => entry?.at);
   result.removed.roomStateMeta = cleanupMapByAge(
@@ -19571,6 +19700,7 @@ async function start() {
   const trainingPerLevelConfig = await getTrainingPerLevelConfigDb();
   setTrainingPerLevelConfigMem(trainingPerLevelConfig);
   await loadGuildSystemConfig();
+  await loadRouteLinesConfig();
   await loadEquipmentRecycleConfigFromDb();
   await loadHarvestSeasonRewardConfigFromDb();
   await loadHarvestSeasonSignConfigFromDb();

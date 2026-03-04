@@ -5125,6 +5125,129 @@ const realmNameInput = document.getElementById('realm-name-input');
 const mergeSourceSelect = document.getElementById('merge-source-realm');
 const mergeTargetSelect = document.getElementById('merge-target-realm');
 const mergeMsg = document.getElementById('merge-msg');
+const routeLinesList = document.getElementById('route-lines-list');
+const routeLinesMsg = document.getElementById('route-lines-msg');
+const routeLinesLoadBtn = document.getElementById('route-lines-load-btn');
+const routeLinesAddBtn = document.getElementById('route-lines-add-btn');
+const routeLinesSaveBtn = document.getElementById('route-lines-save-btn');
+let routeLinesRowsCache = [];
+
+function routeLineEmptyItem() {
+  return {
+    name: '',
+    domain: '',
+    priority: 100,
+    enabled: true
+  };
+}
+
+function renderRouteLinesRows() {
+  if (!routeLinesList) return;
+  routeLinesList.innerHTML = '';
+  if (!Array.isArray(routeLinesRowsCache) || routeLinesRowsCache.length <= 0) {
+    routeLinesList.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">暂无线路，请点击“+ 添加线路”</td></tr>';
+    return;
+  }
+  routeLinesRowsCache.forEach((row, index) => {
+    const tr = document.createElement('tr');
+    tr.dataset.index = String(index);
+
+    const tdName = document.createElement('td');
+    const inputName = document.createElement('input');
+    inputName.type = 'text';
+    inputName.dataset.k = 'name';
+    inputName.value = String(row.name || '');
+    inputName.placeholder = '线路A';
+    tdName.appendChild(inputName);
+    tr.appendChild(tdName);
+
+    const tdApiBase = document.createElement('td');
+    const inputApiBase = document.createElement('input');
+    inputApiBase.type = 'text';
+    inputApiBase.dataset.k = 'domain';
+    inputApiBase.value = String(row.domain || '');
+    inputApiBase.placeholder = 'https://a.example.com';
+    tdApiBase.appendChild(inputApiBase);
+    tr.appendChild(tdApiBase);
+
+    const tdPriority = document.createElement('td');
+    const inputPriority = document.createElement('input');
+    inputPriority.type = 'number';
+    inputPriority.min = '1';
+    inputPriority.max = '9999';
+    inputPriority.dataset.k = 'priority';
+    inputPriority.value = String(Math.max(1, Math.floor(Number(row.priority || 100))));
+    tdPriority.appendChild(inputPriority);
+    tr.appendChild(tdPriority);
+
+    const tdEnabled = document.createElement('td');
+    tdEnabled.style.textAlign = 'center';
+    const inputEnabled = document.createElement('input');
+    inputEnabled.type = 'checkbox';
+    inputEnabled.dataset.k = 'enabled';
+    inputEnabled.checked = row.enabled !== false;
+    tdEnabled.appendChild(inputEnabled);
+    tr.appendChild(tdEnabled);
+
+    const tdAction = document.createElement('td');
+    const delBtn = document.createElement('button');
+    delBtn.dataset.act = 'del';
+    delBtn.className = 'btn-small';
+    delBtn.textContent = '删除';
+    tdAction.appendChild(delBtn);
+    tr.appendChild(tdAction);
+
+    routeLinesList.appendChild(tr);
+  });
+}
+
+async function loadRouteLinesConfig() {
+  if (!routeLinesMsg) return;
+  routeLinesMsg.textContent = '';
+  try {
+    const data = await api('/admin/route-lines', 'GET');
+    routeLinesRowsCache = Array.isArray(data?.lines)
+      ? data.lines.map((line) => ({
+          name: String(line.name || '').trim(),
+          domain: String(line.domain || line.apiBase || line.socketBase || '').trim(),
+          priority: Math.max(1, Math.floor(Number(line.priority || 100))),
+          enabled: line.enabled !== false
+        }))
+      : [];
+    renderRouteLinesRows();
+    routeLinesMsg.textContent = '加载成功';
+    routeLinesMsg.style.color = 'green';
+    setTimeout(() => {
+      if (routeLinesMsg) routeLinesMsg.textContent = '';
+    }, 1600);
+  } catch (err) {
+    routeLinesMsg.textContent = `加载失败: ${err.message}`;
+    routeLinesMsg.style.color = 'red';
+  }
+}
+
+async function saveRouteLinesConfig() {
+  if (!routeLinesMsg) return;
+  routeLinesMsg.textContent = '';
+  try {
+    const lines = (Array.isArray(routeLinesRowsCache) ? routeLinesRowsCache : [])
+      .map((row, index) => ({
+        name: String(row.name || '').trim() || `线路${index + 1}`,
+        domain: String(row.domain || '').trim(),
+        apiBase: String(row.domain || '').trim(),
+        socketBase: String(row.domain || '').trim(),
+        priority: Math.max(1, Math.floor(Number(row.priority || 100))),
+        enabled: row.enabled !== false
+      }));
+    await api('/admin/route-lines/update', 'POST', { lines });
+    routeLinesMsg.textContent = '保存成功，前台将按延迟自动选线';
+    routeLinesMsg.style.color = 'green';
+    await loadRouteLinesConfig();
+  } catch (err) {
+    routeLinesMsg.textContent = `保存失败: ${err.message}`;
+    routeLinesMsg.style.color = 'red';
+  }
+}
 
 async function refreshRealms() {
   if (!realmsList) return;
@@ -7355,9 +7478,10 @@ async function initDashboard() {
       refreshLootLogStatus();
       refreshStateThrottleStatus();
     refreshRoomVariantStatus();
-    loadCmdRateSettings();
-    await refreshRealms();
-    listSponsors();
+      loadCmdRateSettings();
+      await refreshRealms();
+      loadRouteLinesConfig();
+      listSponsors();
     loadWorldBossSettings();
     loadSpecialBossSettings();
     loadCultivationBossSettings();
@@ -7915,6 +8039,54 @@ if (document.getElementById('realm-create-btn')) {
 }
 if (document.getElementById('realm-refresh-btn')) {
   document.getElementById('realm-refresh-btn').addEventListener('click', refreshRealms);
+}
+if (routeLinesLoadBtn) {
+  routeLinesLoadBtn.addEventListener('click', loadRouteLinesConfig);
+}
+if (routeLinesAddBtn) {
+  routeLinesAddBtn.addEventListener('click', () => {
+    if (!Array.isArray(routeLinesRowsCache)) routeLinesRowsCache = [];
+    routeLinesRowsCache.push(routeLineEmptyItem());
+    renderRouteLinesRows();
+  });
+}
+if (routeLinesSaveBtn) {
+  routeLinesSaveBtn.addEventListener('click', saveRouteLinesConfig);
+}
+if (routeLinesList) {
+  routeLinesList.addEventListener('change', (e) => {
+    const target = e.target;
+    const tr = target?.closest?.('tr[data-index]');
+    const index = Number(tr?.dataset?.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    if (!Array.isArray(routeLinesRowsCache) || !routeLinesRowsCache[index]) return;
+    const row = routeLinesRowsCache[index];
+    if (target?.matches?.('input[data-k="name"]')) {
+      row.name = String(target.value || '').trim();
+      return;
+    }
+    if (target?.matches?.('input[data-k="domain"]')) {
+      row.domain = String(target.value || '').trim();
+      return;
+    }
+    if (target?.matches?.('input[data-k="priority"]')) {
+      row.priority = Math.max(1, Math.floor(Number(target.value || 100)));
+      return;
+    }
+    if (target?.matches?.('input[data-k="enabled"]')) {
+      row.enabled = target.checked === true;
+    }
+  });
+  routeLinesList.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('button[data-act="del"]');
+    if (!btn) return;
+    const tr = btn.closest('tr[data-index]');
+    const index = Number(tr?.dataset?.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    if (!Array.isArray(routeLinesRowsCache)) routeLinesRowsCache = [];
+    routeLinesRowsCache.splice(index, 1);
+    renderRouteLinesRows();
+  });
 }
 if (document.getElementById('fix-realm-btn')) {
   document.getElementById('fix-realm-btn').addEventListener('click', fixRealmId);

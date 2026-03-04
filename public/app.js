@@ -13,6 +13,10 @@ let cachedHighTierRecycleConfig = null;
 let serverTimeBase = null;
 let serverTimeLocal = null;
 let serverTimeTimer = null;
+let serverTimeOffsetTarget = null;
+let serverTimeOffsetSmooth = null;
+const SERVER_TIME_SNAP_THRESHOLD_MS = 5000;
+const SERVER_TIME_MAX_ADJUST_PER_TICK_MS = 250;
 let vipSelfClaimEnabled = true;
 let svipSettings = { prices: { month: 100, quarter: 260, year: 900, permanent: 3000 } };
 let registerInviteCode = '';
@@ -248,7 +252,7 @@ function computeDeviceFingerprint() {
 
 async function loadTrainingConfig() {
   try {
-    const res = await fetch('/api/training-config');
+    const res = await fetch(buildApiUrl('/api/training-config'));
     if (res.ok) {
       const data = await res.json();
       if (data.ok && data.config) {
@@ -980,6 +984,7 @@ const registerOverlayBackdrop = document.getElementById('register-overlay-backdr
 const charMsg = document.getElementById('char-msg');
 const characterList = document.getElementById('character-list');
 const realmSelect = document.getElementById('realm-select');
+const lineAutoStatus = document.getElementById('line-auto-status');
 const loginUserInput = document.getElementById('login-username');
 const captchaUi = {
   loginInput: document.getElementById('login-captcha'),
@@ -994,8 +999,68 @@ const CHAT_CACHE_LIMIT = 200;
 let realmList = [];
 let currentRealmId = 1;
 let realmInitPromise = null;
+let routeLines = [];
+let routeLinesInitPromise = null;
+let activeRouteLine = {
+  id: 'default',
+  name: '默认线路',
+  apiBase: '',
+  socketBase: '',
+  enabled: true,
+  priority: 100
+};
 let sponsorNames = new Set(); // 存储赞助玩家名称
 let sponsorCustomTitles = new Map(); // 存储赞助玩家自定义称号
+
+function normalizeRouteBase(base) {
+  const raw = String(base || '').trim();
+  if (!raw || raw === '/') return '';
+  return raw.replace(/\/+$/g, '');
+}
+
+function normalizeRouteLine(line, index = 0) {
+  const source = line && typeof line === 'object' ? line : {};
+  return {
+    id: String(source.id || `line_${index + 1}`).trim() || `line_${index + 1}`,
+    name: String(source.name || `线路${index + 1}`).trim() || `线路${index + 1}`,
+    apiBase: normalizeRouteBase(source.apiBase),
+    socketBase: normalizeRouteBase(source.socketBase),
+    enabled: source.enabled !== false,
+    priority: Math.max(1, Math.floor(Number(source.priority || 100)))
+  };
+}
+
+function resolveRouteBaseToAbsolute(base) {
+  const normalized = normalizeRouteBase(base);
+  if (!normalized) return '';
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (normalized.startsWith('/')) return `${window.location.origin}${normalized}`;
+  return `${window.location.origin}/${normalized}`;
+}
+
+function getApiBaseUrl() {
+  return resolveRouteBaseToAbsolute(activeRouteLine?.apiBase || '');
+}
+
+function getSocketBaseUrl() {
+  const custom = resolveRouteBaseToAbsolute(activeRouteLine?.socketBase || '');
+  if (custom) return custom;
+  return resolveRouteBaseToAbsolute(activeRouteLine?.apiBase || '');
+}
+
+function buildApiUrl(path) {
+  const text = String(path || '').trim();
+  if (!text) return '/';
+  if (/^https?:\/\//i.test(text)) return text;
+  const normalizedPath = text.startsWith('/') ? text : `/${text}`;
+  const base = getApiBaseUrl();
+  return base ? `${base}${normalizedPath}` : normalizedPath;
+}
+
+function setLineAutoStatus(text) {
+  if (!lineAutoStatus) return;
+  lineAutoStatus.textContent = text;
+}
 
 function sanitizeAutoAfkSkillIds(ids) {
   const available = new Set(
@@ -1019,7 +1084,7 @@ async function refreshCaptcha(target) {
   const input = target === 'login' ? captchaUi.loginInput : captchaUi.registerInput;
   if (!img || !input) return;
   try {
-    const res = await fetch('/api/captcha');
+    const res = await fetch(buildApiUrl('/api/captcha'));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'captcha');
     img.src = `data:image/svg+xml;utf8,${encodeURIComponent(data.svg)}`;
@@ -1065,6 +1130,8 @@ function exitGame() {
   }
   serverTimeBase = null;
   serverTimeLocal = null;
+  serverTimeOffsetTarget = null;
+  serverTimeOffsetSmooth = null;
   if (socket) {
     socket.disconnect();
     socket = null;
@@ -1087,6 +1154,8 @@ async function switchCharacter() {
   }
   serverTimeBase = null;
   serverTimeLocal = null;
+  serverTimeOffsetTarget = null;
+  serverTimeOffsetSmooth = null;
   if (socket) {
     socket.disconnect();
     socket = null;
@@ -1186,6 +1255,7 @@ function setCurrentRealmId(realmId, username) {
 }
 
 async function loadRealms() {
+  await ensureRouteLinesLoaded();
   try {
     const data = await apiGet('/api/realms');
     realmList = Array.isArray(data.realms) ? data.realms : [];
@@ -1566,6 +1636,9 @@ function formatServerTime(ms) {
 }
 
 function getServerNow() {
+  if (serverTimeOffsetSmooth != null) {
+    return Date.now() + serverTimeOffsetSmooth;
+  }
   if (serverTimeBase == null || serverTimeLocal == null) return Date.now();
   const delta = Date.now() - serverTimeLocal;
   return serverTimeBase + delta;
@@ -1573,6 +1646,20 @@ function getServerNow() {
 
 function updateServerTimeDisplay() {
   if (!ui.serverTime || serverTimeBase == null || serverTimeLocal == null) return;
+  if (serverTimeOffsetTarget != null && serverTimeOffsetSmooth != null) {
+    const drift = serverTimeOffsetTarget - serverTimeOffsetSmooth;
+    if (Math.abs(drift) > SERVER_TIME_SNAP_THRESHOLD_MS) {
+      serverTimeOffsetSmooth = serverTimeOffsetTarget;
+    } else if (Math.abs(drift) > 1) {
+      const step = Math.max(
+        -SERVER_TIME_MAX_ADJUST_PER_TICK_MS,
+        Math.min(SERVER_TIME_MAX_ADJUST_PER_TICK_MS, drift * 0.3),
+      );
+      serverTimeOffsetSmooth += step;
+    }
+    ui.serverTime.textContent = formatServerTime(Date.now() + serverTimeOffsetSmooth);
+    return;
+  }
   const delta = Date.now() - serverTimeLocal;
   ui.serverTime.textContent = formatServerTime(serverTimeBase + delta);
 }
@@ -4937,6 +5024,119 @@ function renderTreasureModal() {
   }
 }
 
+function setActiveRouteLine(nextLine) {
+  const normalized = normalizeRouteLine(nextLine || {}, 0);
+  activeRouteLine = normalized;
+  try {
+    localStorage.setItem('preferredRouteLineId', normalized.id);
+  } catch {
+    // ignore storage errors
+  }
+  const apiBase = normalizeRouteBase(normalized.apiBase);
+  const status = apiBase
+    ? `线路：${normalized.name}（自动）`
+    : `线路：${normalized.name}`;
+  setLineAutoStatus(status);
+}
+
+async function measureRouteLatency(line, timeoutMs = 2200) {
+  const base = resolveRouteBaseToAbsolute(line?.apiBase || '');
+  const pingUrl = base
+    ? `${base}/api/line-ping?ts=${Date.now()}&r=${Math.random().toString(36).slice(2)}`
+    : `/api/line-ping?ts=${Date.now()}&r=${Math.random().toString(36).slice(2)}`;
+  const started = performance.now();
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    let res = null;
+    try {
+      res = await fetch(pingUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined
+      });
+    } catch {
+      res = await fetch(pingUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        mode: 'no-cors',
+        signal: controller ? controller.signal : undefined
+      });
+    }
+    if (timer) clearTimeout(timer);
+    if (!res) return Number.POSITIVE_INFINITY;
+    if (res.ok || res.type === 'opaque') {
+      return Math.max(1, Math.round(performance.now() - started));
+    }
+    return Number.POSITIVE_INFINITY;
+  } catch {
+    if (timer) clearTimeout(timer);
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+async function autoSelectBestRouteLine(force = false) {
+  const enabledLines = (Array.isArray(routeLines) ? routeLines : []).filter((line) => line.enabled !== false);
+  if (enabledLines.length <= 0) {
+    setActiveRouteLine({ id: 'default', name: '默认线路', apiBase: '', socketBase: '', enabled: true, priority: 100 });
+    return activeRouteLine;
+  }
+  let preferredId = '';
+  try {
+    preferredId = String(localStorage.getItem('preferredRouteLineId') || '').trim();
+  } catch {
+    preferredId = '';
+  }
+  if (!force && preferredId) {
+    const preferred = enabledLines.find((line) => line.id === preferredId);
+    if (preferred) {
+      setActiveRouteLine(preferred);
+      return preferred;
+    }
+  }
+  setLineAutoStatus('线路：测速中...');
+  const probes = await Promise.all(enabledLines.map(async (line) => ({
+    line,
+    latency: await measureRouteLatency(line)
+  })));
+  const best = probes
+    .filter((entry) => Number.isFinite(entry.latency))
+    .sort((a, b) => {
+      if (a.latency !== b.latency) return a.latency - b.latency;
+      return (a.line.priority - b.line.priority) || String(a.line.id).localeCompare(String(b.line.id));
+    })[0];
+  if (best?.line) {
+    setActiveRouteLine(best.line);
+    setLineAutoStatus(`线路：${best.line.name}（${best.latency}ms）`);
+    return best.line;
+  }
+  const fallback = enabledLines.slice().sort((a, b) => (a.priority - b.priority) || String(a.id).localeCompare(String(b.id)))[0];
+  setActiveRouteLine(fallback);
+  setLineAutoStatus(`线路：${fallback.name}（超时，使用回退）`);
+  return fallback;
+}
+
+async function loadRouteLines() {
+  try {
+    const res = await fetch('/api/route-lines', { method: 'GET', cache: 'no-store' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || '线路加载失败');
+    routeLines = Array.isArray(data?.lines) ? data.lines.map((line, idx) => normalizeRouteLine(line, idx)) : [];
+  } catch {
+    routeLines = [
+      { id: 'default', name: '默认线路', apiBase: '', socketBase: '', enabled: true, priority: 100 }
+    ];
+  }
+  await autoSelectBestRouteLine(false);
+}
+
+function ensureRouteLinesLoaded() {
+  if (!routeLinesInitPromise) {
+    routeLinesInitPromise = loadRouteLines();
+  }
+  return routeLinesInitPromise;
+}
+
 function showTreasureModal() {
   if (!treasureUi.modal) return;
   hideItemTooltip();
@@ -7000,7 +7200,7 @@ function parseMarkdown(markdown) {
 
 async function loadSponsors() {
   try {
-    const res = await fetch('/api/sponsors');
+    const res = await fetch(buildApiUrl('/api/sponsors'));
     const data = await res.json();
     if (data.ok && Array.isArray(data.sponsors)) {
       sponsorNames = new Set(data.sponsors.map(s => s.player_name));
@@ -7035,7 +7235,7 @@ async function renderSponsorContent() {
     await loadSponsors();
   }
   try {
-    const res = await fetch('/api/sponsors');
+    const res = await fetch(buildApiUrl('/api/sponsors'));
     const data = await res.json();
     if (data.ok && Array.isArray(data.sponsors)) {
       sponsorList = data.sponsors.map(s => ({
@@ -7263,7 +7463,7 @@ async function showSponsorTitleModal() {
     try {
       sponsorTitleUi.msg.textContent = '保存中...';
       sponsorTitleUi.msg.style.color = '#999';
-      const res = await fetch('/api/sponsors/custom-title', {
+      const res = await fetch(buildApiUrl('/api/sponsors/custom-title'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, customTitle, characterName: currentPlayerName })
@@ -8469,6 +8669,16 @@ function renderState(state) {
     if (state.server_time) {
       serverTimeBase = state.server_time;
       serverTimeLocal = Date.now();
+      const now = Date.now();
+      const targetOffset = Number(state.server_time) - now;
+      if (Number.isFinite(targetOffset)) {
+        serverTimeOffsetTarget = targetOffset;
+        if (serverTimeOffsetSmooth == null) {
+          serverTimeOffsetSmooth = targetOffset;
+        } else if (Math.abs(serverTimeOffsetTarget - serverTimeOffsetSmooth) > SERVER_TIME_SNAP_THRESHOLD_MS) {
+          serverTimeOffsetSmooth = serverTimeOffsetTarget;
+        }
+      }
       updateServerTimeDisplay();
       if (!serverTimeTimer) {
         serverTimeTimer = setInterval(updateServerTimeDisplay, 1000);
@@ -9463,6 +9673,7 @@ if (remembered) {
 }
 closeRegisterOverlay();
 (async () => {
+  await ensureRouteLinesLoaded();
   // 加载赞助者名单，确保刷新页面后特效依然有效
   await loadSponsors();
   await ensureRealmsLoaded();
@@ -9491,7 +9702,7 @@ closeRegisterOverlay();
 })();
 
 async function apiPost(path, body) {
-  const res = await fetch(path, {
+  const res = await fetch(buildApiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -9506,7 +9717,7 @@ async function apiGet(path, withAuth = false) {
   if (withAuth && token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const res = await fetch(path, { headers });
+  const res = await fetch(buildApiUrl(path), { headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || '请求失败');
   return data;
@@ -9593,6 +9804,7 @@ async function login() {
   const loginBtn = document.getElementById('login-btn');
   loginBtn.classList.add('btn-loading');
   try {
+    await ensureRouteLinesLoaded();
     const data = await apiPost('/api/login', { username, password, captchaToken, captchaCode, realmId: currentRealmId });
     localStorage.setItem('rememberedUser', username);
     token = data.token;
@@ -10060,7 +10272,8 @@ function enterGame(name) {
   antiKey = '';
   antiSeq = 0;
   pendingCmds = [];
-  socket = io();
+  const socketBaseUrl = getSocketBaseUrl();
+  socket = socketBaseUrl ? io(socketBaseUrl) : io();
   const rawEmit = socket.emit.bind(socket);
   socket.emit = (event, payload) => {
     if (event === 'cmd' && payload && typeof payload === 'object' && !payload.source) {
@@ -10645,8 +10858,11 @@ if (captchaUi.loginImg) {
 if (captchaUi.registerImg) {
   captchaUi.registerImg.addEventListener('click', () => refreshCaptcha('register'));
 }
-refreshCaptcha('login');
-refreshCaptcha('register');
+(async () => {
+  await ensureRouteLinesLoaded();
+  refreshCaptcha('login');
+  refreshCaptcha('register');
+})();
 if (chat.sendBtn) {
   chat.sendBtn.addEventListener('click', sendChatMessage);
 }

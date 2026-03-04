@@ -62,6 +62,40 @@
 
         <div class="block full" data-collapsible>
           <div class="block-title">
+            <h2>线路管理</h2>
+            <button class="btn-small block-toggle">折叠</button>
+          </div>
+          <div class="block-body">
+            <p class="muted" style="margin-bottom: 8px;">
+              配置前台可用线路。前台会按线路延迟自动选最优线路。
+            </p>
+            <div class="row" style="margin-bottom: 8px; justify-content: flex-start; gap: 8px; flex-wrap: wrap;">
+              <button id="route-lines-load-btn" class="btn-small">加载</button>
+              <button id="route-lines-add-btn" class="btn-small">+ 添加线路</button>
+              <button id="route-lines-save-btn" class="btn-small">保存</button>
+            </div>
+            <div class="table-container compact-config-table-container">
+              <table class="compact-config-table" style="font-size: 12px;">
+                <thead>
+                  <tr>
+                    <th>线路名</th>
+                    <th>域名</th>
+                    <th>优先级</th>
+                    <th>启用</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="route-lines-list">
+                  <tr><td colspan="5" style="text-align:center;color:#999;">点击加载</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="route-lines-msg" class="msg"></div>
+          </div>
+        </div>
+
+        <div class="block full" data-collapsible>
+          <div class="block-title">
             <h2>用户与权限</h2>
             <button class="btn-small block-toggle">折叠</button>
           </div>
