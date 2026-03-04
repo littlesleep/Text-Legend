@@ -5883,7 +5883,7 @@ function totalRewardMultiplier({ vipActive, svipActive = false, guildActive, gui
 
 function totalGoldRewardMultiplier({ vipActive, svipActive = false, guildActive, guildBuildGoldPct = 0, cultivationMult = 1, partyMult = 1 }) {
   const vipBonus = (vipActive ? 1 : 0) + (svipActive ? 1 : 0);
-  const guildBonus = guildActive ? 1 : 0;
+  const guildBonus = 0;
   const guildBuildBonus = Math.max(0, Number(guildBuildGoldPct || 0) / 100);
   const cultivationBonus = Math.max(0, (Number(cultivationMult) || 1) - 1);
   const partyBonus = Math.max(0, (Number(partyMult) || 1) - 1);
@@ -5914,7 +5914,6 @@ function buildRewardBonusBreakdown(player, party) {
   }
   if (guildActive) {
     expSources.push({ key: 'guild', label: '行会基础', pct: 100 });
-    goldSources.push({ key: 'guild', label: '行会基础', pct: 100 });
   }
   if (guildBuildExpPct > 0) expSources.push({ key: 'guild_build_exp', label: '历练阁', pct: guildBuildExpPct });
   if (guildBuildGoldPct > 0) goldSources.push({ key: 'guild_build_gold', label: '财库阁', pct: guildBuildGoldPct });
