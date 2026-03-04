@@ -328,6 +328,18 @@ npm run db:cleanup-mob-respawns -- --execute --batch-size=2000 --max-rounds=400 
 npm run db:cleanup-mob-respawns -- --execute --max-delete=50000
 ```
 
+按区服清理（例如仅清理 `realm_id=1`）：
+
+```bash
+npm run db:cleanup-mob-respawns -- --execute --realm-id=1
+```
+
+可多次传参同时清理多个区服：
+
+```bash
+npm run db:cleanup-mob-respawns -- --execute --realm-id=1 --realm-id=2
+```
+
 ## 安卓客户端（原生）
 
 项目包含 `android/` 目录（Kotlin + Jetpack Compose），通过 HTTP / Socket API 连接游戏服务器。

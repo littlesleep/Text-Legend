@@ -8,7 +8,8 @@ function parseArgs(argv) {
     batchSize: 1000,
     maxRounds: 300,
     sleepMs: 80,
-    maxDelete: 0
+    maxDelete: 0,
+    realmIds: []
   };
 
   for (const raw of argv) {
@@ -34,23 +35,61 @@ function parseArgs(argv) {
       options.maxDelete = Math.max(0, Math.floor(Number(arg.split('=')[1]) || 0));
       continue;
     }
+    if (arg.startsWith('--realm-id=')) {
+      const parsed = Math.floor(Number(arg.split('=')[1]) || 0);
+      if (Number.isFinite(parsed)) options.realmIds.push(parsed);
+      continue;
+    }
   }
 
+  options.realmIds = Array.from(new Set(options.realmIds))
+    .filter((id) => Number.isFinite(id) && id >= 0);
   return options;
 }
 
-async function countExpiredRows(nowMs) {
-  const row = await knex('mob_respawns')
+async function countExpiredRows(nowMs, realmIds = []) {
+  const query = knex('mob_respawns')
     .where('respawn_at', '<=', nowMs)
-    .andWhere((q) => q.whereNull('current_hp').orWhere('current_hp', '<=', 0))
-    .count({ total: '*' })
-    .first();
+    .andWhere((q) => q.whereNull('current_hp').orWhere('current_hp', '<=', 0));
+  if (Array.isArray(realmIds) && realmIds.length > 0) {
+    query.whereIn('realm_id', realmIds);
+  }
+  const row = await query.count({ total: '*' }).first();
   return Math.max(0, Math.floor(Number(row?.total ?? row?.['count(*)'] ?? 0)));
 }
 
 async function sleep(ms) {
   if (ms <= 0) return;
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function cleanupExpiredMobRespawnsBatchByRealm(nowMs, limit, realmIds = []) {
+  const now = Math.max(0, Math.floor(Number(nowMs) || 0));
+  const batchSize = Math.max(1, Math.min(5000, Math.floor(Number(limit) || 1000)));
+  const base = knex('mob_respawns')
+    .where('respawn_at', '<=', now)
+    .andWhere((q) => q.whereNull('current_hp').orWhere('current_hp', '<=', 0));
+  if (Array.isArray(realmIds) && realmIds.length > 0) {
+    base.whereIn('realm_id', realmIds);
+  }
+  const rows = await base
+    .select('realm_id', 'zone_id', 'room_id', 'slot_index')
+    .limit(batchSize);
+  if (!rows.length) return 0;
+  return knex('mob_respawns')
+    .where((q) => {
+      rows.forEach((row, index) => {
+        const clause = {
+          realm_id: row.realm_id,
+          zone_id: row.zone_id,
+          room_id: row.room_id,
+          slot_index: row.slot_index
+        };
+        if (index === 0) q.where(clause);
+        else q.orWhere(clause);
+      });
+    })
+    .del();
 }
 
 export async function runMobRespawnCleanupCli(argv = process.argv.slice(2)) {
@@ -62,9 +101,10 @@ export async function runMobRespawnCleanupCli(argv = process.argv.slice(2)) {
   });
 
   const now = Date.now();
-  const before = await countExpiredRows(now);
+  const before = await countExpiredRows(now, options.realmIds);
+  const realmScope = options.realmIds.length > 0 ? options.realmIds.join(',') : 'all';
   console.log(
-    `[mob-cleanup] candidates=${before} batchSize=${options.batchSize} maxRounds=${options.maxRounds} sleepMs=${options.sleepMs} maxDelete=${options.maxDelete || 'unlimited'}`
+    `[mob-cleanup] candidates=${before} realms=${realmScope} batchSize=${options.batchSize} maxRounds=${options.maxRounds} sleepMs=${options.sleepMs} maxDelete=${options.maxDelete || 'unlimited'}`
   );
 
   if (!options.execute) {
@@ -79,7 +119,10 @@ export async function runMobRespawnCleanupCli(argv = process.argv.slice(2)) {
     const remainingCap = options.maxDelete > 0 ? (options.maxDelete - totalDeleted) : options.batchSize;
     if (remainingCap <= 0) break;
     const currentBatchSize = Math.max(1, Math.min(options.batchSize, remainingCap));
-    const deleted = Number(await cleanupExpiredMobRespawnsBatch(Date.now(), currentBatchSize) || 0);
+    const rawDeleted = options.realmIds.length > 0
+      ? await cleanupExpiredMobRespawnsBatchByRealm(Date.now(), currentBatchSize, options.realmIds)
+      : await cleanupExpiredMobRespawnsBatch(Date.now(), currentBatchSize);
+    const deleted = Number(rawDeleted || 0);
     rounds += 1;
     totalDeleted += Math.max(0, deleted);
     console.log(`[mob-cleanup] round=${rounds} deleted=${deleted} total=${totalDeleted}`);
@@ -89,7 +132,7 @@ export async function runMobRespawnCleanupCli(argv = process.argv.slice(2)) {
     await sleep(options.sleepMs);
   }
 
-  const after = await countExpiredRows(Date.now());
+  const after = await countExpiredRows(Date.now(), options.realmIds);
   console.log(`[mob-cleanup] done rounds=${rounds} deleted=${totalDeleted} remaining=${after}`);
 }
 
