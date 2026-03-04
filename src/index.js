@@ -17653,9 +17653,6 @@ async function processMobDeath(player, mob, online) {
   gainSummonExp(player);
   let exp = template.exp;
   let gold = randInt(template.gold[0], template.gold[1]);
-  if (isCultivationRoom(mobZoneId) && !isCultivationBoss(template)) {
-    exp = Math.max(1, Math.floor(exp * 0.5));
-  }
 
   const party = getPartyByMember(player.name, realmId);
   // 检查队伍成员是否都在同一个房间
