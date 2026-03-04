@@ -5180,13 +5180,13 @@ async function reconnectByRouteSwitch(lineName) {
       clearTimeout(timer);
       resolve({ ok: Boolean(ok), reason: String(reason || '') });
     };
-    const timer = setTimeout(() => done(false, '重连超时'), 22000);
+    const timer = setTimeout(() => done(false, '重连超时'), 30000);
     enterGame(target, {
       reconnect: true,
       preserveLog: true,
       reconnectMessage: `正在切换线路到 ${lineName}，请稍候...`,
       suppressAuthFailActions: true,
-      reconnectAuthDelayMs: 500,
+      reconnectAuthDelayMs: 1500,
       onReady: () => done(true),
       onFail: (reason) => done(false, reason)
     });
@@ -10450,15 +10450,24 @@ function enterGame(name, options = {}) {
     : 0;
   const onReady = typeof options?.onReady === 'function' ? options.onReady : null;
   const onFail = typeof options?.onFail === 'function' ? options.onFail : null;
+  let pendingDisconnectFailTimer = null;
   let connectionSettled = false;
   const notifyReady = () => {
     if (connectionSettled) return;
     connectionSettled = true;
+    if (pendingDisconnectFailTimer) {
+      clearTimeout(pendingDisconnectFailTimer);
+      pendingDisconnectFailTimer = null;
+    }
     if (onReady) onReady();
   };
   const notifyFail = (reason = '') => {
     if (connectionSettled) return;
     connectionSettled = true;
+    if (pendingDisconnectFailTimer) {
+      clearTimeout(pendingDisconnectFailTimer);
+      pendingDisconnectFailTimer = null;
+    }
     if (onFail) onFail(reason);
   };
   // 断开旧的 socket 连接
@@ -10582,6 +10591,12 @@ function enterGame(name, options = {}) {
     antiSeq = 0;
     pendingCmds = [];
     stopEffectBatchTask();
+    if (reconnect && !connectionSettled) {
+      if (pendingDisconnectFailTimer) clearTimeout(pendingDisconnectFailTimer);
+      pendingDisconnectFailTimer = setTimeout(() => {
+        notifyFail('连接被服务器断开');
+      }, 4500);
+    }
   });
   socket.on('trade_invite', (payload) => {
     const from = payload?.from;
