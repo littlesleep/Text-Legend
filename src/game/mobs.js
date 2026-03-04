@@ -2270,16 +2270,4 @@ function extendCultivationMobs() {
 
 extendCultivationMobs();
 
-function nerfCultivationFieldBaseExp() {
-  Object.keys(MOB_TEMPLATES).forEach((id) => {
-    if (!String(id).startsWith('cultivation_')) return;
-    if (String(id).startsWith('cultivation_boss_')) return;
-    const mob = MOB_TEMPLATES[id];
-    if (!mob) return;
-    mob.exp = Math.max(1, Math.floor(Number(mob.exp || 0) * 0.5));
-  });
-}
-
-nerfCultivationFieldBaseExp();
-
 
