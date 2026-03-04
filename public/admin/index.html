@@ -710,26 +710,18 @@
           </div>
           <div class="block-body">
             <p style="color: #666; margin-bottom: 8px; font-size: 13px;">
-              配置行会建筑分支的升级门槛、升级时间和每级加成（网页/安卓行会界面统一读取）。
+              配置行会建筑分支的升级门槛、每级固定升级时长和每级加成（网页/安卓行会界面统一读取）。
             </p>
             <div class="row" style="margin-bottom: 8px;">
               <button id="guild-building-load-btn" class="btn-small">加载</button>
               <button id="guild-building-save-btn" class="btn-small">保存</button>
             </div>
-            <div class="table-container">
-              <table style="font-size: 12px;">
-                <thead>
-                  <tr>
-                    <th>等级</th>
-                    <th>累计建设值</th>
-                    <th>升级时间(秒)</th>
-                  </tr>
-                </thead>
-                <tbody id="guild-building-level-list">
-                  <tr><td colspan="3" style="text-align:center;color:#999;">点击加载</td></tr>
-                </tbody>
-              </table>
+            <div class="row" style="margin-bottom: 8px; gap: 6px; align-items: center; justify-content: flex-start;">
+              <label for="guild-building-duration-step" style="min-width: 140px;">升级每级增加秒数:</label>
+              <input id="guild-building-duration-step" type="number" min="1" step="1" style="width: 120px;">
+              <span style="color:#999;font-size:12px;">例如 300 表示 1级=300秒，2级=600秒...</span>
             </div>
+            <div id="guild-building-level-summary" style="margin-bottom: 8px; color:#999; font-size:12px;">点击加载</div>
             <table style="font-size: 12px; margin-top: 8px;">
               <thead>
                 <tr>

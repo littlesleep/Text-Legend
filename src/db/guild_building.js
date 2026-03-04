@@ -4,9 +4,10 @@ import { getSetting, setSetting } from './settings.js';
 const GUILD_BUILDING_CONFIG_KEY = 'guild_building_config_v1';
 const GUILD_MEMBER_TIME_REDUCTION_PCT_PER_LEVEL_DEFAULT = 5;
 const GUILD_MEMBER_TIME_REDUCTION_PCT_CAP = 50;
+const GUILD_BUILD_DURATION_STEP_SEC = 300;
 const DEFAULT_GUILD_BUILDING_CONFIG = {
   thresholds: [0, 100000, 300000, 600000, 1000000, 1600000, 2400000, 3600000, 5200000, 7200000],
-  durationsSec: [0, 300, 900, 1800, 3600, 7200, 10800, 14400, 21600, 28800],
+  durationsSec: [0, 300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700],
   gains: {
     memberBaseLimit: 20,
     memberPerLevel: 5,
@@ -59,7 +60,7 @@ function normalizeGuildBuildingConfig(raw) {
   const durationsSec = [];
   for (let i = 0; i < targetLength; i += 1) {
     const thresholdFallback = defaults.thresholds[Math.min(i, defaults.thresholds.length - 1)] || 0;
-    const durationFallback = defaults.durationsSec[Math.min(i, defaults.durationsSec.length - 1)] || 0;
+    const durationFallback = i * GUILD_BUILD_DURATION_STEP_SEC;
     const threshold = Math.max(0, Math.floor(Number(thresholdsInput[i] ?? thresholdFallback) || 0));
     const duration = Math.max(0, Math.floor(Number(durationsInput[i] ?? durationFallback) || 0));
     thresholds.push(i === 0 ? 0 : Math.max(thresholds[i - 1], threshold));
@@ -149,7 +150,12 @@ function getBuildDurationSec(level) {
   if (safeLevel <= configuredMaxLevel) {
     return Math.max(0, Math.floor(Number(durations[safeLevel] || 0)));
   }
-  return Math.max(0, Math.floor(Number(durations[configuredMaxLevel] || 0)));
+  const last = Math.max(0, Math.floor(Number(durations[configuredMaxLevel] || 0)));
+  const prev = configuredMaxLevel > 0
+    ? Math.max(0, Math.floor(Number(durations[configuredMaxLevel - 1] || 0)))
+    : 0;
+  const step = Math.max(1, last - prev, GUILD_BUILD_DURATION_STEP_SEC);
+  return last + (safeLevel - configuredMaxLevel) * step;
 }
 
 function parseGuildBuildTimeMs(value) {

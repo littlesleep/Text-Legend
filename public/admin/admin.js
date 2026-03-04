@@ -532,7 +532,8 @@ let guildSystemItemSearchKeyword = '';
 const guildBuildingMsg = document.getElementById('guild-building-msg');
 const guildBuildingLoadBtn = document.getElementById('guild-building-load-btn');
 const guildBuildingSaveBtn = document.getElementById('guild-building-save-btn');
-const guildBuildingLevelList = document.getElementById('guild-building-level-list');
+const guildBuildingLevelSummary = document.getElementById('guild-building-level-summary');
+const guildBuildingDurationStepInput = document.getElementById('guild-building-duration-step');
 const guildBuildingMemberBaseInput = document.getElementById('guild-building-member-base');
 const guildBuildingMemberPerLevelInput = document.getElementById('guild-building-member-per-level');
 const guildBuildingExpPerLevelInput = document.getElementById('guild-building-exp-per-level');
@@ -544,6 +545,24 @@ const guildBuildingSpiritPerLevelInput = document.getElementById('guild-building
 const guildBuildingDefPerLevelInput = document.getElementById('guild-building-def-per-level');
 const guildBuildingMdefPerLevelInput = document.getElementById('guild-building-mdef-per-level');
 let guildBuildingLevelRowsCache = [];
+
+function getGuildBuildingDurationStepSec() {
+  const step = Math.floor(Number(guildBuildingDurationStepInput?.value || 300));
+  return Math.max(1, step);
+}
+
+function inferGuildBuildingDurationStepSec(durationsSec = []) {
+  const values = Array.isArray(durationsSec) ? durationsSec : [];
+  const lvl1 = Math.floor(Number(values[1] || 0));
+  if (lvl1 > 0) return lvl1;
+  for (let i = 1; i < values.length; i += 1) {
+    const prev = Math.floor(Number(values[i - 1] || 0));
+    const curr = Math.floor(Number(values[i] || 0));
+    const diff = curr - prev;
+    if (diff > 0) return diff;
+  }
+  return 300;
+}
 
 // 每日幸运玩家相关
 const dailyLuckyMsg = document.getElementById('daily-lucky-msg');
@@ -1431,23 +1450,19 @@ async function saveGuildSystemConfig() {
 }
 
 function renderGuildBuildingLevelRows() {
-  if (!guildBuildingLevelList) return;
-  guildBuildingLevelList.innerHTML = '';
   const rows = Array.isArray(guildBuildingLevelRowsCache) ? guildBuildingLevelRowsCache : [];
-  if (!rows.length) {
-    guildBuildingLevelList.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">暂无配置</td></tr>';
+  const stepSec = getGuildBuildingDurationStepSec();
+  if (!guildBuildingLevelSummary) return;
+  if (rows.length <= 0) {
+    guildBuildingLevelSummary.textContent = '暂无等级配置';
     return;
   }
-  rows.forEach((row, index) => {
-    const tr = document.createElement('tr');
-    tr.dataset.index = String(index);
-    tr.innerHTML = `
-      <td>${index}</td>
-      <td><input data-k="threshold" type="number" min="0" value="${Math.max(0, Math.floor(Number(row?.threshold || 0)))}" style="width: 120px;"></td>
-      <td><input data-k="durationSec" type="number" min="0" value="${Math.max(0, Math.floor(Number(row?.durationSec || 0)))}" style="width: 120px;"></td>
-    `;
-    guildBuildingLevelList.appendChild(tr);
-  });
+  const maxLevel = Math.max(0, rows.length - 1);
+  const lastThreshold = Math.max(0, Math.floor(Number(rows[maxLevel]?.threshold || 0)));
+  const lvl1 = 1 * stepSec;
+  const lvl5 = 5 * stepSec;
+  const lvl10 = 10 * stepSec;
+  guildBuildingLevelSummary.textContent = `当前等级配置: 0-${maxLevel} 级，最高门槛 ${lastThreshold}；升级时长按每级 +${stepSec} 秒（1级=${lvl1}s，5级=${lvl5}s，10级=${lvl10}s）`;
 }
 
 function collectGuildBuildingConfigFromUi() {
@@ -1456,14 +1471,13 @@ function collectGuildBuildingConfigFromUi() {
     if (!Number.isFinite(numeric) || numeric <= 0) return 0;
     return Math.round(numeric * 10) / 10;
   };
-  const thresholds = [];
-  const durationsSec = [];
-  if (guildBuildingLevelList) {
-    guildBuildingLevelList.querySelectorAll('tr[data-index]').forEach((tr, idx) => {
-      thresholds.push(Math.max(0, Math.floor(Number(tr.querySelector('[data-k="threshold"]')?.value || 0))));
-      durationsSec.push(idx === 0 ? 0 : Math.max(0, Math.floor(Number(tr.querySelector('[data-k="durationSec"]')?.value || 0))));
-    });
+  const thresholds = (Array.isArray(guildBuildingLevelRowsCache) ? guildBuildingLevelRowsCache : [])
+    .map((row) => Math.max(0, Math.floor(Number(row?.threshold || 0))));
+  if (thresholds.length <= 0) {
+    thresholds.push(0, 100000);
   }
+  const stepSec = getGuildBuildingDurationStepSec();
+  const durationsSec = thresholds.map((_, idx) => idx * stepSec);
   return {
     thresholds,
     durationsSec,
@@ -1490,9 +1504,10 @@ async function loadGuildBuildingConfig() {
     const config = data?.config || {};
     const thresholds = Array.isArray(config.thresholds) ? config.thresholds : [];
     const durationsSec = Array.isArray(config.durationsSec) ? config.durationsSec : [];
+    const stepSec = inferGuildBuildingDurationStepSec(durationsSec);
+    if (guildBuildingDurationStepInput) guildBuildingDurationStepInput.value = stepSec;
     guildBuildingLevelRowsCache = thresholds.map((threshold, index) => ({
-      threshold: Math.max(0, Math.floor(Number(threshold || 0))),
-      durationSec: index === 0 ? 0 : Math.max(0, Math.floor(Number(durationsSec[index] || 0)))
+      threshold: Math.max(0, Math.floor(Number(threshold || 0)))
     }));
     renderGuildBuildingLevelRows();
     const gains = config.gains || {};
@@ -1522,9 +1537,10 @@ async function saveGuildBuildingConfig() {
     const config = collectGuildBuildingConfigFromUi();
     const data = await api('/admin/guild-building-settings/update', 'POST', { config });
     const nextConfig = data?.config || config;
+    const stepSec = inferGuildBuildingDurationStepSec(nextConfig?.durationsSec || config?.durationsSec || []);
+    if (guildBuildingDurationStepInput) guildBuildingDurationStepInput.value = stepSec;
     guildBuildingLevelRowsCache = (Array.isArray(nextConfig.thresholds) ? nextConfig.thresholds : []).map((threshold, index) => ({
-      threshold: Math.max(0, Math.floor(Number(threshold || 0))),
-      durationSec: index === 0 ? 0 : Math.max(0, Math.floor(Number(nextConfig?.durationsSec?.[index] || 0)))
+      threshold: Math.max(0, Math.floor(Number(threshold || 0)))
     }));
     renderGuildBuildingLevelRows();
     guildBuildingMsg.textContent = '保存成功';
@@ -7555,6 +7571,11 @@ if (guildSystemShopAddBtn) {
 }
 if (guildBuildingLoadBtn) guildBuildingLoadBtn.addEventListener('click', loadGuildBuildingConfig);
 if (guildBuildingSaveBtn) guildBuildingSaveBtn.addEventListener('click', saveGuildBuildingConfig);
+if (guildBuildingDurationStepInput) {
+  guildBuildingDurationStepInput.addEventListener('input', () => {
+    renderGuildBuildingLevelRows();
+  });
+}
 
 async function resetPetSkillEffectsToDefault() {
   if (!petSettingsMsg) return;
