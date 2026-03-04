@@ -6484,36 +6484,14 @@ function showAutoFullBossModal() {
     const points = Math.max(0, Math.floor(Number(payload?.points || 0)));
     const items = Array.isArray(payload?.items) ? payload.items.slice().sort(compareRewardRarityDesc) : [];
     const options = items.map((it) => {
-      const tags = [];
-      if (it.minLevel > 0) tags.push(`Lv>=${it.minLevel}`);
-      if (it.maxLevel > 0) tags.push(`Lv<=${it.maxLevel}`);
-      if (it.needVip) tags.push('VIP');
-      if (it.needSvip) tags.push('SVIP');
-      if (it.limitText && it.limitText !== '不限') tags.push(it.limitText);
-      const extra = tags.length ? ` | ${tags.join(' / ')}` : '';
       const rewardItems = Array.isArray(it.rewardItems) ? it.rewardItems : [];
       const primaryReward = rewardItems[0] || null;
       const titleRarityKey = normalizeRarityKey(primaryReward?.rarity);
       const titleLabel = `${it.name}（${Number(it.cost || 0)}积分）`;
-      const rewardHtml = rewardItems.length
-        ? rewardItems.slice().sort((a, b) => rarityRank(b) - rarityRank(a)).map((reward) => {
-          const rarityKey = normalizeRarityKey(reward?.rarity);
-          const cls = rarityKey ? ` class="rarity-${rarityKey}"` : '';
-          return `<span${cls}>${reward?.name || reward?.id || ''} x${Math.max(1, Math.floor(Number(reward?.qty || 1)))}</span>`;
-        }).join('、')
-        : (it.rewardText || '');
-      const primaryQty = Math.max(1, Math.floor(Number(primaryReward?.qty || 1)));
-      const isSingleRewardDuplicate = rewardItems.length === 1
-        && primaryReward
-        && String(primaryReward.name || primaryReward.id || '').trim() === String(it.name || '').trim()
-        && primaryQty === 1;
-      const detailHtml = isSingleRewardDuplicate ? '' : rewardHtml;
       return {
         value: `redeem:${it.id}`,
         label: `${it.name}（${Number(it.cost || 0)}积分）`,
         labelHtml: titleRarityKey ? `<span class="rarity-${titleRarityKey}">${titleLabel}</span>` : titleLabel,
-        description: `${it.rewardText || ''}${extra}${it.desc ? ` | ${it.desc}` : ''}`,
-        descriptionHtml: `${detailHtml}${extra ? `${detailHtml ? ' ' : ''}<span>${extra}</span>` : ''}${it.desc ? `${detailHtml || extra ? ' ' : ''}<span>${detailHtml || extra ? '| ' : ''}${it.desc}</span>` : ''}`,
         className: 'activity-action-shop'
       };
     });
@@ -6951,7 +6929,10 @@ async function showCommissionBoardModal() {
       cancelText: '关闭',
       optionsClassName: 'activity-center-options',
       modalClassName: 'activity-center-prompt',
-      onSelect: (value) => runActivityCenterAction(value)
+      onSelect: (value) => {
+        const action = String(value || '');
+        setTimeout(() => runActivityCenterAction(action), 0);
+      }
     });
   }
 
