@@ -3869,7 +3869,9 @@ export async function handleCommand({ player, players, allCharacters, playersByN
               id: reward.id,
               qty: reward.qty,
               name: ITEM_TEMPLATES[reward.id]?.name || reward.id,
-              rarity: ITEM_TEMPLATES[reward.id]?.rarity || null
+              rarity: ITEM_TEMPLATES[reward.id]
+                ? (ITEM_TEMPLATES[reward.id].rarity || rarityByPrice(ITEM_TEMPLATES[reward.id]))
+                : null
             })) : [];
             return {
               id: it.id,

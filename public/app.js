@@ -6492,7 +6492,7 @@ function showAutoFullBossModal() {
         value: `redeem:${it.id}`,
         label: `${it.name}（${Number(it.cost || 0)}积分）`,
         labelHtml: titleRarityKey ? `<span class="rarity-${titleRarityKey}">${titleLabel}</span>` : titleLabel,
-        className: 'activity-action-shop'
+        className: `activity-action-shop${titleRarityKey ? ` rarity-${titleRarityKey}` : ''}`
       };
     });
     await promptMultiSelectModal({
