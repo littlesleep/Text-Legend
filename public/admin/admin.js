@@ -1459,10 +1459,14 @@ function renderGuildBuildingLevelRows() {
   }
   const maxLevel = Math.max(0, rows.length - 1);
   const lastThreshold = Math.max(0, Math.floor(Number(rows[maxLevel]?.threshold || 0)));
+  const prevThreshold = maxLevel > 0
+    ? Math.max(0, Math.floor(Number(rows[maxLevel - 1]?.threshold || 0)))
+    : 0;
+  const thresholdStep = Math.max(1, lastThreshold - prevThreshold, lastThreshold || 100000);
   const lvl1 = 1 * stepSec;
   const lvl5 = 5 * stepSec;
   const lvl10 = 10 * stepSec;
-  guildBuildingLevelSummary.textContent = `当前等级配置: 0-${maxLevel} 级，最高门槛 ${lastThreshold}；升级时长按每级 +${stepSec} 秒（1级=${lvl1}s，5级=${lvl5}s，10级=${lvl10}s）`;
+  guildBuildingLevelSummary.textContent = `行会建筑等级无上限。当前基础门槛配置到 ${maxLevel} 级（最高门槛 ${lastThreshold}），超出后门槛按每级 +${thresholdStep} 递增；升级时长按每级 +${stepSec} 秒（例如设置 ${stepSec} 时：1级=${lvl1}s，5级=${lvl5}s，10级=${lvl10}s）。`;
 }
 
 function collectGuildBuildingConfigFromUi() {
