@@ -14,6 +14,7 @@ import knex from './db/index.js';
 import { createUser, verifyUser, createSession, getSession, getUserByName, setAdminFlag, verifyUserPassword, updateUserPassword, clearUserSessions, clearRealmSessions } from './db/users.js';
 import { listCharacters, loadCharacter, saveCharacter, findCharacterByName, findCharacterByNameInRealm, listAllCharacters, deleteCharacter, restoreDeletedCharacter } from './db/characters.js';
 import { addGuildMember, createGuild, getGuildByName, getGuildByNameInRealm, getGuildById, getGuildMember, getSabakOwner, isGuildLeader, isGuildLeaderOrVice, setGuildMemberRole, listGuildMembers, listSabakRegistrations, registerSabak, hasSabakRegistrationToday, hasAnySabakRegistrationToday, removeGuildMember, leaveGuild, setSabakOwner, clearSabakRegistrations, transferGuildLeader, ensureSabakState, applyToGuild, listGuildApplications, removeGuildApplication, approveGuildApplication, getApplicationByUser, listAllGuilds } from './db/guilds.js';
+import { getGuildBuildingInfo, addGuildBuildingContribution, buildGuildBuildingPayload, startGuildBuildingUpgrade, getGuildBuildingConfigSnapshot, loadGuildBuildingConfig, setGuildBuildingConfig } from './db/guild_building.js';
 import { createAdminSession, listUsers, verifyAdminSession, deleteUser } from './db/admin.js';
 import { sendMail, listMail, listSentMail, markMailRead, markMailClaimed, deleteMail } from './db/mail.js';
 import { createVipCodes, listVipCodes, countVipCodes, useVipCode } from './db/vip.js';
@@ -89,7 +90,7 @@ import {
   syncMobDropsToTemplates
 } from './db/items_admin.js';
 import { runMigrations } from './db/migrate.js';
-import { newCharacter, computeDerived, gainExp, addItem, removeItem, getItemKey, normalizeInventory, normalizeEquipment, getDurabilityMax, getRepairCost } from './game/player.js';
+import { newCharacter, computeDerived, gainExp, addItem, removeItem, getItemKey, normalizeInventory, normalizeEquipment, getDurabilityMax, getRepairCost, buildSpecializationPayload, SPECIALIZATION_DEFS } from './game/player.js';
 import {
   handleCommand,
   awardKill,
@@ -101,6 +102,7 @@ import {
 } from './game/commands.js';
 import {
   getActivityStatePayload,
+  spendActivityPoints,
   getMobRewardActivityBonus,
   recordBossKillActivities,
   recordTreasurePetFestivalActivity,
@@ -109,6 +111,7 @@ import {
   claimHarvestBlessing,
   claimHarvestSupplyByMail,
   claimHarvestTimedChestByMail,
+  claimCommissionTask,
   normalizeHarvestSeasonRewardConfig,
   setHarvestSeasonRewardConfig,
   normalizeHarvestSeasonSignConfig,
@@ -201,6 +204,7 @@ const HARVEST_SEASON_REWARD_SETTING_KEY = 'harvest_season_reward_config_v1';
 const HARVEST_SEASON_SIGN_SETTING_KEY = 'harvest_season_sign_config_v1';
 const FIRST_RECHARGE_WELFARE_SETTING_KEY = 'first_recharge_welfare_config_v1';
 const INVITE_REWARD_SETTING_KEY = 'invite_reward_config_v1';
+const GUILD_SYSTEM_SETTING_KEY = 'guild_system_config_v1';
 const INVITE_RECHARGE_BONUS_RATE = 0.2;
 
 async function autoClaimActivityRewardsForPlayer(player, now = Date.now()) {
@@ -260,6 +264,28 @@ const DEFAULT_INVITE_REWARD_CONFIG = Object.freeze({
   bonusRate: INVITE_RECHARGE_BONUS_RATE
 });
 let INVITE_REWARD_CONFIG = { ...DEFAULT_INVITE_REWARD_CONFIG };
+const DEFAULT_GUILD_SYSTEM_CONFIG = Object.freeze({
+  donateLimits: {
+    gold: 5,
+    points: 3
+  },
+  donateCost: {
+    gold: 100000,
+    points: 50
+  },
+  contributionGain: {
+    gold: 10,
+    points: 50
+  },
+  shopItems: [
+    { id: 'training_fruit', name: '修炼果', qty: 5, cost: 50 },
+    { id: 'pet_training_fruit', name: '宠物修炼果', qty: 5, cost: 50 },
+    { id: 'treasure_exp_material', name: '法宝经验丹', qty: 10, cost: 80 },
+    { id: 'ultimate_growth_stone', name: '装备成长石', qty: 5, cost: 120 },
+    { id: 'ultimate_growth_break', name: '成长突破石', qty: 3, cost: 240 }
+  ]
+});
+let GUILD_SYSTEM_CONFIG = JSON.parse(JSON.stringify(DEFAULT_GUILD_SYSTEM_CONFIG));
 
 function normalizeFirstRechargeWelfareConfig(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
@@ -351,6 +377,78 @@ async function setInviteRewardConfig(raw) {
   const normalized = normalizeInviteRewardConfig(raw);
   await setSetting(INVITE_REWARD_SETTING_KEY, JSON.stringify(normalized));
   INVITE_REWARD_CONFIG = normalized;
+  return normalized;
+}
+
+function normalizeGuildSystemConfig(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const toInt = (value, fallback, min = 0) => {
+    const num = Number(value ?? fallback);
+    if (!Number.isFinite(num)) return Math.max(min, Math.floor(Number(fallback || 0)));
+    return Math.max(min, Math.floor(num));
+  };
+  const donateLimits = {
+    gold: toInt(source?.donateLimits?.gold, DEFAULT_GUILD_SYSTEM_CONFIG.donateLimits.gold, 0),
+    points: toInt(source?.donateLimits?.points, DEFAULT_GUILD_SYSTEM_CONFIG.donateLimits.points, 0)
+  };
+  const donateCost = {
+    gold: toInt(source?.donateCost?.gold, DEFAULT_GUILD_SYSTEM_CONFIG.donateCost.gold, 0),
+    points: toInt(source?.donateCost?.points, DEFAULT_GUILD_SYSTEM_CONFIG.donateCost.points, 0)
+  };
+  const contributionGain = {
+    gold: toInt(source?.contributionGain?.gold, DEFAULT_GUILD_SYSTEM_CONFIG.contributionGain.gold, 0),
+    points: toInt(source?.contributionGain?.points, DEFAULT_GUILD_SYSTEM_CONFIG.contributionGain.points, 0)
+  };
+  const rawShopItems = Array.isArray(source?.shopItems) ? source.shopItems : DEFAULT_GUILD_SYSTEM_CONFIG.shopItems;
+  const seenShopItemIds = new Set();
+  const shopItems = rawShopItems
+    .map((entry) => {
+      const id = String(entry?.id || '').trim();
+      if (!id || !ITEM_TEMPLATES[id]) return null;
+      if (seenShopItemIds.has(id)) return null;
+      seenShopItemIds.add(id);
+      const tpl = ITEM_TEMPLATES[id] || {};
+      return {
+        id,
+        name: String(entry?.name || tpl.name || id).trim() || id,
+        qty: toInt(entry?.qty, 1, 1),
+        cost: toInt(entry?.cost, 1, 1)
+      };
+    })
+    .filter(Boolean);
+  return {
+    donateLimits,
+    donateCost,
+    contributionGain,
+    shopItems: shopItems.length
+      ? shopItems
+      : DEFAULT_GUILD_SYSTEM_CONFIG.shopItems.map((item) => ({ ...item }))
+  };
+}
+
+function getGuildSystemConfigSnapshot() {
+  return normalizeGuildSystemConfig(GUILD_SYSTEM_CONFIG);
+}
+
+async function loadGuildSystemConfig() {
+  try {
+    const raw = await getSetting(GUILD_SYSTEM_SETTING_KEY, '');
+    if (!raw) {
+      GUILD_SYSTEM_CONFIG = normalizeGuildSystemConfig(DEFAULT_GUILD_SYSTEM_CONFIG);
+      return GUILD_SYSTEM_CONFIG;
+    }
+    GUILD_SYSTEM_CONFIG = normalizeGuildSystemConfig(JSON.parse(raw));
+  } catch (err) {
+    console.warn('行会系统配置加载失败，使用默认值:', err?.message || err);
+    GUILD_SYSTEM_CONFIG = normalizeGuildSystemConfig(DEFAULT_GUILD_SYSTEM_CONFIG);
+  }
+  return GUILD_SYSTEM_CONFIG;
+}
+
+async function setGuildSystemConfig(raw) {
+  const normalized = normalizeGuildSystemConfig(raw);
+  await setSetting(GUILD_SYSTEM_SETTING_KEY, JSON.stringify(normalized));
+  GUILD_SYSTEM_CONFIG = normalized;
   return normalized;
 }
 
@@ -2737,6 +2835,60 @@ app.post('/admin/equipment-recycle-settings/update', async (req, res) => {
   }
 });
 
+app.get('/admin/guild-system-settings', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    const config = await loadGuildSystemConfig();
+    const itemOptions = Object.values(ITEM_TEMPLATES || {})
+      .filter((it) => it && it.id)
+      .map((it) => ({
+        id: String(it.id),
+        name: String(it.name || it.id),
+        type: String(it.type || 'unknown')
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    res.json({ ok: true, config, itemOptions });
+  } catch (err) {
+    res.status(500).json({ error: err.message || '加载失败' });
+  }
+});
+
+app.post('/admin/guild-system-settings/update', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    const payload = req.body?.config ?? req.body ?? {};
+    const config = await setGuildSystemConfig(payload);
+    res.json({ ok: true, config });
+  } catch (err) {
+    res.status(400).json({ error: err.message || '保存失败' });
+  }
+});
+
+app.get('/admin/guild-building-settings', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    const config = await loadGuildBuildingConfig(true);
+    res.json({ ok: true, config });
+  } catch (err) {
+    res.status(500).json({ error: err.message || '加载失败' });
+  }
+});
+
+app.post('/admin/guild-building-settings/update', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    const payload = req.body?.config ?? req.body ?? {};
+    const config = await setGuildBuildingConfig(payload);
+    res.json({ ok: true, config });
+  } catch (err) {
+    res.status(400).json({ error: err.message || '保存失败' });
+  }
+});
+
 app.post('/admin/event-time-settings/update', async (req, res) => {
   const admin = await requireAdmin(req);
   if (!admin) return res.status(401).json({ error: '无管理员权限。' });
@@ -4968,6 +5120,7 @@ app.post('/api/sponsors/custom-title', async (req, res) => {
 
 const players = new Map();
 const realmStates = new Map();
+const mobStatePersistCache = new Map();
 let realmCache = [];
 
 function createSabakState() {
@@ -5237,6 +5390,7 @@ const DEFAULT_CMD_COOLDOWNS_MS = {
 };
 const commandRateState = new Map();
 const commandCooldownState = new Map();
+const COMMAND_STATE_STALE_MS = 30 * 60 * 1000;
 let cmdRateCache = { value: null, updatedAt: 0 };
 
 async function getCmdRateSettingsCached() {
@@ -5289,19 +5443,56 @@ function hitCooldown(player, key, cooldownMs) {
   return false;
 }
 
+function cleanupStaleCommandState(now = Date.now()) {
+  for (const [key, entry] of commandRateState.entries()) {
+    const start = Number(entry?.start || 0);
+    if (!start || now - start > COMMAND_STATE_STALE_MS) {
+      commandRateState.delete(key);
+    }
+  }
+  for (const [key, last] of commandCooldownState.entries()) {
+    const ts = Number(last || 0);
+    if (!ts || now - ts > COMMAND_STATE_STALE_MS) {
+      commandCooldownState.delete(key);
+    }
+  }
+}
+
+function getMobPersistCacheKey(mob) {
+  return `${mob.realmId || 1}:${mob.zoneId}:${mob.roomId}:${mob.slotIndex}`;
+}
+
+function getMobPersistSnapshot(mob) {
+  return JSON.stringify([
+    mob.templateId,
+    Math.max(0, Math.floor(Number(mob.currentHp || 0))),
+    mob.status || {}
+  ]);
+}
+
 function cultivationRewardMultiplier(player) {
   const level = Math.floor(Number(player?.flags?.cultivationLevel ?? -1));
   if (Number.isNaN(level) || level < 0) return 1;
   return 1 + (level + 1) * 0.1;
 }
 
-function totalRewardMultiplier({ vipActive, svipActive = false, guildActive, cultivationMult = 1, partyMult = 1, treasureExpPct = 0 }) {
+function totalRewardMultiplier({ vipActive, svipActive = false, guildActive, guildBuildRewardPct = 0, cultivationMult = 1, partyMult = 1, treasureExpPct = 0 }) {
   const vipBonus = (vipActive ? 1 : 0) + (svipActive ? 1 : 0);
   const guildBonus = guildActive ? 1 : 0;
+  const guildBuildBonus = Math.max(0, Number(guildBuildRewardPct || 0) / 100);
   const cultivationBonus = Math.max(0, (Number(cultivationMult) || 1) - 1);
   const partyBonus = Math.max(0, (Number(partyMult) || 1) - 1);
   const treasureBonus = Math.max(0, Number(treasureExpPct || 0) / 100);
-  return 1 + vipBonus + guildBonus + cultivationBonus + partyBonus + treasureBonus;
+  return 1 + vipBonus + guildBonus + guildBuildBonus + cultivationBonus + partyBonus + treasureBonus;
+}
+
+function totalGoldRewardMultiplier({ vipActive, svipActive = false, guildActive, guildBuildGoldPct = 0, cultivationMult = 1, partyMult = 1 }) {
+  const vipBonus = (vipActive ? 1 : 0) + (svipActive ? 1 : 0);
+  const guildBonus = guildActive ? 1 : 0;
+  const guildBuildBonus = Math.max(0, Number(guildBuildGoldPct || 0) / 100);
+  const cultivationBonus = Math.max(0, (Number(cultivationMult) || 1) - 1);
+  const partyBonus = Math.max(0, (Number(partyMult) || 1) - 1);
+  return 1 + vipBonus + guildBonus + guildBuildBonus + cultivationBonus + partyBonus;
 }
 
 function buildItemView(itemId, effects = null, durability = null, max_durability = null, refine_level = 0, base_roll_pct = null, growth_level = 0, growth_fail_stack = 0) {
@@ -6569,7 +6760,7 @@ async function recoverManagedHostedPlayersOnStartup() {
       ensurePersonalBossPosition(loaded);
       const member = await getGuildMember(userId, charName, realmId);
       if (member && member.guild) {
-        loaded.guild = { id: member.guild.id, name: member.guild.name, role: member.role };
+        attachGuildMeta(loaded, member.guild, member.role);
       }
       if (loaded.rankTitle) {
         onlinePlayerRankTitles.set(loaded.name, loaded.rankTitle);
@@ -9483,12 +9674,21 @@ function applyOfflineRewards(player) {
     vipActive,
     svipActive,
     guildActive: Boolean(player.guild),
+    guildBuildRewardPct: Number(player.guild?.buildExpBonusPct || player.guild?.buildRewardBonusPct || 0),
     cultivationMult,
     partyMult: 1,
     treasureExpPct: Number(player.flags?.treasureExpBonusPct || 0)
   });
+  const goldRewardMult = totalGoldRewardMultiplier({
+    vipActive,
+    svipActive,
+    guildActive: Boolean(player.guild),
+    guildBuildGoldPct: Number(player.guild?.buildGoldBonusPct || 0),
+    cultivationMult,
+    partyMult: 1
+  });
   const expGain = Math.floor(offlineMinutes * player.level * offlineMultiplier * rewardMult);
-  const goldGain = Math.floor(offlineMinutes * player.level * offlineMultiplier);
+  const goldGain = Math.floor(offlineMinutes * player.level * offlineMultiplier * goldRewardMult);
   let fruitGain = 0;
   let petFruitGain = 0;
   const fruitDropRate = getTrainingFruitDropRate();
@@ -12480,9 +12680,117 @@ function buildPetStatePayload(player) {
   };
 }
 
+function attachGuildMeta(player, guild, role = 'member') {
+  if (!player || !guild) return null;
+  const building = buildGuildBuildingPayload(guild);
+  player.guild = {
+    id: guild.id,
+    name: guild.name,
+    role,
+    buildExp: building.exp,
+    buildGold: building.gold,
+    buildPoints: building.points,
+    buildLevel: building.level,
+    buildBranchLevels: Array.isArray(building.branches)
+      ? Object.fromEntries(building.branches.map((branch) => [branch.id, branch.level]))
+      : {},
+    buildMemberLimit: building.memberLimit,
+    buildExpBonusPct: building.expBonusPct,
+    buildGoldBonusPct: building.goldBonusPct,
+    buildAtkBonusPct: building.atkBonusPct,
+    buildMagBonusPct: building.magBonusPct,
+    buildSpiritBonusPct: building.spiritBonusPct,
+    buildDefBonusPct: building.defBonusPct,
+    buildMdefBonusPct: building.mdefBonusPct,
+    buildRewardBonusPct: building.rewardBonusPct,
+    buildBattleBonusPct: building.battleBonusPct,
+    buildUpgradeStartedAt: building.upgradeStartedAt || null,
+    buildUpgradeEndsAt: building.upgradeEndsAt || null,
+    buildUpgradeBranch: building.activeUpgradeBranch || null
+  };
+  return building;
+}
+
+function syncGuildMetaToOnlineMembers(guildId, building) {
+  if (!guildId || !building) return;
+  players.forEach((onlinePlayer) => {
+    if (!onlinePlayer?.guild || String(onlinePlayer.guild.id) !== String(guildId)) return;
+    onlinePlayer.guild.buildExp = building.exp;
+    onlinePlayer.guild.buildGold = building.gold;
+    onlinePlayer.guild.buildPoints = building.points;
+    onlinePlayer.guild.buildLevel = building.level;
+    onlinePlayer.guild.buildBranchLevels = Array.isArray(building.branches)
+      ? Object.fromEntries(building.branches.map((branch) => [branch.id, branch.level]))
+      : {};
+    onlinePlayer.guild.buildMemberLimit = building.memberLimit;
+    onlinePlayer.guild.buildExpBonusPct = building.expBonusPct;
+    onlinePlayer.guild.buildGoldBonusPct = building.goldBonusPct;
+    onlinePlayer.guild.buildAtkBonusPct = building.atkBonusPct;
+    onlinePlayer.guild.buildMagBonusPct = building.magBonusPct;
+    onlinePlayer.guild.buildSpiritBonusPct = building.spiritBonusPct;
+    onlinePlayer.guild.buildDefBonusPct = building.defBonusPct;
+    onlinePlayer.guild.buildMdefBonusPct = building.mdefBonusPct;
+    onlinePlayer.guild.buildRewardBonusPct = building.rewardBonusPct;
+    onlinePlayer.guild.buildBattleBonusPct = building.battleBonusPct;
+    onlinePlayer.guild.buildUpgradeStartedAt = building.upgradeStartedAt || null;
+    onlinePlayer.guild.buildUpgradeEndsAt = building.upgradeEndsAt || null;
+    onlinePlayer.guild.buildUpgradeBranch = building.activeUpgradeBranch || null;
+    computeDerived(onlinePlayer);
+    onlinePlayer.forceStateRefresh = true;
+  });
+}
+
+function normalizeGuildDonateDailyState(player, now = Date.now()) {
+  if (!player?.flags) player.flags = {};
+  const t = getChinaDateParts(now);
+  const todayKey = String(t.dateKey || '');
+  const current = player.flags.guildDonateDaily;
+  if (!current || typeof current !== 'object' || current.dateKey !== todayKey) {
+    player.flags.guildDonateDaily = {
+      dateKey: todayKey,
+      goldCount: 0,
+      pointsCount: 0
+    };
+  }
+  return player.flags.guildDonateDaily;
+}
+
+function getGuildDonateDailyInfo(player, now = Date.now()) {
+  const guildConfig = getGuildSystemConfigSnapshot();
+  const state = normalizeGuildDonateDailyState(player, now);
+  const goldCount = Math.max(0, Math.floor(Number(state.goldCount || 0)));
+  const pointsCount = Math.max(0, Math.floor(Number(state.pointsCount || 0)));
+  const goldLimit = Math.max(0, Math.floor(Number(guildConfig.donateLimits?.gold || 0)));
+  const pointsLimit = Math.max(0, Math.floor(Number(guildConfig.donateLimits?.points || 0)));
+  return {
+    dateKey: state.dateKey,
+    gold: {
+      limit: goldLimit,
+      used: goldCount,
+      remaining: Math.max(0, goldLimit - goldCount)
+    },
+    points: {
+      limit: pointsLimit,
+      used: pointsCount,
+      remaining: Math.max(0, pointsLimit - pointsCount)
+    }
+  };
+}
+
+function normalizeGuildContribution(player) {
+  if (!player?.flags) player.flags = {};
+  const value = Math.max(0, Math.floor(Number(player.flags.guildContribution || 0)));
+  player.flags.guildContribution = value;
+  return value;
+}
+
 async function buildState(player) {
   normalizeVipStatus(player);
   normalizeSvipStatus(player);
+  if (player.guild?.id && player.guild.buildUpgradeEndsAt && Number(player.guild.buildUpgradeEndsAt) <= Date.now()) {
+    const refreshedGuildBuilding = await getGuildBuildingInfo(player.guild.id);
+    if (refreshedGuildBuilding) syncGuildMetaToOnlineMembers(player.guild.id, refreshedGuildBuilding);
+  }
   computeDerived(player);
   const realmId = player.realmId || 1;
   const roomRealmId = getRoomRealmId(player.position.zone, player.position.room, realmId);
@@ -12655,6 +12963,20 @@ async function buildState(player) {
   const effectResetTripleRate = getEffectResetTripleRate();
   const effectResetQuadrupleRate = getEffectResetQuadrupleRate();
   const effectResetQuintupleRate = getEffectResetQuintupleRate();
+  const guildBuilding = player.guild
+    ? buildGuildBuildingPayload({
+        id: player.guild.id,
+        build_exp: player.guild.buildExp || 0,
+        build_gold: player.guild.buildGold || 0,
+        build_points: player.guild.buildPoints || 0,
+        build_branch_levels: player.guild.buildBranchLevels || null,
+        build_upgrade_started_at: player.guild.buildUpgradeStartedAt || null,
+        build_upgrade_ends_at: player.guild.buildUpgradeEndsAt || null,
+        build_upgrade_branch: player.guild.buildUpgradeBranch || null
+      })
+    : null;
+  const guildDonateDaily = player.guild ? getGuildDonateDailyInfo(player) : null;
+  const guildSystemConfig = getGuildSystemConfigSnapshot();
 
   return {
     player: {
@@ -12707,6 +13029,9 @@ async function buildState(player) {
         : Math.max(0, Math.ceil(autoFullTrialInfo.remainingMs / 1000)),
       autoFullBossFilter,
       guild_bonus: guildBonus,
+      guild_build_level: guildBuilding?.level || 0,
+      guild_build_reward_bonus_pct: guildBuilding?.rewardBonusPct || 0,
+      guild_build_battle_bonus_pct: guildBuilding?.battleBonusPct || 0,
       set_bonus: Boolean(player.flags?.setBonusActive),
       exp_gold_bonus_pct: (() => {
         const totalPartyCount = partyMembersTotalCount(party) || 1;
@@ -12716,11 +13041,20 @@ async function buildState(player) {
           vipActive: isVipActive(player),
           svipActive: isSvipActive(player),
           guildActive: Boolean(player.guild),
+          guildBuildRewardPct: Number(player.guild?.buildExpBonusPct || player.guild?.buildRewardBonusPct || 0),
           cultivationMult,
           partyMult,
           treasureExpPct: Number(player.flags?.treasureExpBonusPct || 0)
         });
-        return Math.max(0, Math.round((rewardMult - 1) * 100));
+        const goldMult = totalGoldRewardMultiplier({
+          vipActive: isVipActive(player),
+          svipActive: isSvipActive(player),
+          guildActive: Boolean(player.guild),
+          guildBuildGoldPct: Number(player.guild?.buildGoldBonusPct || 0),
+          cultivationMult,
+          partyMult
+        });
+        return Math.max(0, Math.round((Math.max(rewardMult, goldMult) - 1) * 100));
       })()
     },
     summon: summonPayloads[0] || null,
@@ -12729,6 +13063,18 @@ async function buildState(player) {
     warehouse,
     guild: player.guild?.name || null,
     guild_role: player.guild?.role || null,
+    guild_contribution: normalizeGuildContribution(player),
+    guild_system: {
+      donateCost: { ...guildSystemConfig.donateCost },
+      contributionGain: { ...guildSystemConfig.contributionGain }
+    },
+    guild_shop_items: guildSystemConfig.shopItems.map((item) => ({ ...item })),
+    guild_building: guildBuilding
+      ? {
+          ...guildBuilding,
+          donationLimits: guildDonateDaily
+        }
+      : null,
     party: party ? { size: party.members.length, leader: party.leader, members: partyMembers } : null,
     training: player.flags?.training || { hp: 0, mp: 0, atk: 0, def: 0, mag: 0, mdef: 0, spirit: 0, dex: 0 },
     online: { count: onlineCount },
@@ -12754,6 +13100,7 @@ async function buildState(player) {
       randomAttr: treasureRandomAttrTotal
     },
     pet: buildPetStatePayload(player),
+    specialization: buildSpecializationPayload(player),
     anti: {
       key: player.socket?.data?.antiKey || null,
       seq: player.socket?.data?.antiSeq || 0
@@ -14302,7 +14649,7 @@ io.on('connection', (socket) => {
 
     const member = await getGuildMember(session.user_id, name, loaded.realmId || 1);
     if (member && member.guild) {
-      loaded.guild = { id: member.guild.id, name: member.guild.name, role: member.role };
+      attachGuildMeta(loaded, member.guild, member.role);
     }
     normalizeZhuxianTowerProgress(loaded);
     normalizePetState(loaded);
@@ -15474,6 +15821,14 @@ io.on('connection', (socket) => {
       socket.emit('guild_members', { ok: false, error: '你不在行会中。' });
       return;
     }
+    const building = await getGuildBuildingInfo(player.guild.id);
+    if (building) syncGuildMetaToOnlineMembers(player.guild.id, building);
+    const buildingPayload = building
+      ? {
+          ...building,
+          donationLimits: getGuildDonateDailyInfo(player)
+        }
+      : null;
     const members = await listGuildMembers(player.guild.id, player.realmId || 1);
     const online = listOnlinePlayers(player.realmId || 1);
     const memberList = members.map((m) => ({
@@ -15490,6 +15845,7 @@ io.on('connection', (socket) => {
       guildId: player.guild.id,
       guildName: player.guild.name,
       role: player.guild.role || 'member',
+      building: buildingPayload,
       members: memberList
     });
   });
@@ -15576,6 +15932,12 @@ io.on('connection', (socket) => {
     if (!targetApp) {
       return socket.emit('guild_approve_result', { ok: false, msg: '该玩家没有申请加入你的行会' });
     }
+    const buildingInfo = await getGuildBuildingInfo(player.guild.id);
+    const memberLimit = Math.max(1, Math.floor(Number(buildingInfo?.memberLimit || 20)));
+    const currentMembers = await listGuildMembers(player.guild.id, player.realmId || 1);
+    if (Array.isArray(currentMembers) && currentMembers.length >= memberLimit) {
+      return socket.emit('guild_approve_result', { ok: false, msg: `行会人数已满（${currentMembers.length}/${memberLimit}），请先升级成员殿。` });
+    }
 
     try {
       await approveGuildApplication(player.guild.id, targetApp.user_id, clean.charName, player.realmId || 1);
@@ -15583,7 +15945,12 @@ io.on('connection', (socket) => {
 
       const onlineTarget = playersByName(clean.charName, player.realmId || 1);
       if (onlineTarget) {
-        onlineTarget.guild = { id: player.guild.id, name: player.guild.name, role: 'member' };
+        const guildRow = await getGuildById(player.guild.id);
+        if (guildRow) attachGuildMeta(onlineTarget, guildRow, 'member');
+        else onlineTarget.guild = { id: player.guild.id, name: player.guild.name, role: 'member' };
+        computeDerived(onlineTarget);
+        onlineTarget.forceStateRefresh = true;
+        await sendState(onlineTarget);
         onlineTarget.send(`你的申请已被批准，已加入行会 ${player.guild.name}`);
       }
     } catch (err) {
@@ -15620,6 +15987,175 @@ io.on('connection', (socket) => {
     if (onlineTarget) {
       onlineTarget.send('你的加入行会申请已被拒绝');
     }
+  });
+
+  socket.on('guild_donate', async (payload) => {
+    const player = players.get(socket.id);
+    if (!player || !player.guild) {
+      socket.emit('guild_donate_result', { ok: false, msg: '你不在行会中。' });
+      return;
+    }
+    const guildConfig = getGuildSystemConfigSnapshot();
+    const { clean } = sanitizePayload(payload, ['type'], 'guild_donate');
+    const donateType = String(clean?.type || '').trim().toLowerCase();
+    const donateDaily = getGuildDonateDailyInfo(player);
+    let costGold = 0;
+    let costPoints = 0;
+    if (donateType === 'gold') {
+      if (donateDaily.gold.remaining <= 0) {
+        socket.emit('guild_donate_result', { ok: false, msg: `今日金币捐献次数已达上限（${donateDaily.gold.limit}次）。`, building: player.guild ? { ...buildGuildBuildingPayload({ id: player.guild.id, build_exp: player.guild.buildExp || 0, build_gold: player.guild.buildGold || 0, build_points: player.guild.buildPoints || 0, build_branch_levels: player.guild.buildBranchLevels || null, build_upgrade_started_at: player.guild.buildUpgradeStartedAt || null, build_upgrade_ends_at: player.guild.buildUpgradeEndsAt || null, build_upgrade_branch: player.guild.buildUpgradeBranch || null }), donationLimits: donateDaily } : null });
+        return;
+      }
+      costGold = Math.max(0, Math.floor(Number(guildConfig.donateCost?.gold || 0)));
+      if (Number(player.gold || 0) < costGold) {
+        socket.emit('guild_donate_result', { ok: false, msg: `金币不足，捐献需要 ${costGold} 金币。` });
+        return;
+      }
+      player.gold -= costGold;
+    } else if (donateType === 'points') {
+      if (donateDaily.points.remaining <= 0) {
+        socket.emit('guild_donate_result', { ok: false, msg: `今日活动积分捐献次数已达上限（${donateDaily.points.limit}次）。`, building: player.guild ? { ...buildGuildBuildingPayload({ id: player.guild.id, build_exp: player.guild.buildExp || 0, build_gold: player.guild.buildGold || 0, build_points: player.guild.buildPoints || 0, build_branch_levels: player.guild.buildBranchLevels || null, build_upgrade_started_at: player.guild.buildUpgradeStartedAt || null, build_upgrade_ends_at: player.guild.buildUpgradeEndsAt || null, build_upgrade_branch: player.guild.buildUpgradeBranch || null }), donationLimits: donateDaily } : null });
+        return;
+      }
+      costPoints = Math.max(0, Math.floor(Number(guildConfig.donateCost?.points || 0)));
+      const spendResult = spendActivityPoints(player, costPoints);
+      if (!spendResult.ok) {
+        socket.emit('guild_donate_result', { ok: false, msg: spendResult.error || '活动积分不足。' });
+        return;
+      }
+    } else {
+      socket.emit('guild_donate_result', { ok: false, msg: '无效捐献类型。' });
+      return;
+    }
+    const donateState = normalizeGuildDonateDailyState(player);
+    if (donateType === 'gold') donateState.goldCount = Math.max(0, Math.floor(Number(donateState.goldCount || 0))) + 1;
+    if (donateType === 'points') donateState.pointsCount = Math.max(0, Math.floor(Number(donateState.pointsCount || 0))) + 1;
+    const contributionGain = donateType === 'gold'
+      ? Math.max(0, Math.floor(Number(guildConfig.contributionGain?.gold || 0)))
+      : Math.max(0, Math.floor(Number(guildConfig.contributionGain?.points || 0)));
+    player.flags.guildContribution = normalizeGuildContribution(player) + contributionGain;
+    const building = await addGuildBuildingContribution(player.guild.id, { gold: costGold, points: costPoints });
+    if (building) syncGuildMetaToOnlineMembers(player.guild.id, building);
+    player.forceStateRefresh = true;
+    await sendState(player);
+    await savePlayer(player);
+    const resultBuilding = building
+      ? {
+          ...building,
+          donationLimits: getGuildDonateDailyInfo(player)
+        }
+      : null;
+    socket.emit('guild_donate_result', {
+      ok: true,
+      msg: donateType === 'gold'
+        ? `行会建设捐献成功：投入 ${costGold} 金币，获得 ${contributionGain} 行会贡献，建设等级 Lv${building?.level || 0}。`
+        : `行会建设捐献成功：投入 ${costPoints} 活动积分，获得 ${contributionGain} 行会贡献，建设等级 Lv${building?.level || 0}。`,
+      building: resultBuilding
+    });
+  });
+
+  socket.on('guild_build_upgrade', async (payload) => {
+    const player = players.get(socket.id);
+    if (!player || !player.guild) {
+      socket.emit('guild_build_upgrade_result', { ok: false, msg: '你不在行会中。' });
+      return;
+    }
+    const isLeaderOrVice = await isGuildLeaderOrVice(player.guild.id, player.userId, player.name, player.realmId || 1);
+    if (!isLeaderOrVice) {
+      socket.emit('guild_build_upgrade_result', { ok: false, msg: '只有会长或副会长可以发起行会建筑升级。' });
+      return;
+    }
+    const { clean } = sanitizePayload(payload, ['branchId'], 'guild_build_upgrade');
+    const branchId = String(clean?.branchId || '').trim().toLowerCase() || 'exp';
+    const result = await startGuildBuildingUpgrade(player.guild.id, branchId);
+    if (result.building) syncGuildMetaToOnlineMembers(player.guild.id, result.building);
+    player.forceStateRefresh = true;
+    await sendState(player);
+    await savePlayer(player);
+    const activeBranch = (result.building?.branches || []).find((entry) => entry.id === result.building?.activeUpgradeBranch);
+    socket.emit('guild_build_upgrade_result', {
+      ok: Boolean(result.ok),
+      msg: result.ok
+        ? `${activeBranch?.label || '行会建筑'}已开始升级，预计 ${Math.max(0, Number(activeBranch?.nextDurationSec || result.building?.nextDurationSec || 0))} 秒后完成。`
+        : (result.error || '行会建筑升级发起失败。'),
+      building: result.building || null
+    });
+  });
+
+  socket.on('guild_shop_buy', async (payload) => {
+    const player = players.get(socket.id);
+    if (!player || !player.guild) {
+      socket.emit('guild_shop_result', { ok: false, msg: '你不在行会中。' });
+      return;
+    }
+    const guildConfig = getGuildSystemConfigSnapshot();
+    const { clean } = sanitizePayload(payload, ['itemId'], 'guild_shop_buy');
+    const itemId = String(clean?.itemId || '').trim();
+    const item = (Array.isArray(guildConfig.shopItems) ? guildConfig.shopItems : []).find((entry) => entry.id === itemId);
+    if (!item) {
+      socket.emit('guild_shop_result', { ok: false, msg: '无效商城物品。' });
+      return;
+    }
+    const currentContribution = normalizeGuildContribution(player);
+    if (currentContribution < item.cost) {
+      socket.emit('guild_shop_result', { ok: false, msg: `行会贡献不足，需要 ${item.cost}。` });
+      return;
+    }
+    const addResult = addItem(player, item.id, item.qty);
+    if (!addResult?.ok) {
+      socket.emit('guild_shop_result', { ok: false, msg: addResult?.error || '奖励发放失败。' });
+      return;
+    }
+    player.flags.guildContribution = currentContribution - item.cost;
+    player.forceStateRefresh = true;
+    await sendState(player);
+    await savePlayer(player);
+    socket.emit('guild_shop_result', {
+      ok: true,
+      msg: `兑换成功：${item.name} x${item.qty}，消耗 ${item.cost} 行会贡献。`,
+      itemId: item.id
+    });
+  });
+
+  socket.on('commission_claim', async (payload) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const { clean } = sanitizePayload(payload, ['taskId'], 'commission_claim');
+    const taskId = String(clean?.taskId || '').trim().toLowerCase() || 'all';
+    const result = claimCommissionTask(player, taskId);
+    player.forceStateRefresh = true;
+    await sendState(player);
+    await savePlayer(player);
+    socket.emit('commission_result', {
+      ok: Boolean(result.ok),
+      msg: result.ok
+        ? `委托奖励已领取：获得活动积分 ${Math.max(0, Math.floor(Number(result.points || 0)))}。`
+        : (result.error || '委托奖励领取失败。'),
+      taskIds: result.taskIds || []
+    });
+  });
+
+  socket.on('specialization_set', async (payload) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const { clean } = sanitizePayload(payload, ['trackId'], 'specialization_set');
+    const trackId = String(clean?.trackId || '').trim();
+    const defs = SPECIALIZATION_DEFS[player.classId] || [];
+    const picked = defs.find((entry) => entry.id === trackId);
+    if (!picked) {
+      socket.emit('specialization_result', { ok: false, msg: '无效专精路线。' });
+      return;
+    }
+    if (!player.flags) player.flags = {};
+    if (!player.flags.specialization || typeof player.flags.specialization !== 'object') {
+      player.flags.specialization = {};
+    }
+    player.flags.specialization.trackId = trackId;
+    computeDerived(player);
+    player.forceStateRefresh = true;
+    await sendState(player);
+    await savePlayer(player);
+    socket.emit('specialization_result', { ok: true, msg: `已切换到 ${picked.name}。`, trackId });
   });
 
   socket.on('sabak_info', async () => {
@@ -16657,13 +17193,22 @@ async function processMobDeath(player, mob, online) {
         vipActive: isVipActive(member),
         svipActive: isSvipActive(member),
         guildActive: Boolean(member.guild),
+        guildBuildRewardPct: Number(member.guild?.buildExpBonusPct || member.guild?.buildRewardBonusPct || 0),
         cultivationMult,
         partyMult,
         treasureExpPct: Number(member.flags?.treasureExpBonusPct || 0)
       });
+      const goldRewardMult = totalGoldRewardMultiplier({
+        vipActive: isVipActive(member),
+        svipActive: isSvipActive(member),
+        guildActive: Boolean(member.guild),
+        guildBuildGoldPct: Number(member.guild?.buildGoldBonusPct || 0),
+        cultivationMult,
+        partyMult
+      });
       const activityBonus = getMobRewardActivityBonus(member, template, Date.now(), { zoneId: mobZoneId, roomId: mobRoomId });
       const finalExp = Math.floor(shareExp * rewardMult * (activityBonus.expMult || 1));
-      const finalGold = Math.floor(shareGold * (activityBonus.goldMult || 1));
+      const finalGold = Math.floor(shareGold * goldRewardMult * (activityBonus.goldMult || 1));
       member.gold += finalGold;
       const leveled = gainExp(member, finalExp);
       const petExpResult = gainActivePetExp(member, finalExp);
@@ -18470,6 +19015,7 @@ async function start() {
   }
   await runMigrations();
   await loadPetSettingsFromDb();
+  await loadGuildBuildingConfig();
   await applyWorldBossSettings();
   await applyCultivationBossSettings();
   await applySpecialBossSettings();
@@ -18560,9 +19106,14 @@ async function start() {
   setInterval(async () => {
     try {
       const realmIds = getRealmIds();
+      const activeMobKeys = new Set();
       for (const realmId of realmIds) {
         const aliveMobs = getAllAliveMobs(realmId);
         for (const mob of aliveMobs) {
+          const cacheKey = getMobPersistCacheKey(mob);
+          activeMobKeys.add(cacheKey);
+          const nextSnapshot = getMobPersistSnapshot(mob);
+          if (mobStatePersistCache.get(cacheKey) === nextSnapshot) continue;
           await saveMobState(
             realmId,
             mob.zoneId,
@@ -18572,6 +19123,12 @@ async function start() {
             mob.currentHp,
             mob.status
           );
+          mobStatePersistCache.set(cacheKey, nextSnapshot);
+        }
+      }
+      for (const key of mobStatePersistCache.keys()) {
+        if (!activeMobKeys.has(key)) {
+          mobStatePersistCache.delete(key);
         }
       }
     } catch (err) {
@@ -18610,6 +19167,11 @@ async function start() {
       console.warn('Failed to cleanup expired consignments:', err);
     }
   }, CONSIGN_CLEANUP_INTERVAL_MS);
+
+  // 定期清理长时间未访问的限频/冷却缓存，避免长时间运行后 Map 持续增长
+  setInterval(() => {
+    cleanupStaleCommandState(Date.now());
+  }, 10 * 60 * 1000);
   
   try {
     const result = await cleanupInvalidItems();
@@ -18650,6 +19212,7 @@ async function start() {
   // 加载修炼系统配置
   const trainingPerLevelConfig = await getTrainingPerLevelConfigDb();
   setTrainingPerLevelConfigMem(trainingPerLevelConfig);
+  await loadGuildSystemConfig();
   await loadEquipmentRecycleConfigFromDb();
   await loadHarvestSeasonRewardConfigFromDb();
   await loadHarvestSeasonSignConfigFromDb();

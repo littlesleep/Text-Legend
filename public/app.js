@@ -845,6 +845,7 @@ let tradeData = {
   partnerName: ''
 };
 let guildMembers = [];
+let guildBuildingState = null;
 let lastGuildApplyId = null;
 const guildApplyButtons = new Map();
 const guildApplyPending = new Set();
@@ -6193,6 +6194,140 @@ function showAutoFullBossModal() {
     });
   }
 
+function formatSpecializationBonusText(bonuses = {}) {
+    const parts = [];
+    const appendPct = (key, label) => {
+      const value = Math.round(Math.max(0, Number(bonuses?.[key] || 0)) * 100);
+      if (value > 0) parts.push(`${label}+${value}%`);
+    };
+    appendPct('atkPct', '攻击');
+    appendPct('defPct', '防御');
+    appendPct('magPct', '魔法');
+    appendPct('spiritPct', '道术');
+    appendPct('mdefPct', '魔御');
+    appendPct('dexPct', '敏捷');
+    appendPct('maxHpPct', '生命');
+    appendPct('maxMpPct', '法力');
+    return parts.join(' / ') || '无额外加成';
+}
+
+async function showGuildShopModal() {
+  const contribution = Math.max(0, Math.floor(Number(lastState?.guild_contribution || 0)));
+  const fallbackItems = [
+    { id: 'training_fruit', name: '修炼果', qty: 5, cost: 50, desc: '日常修炼补给' },
+    { id: 'pet_training_fruit', name: '宠物修炼果', qty: 5, cost: 50, desc: '宠物养成补给' },
+    { id: 'treasure_exp_material', name: '法宝经验丹', qty: 10, cost: 80, desc: '法宝升级材料' },
+    { id: 'ultimate_growth_stone', name: '装备成长石', qty: 5, cost: 120, desc: '终极装备成长材料' },
+    { id: 'ultimate_growth_break', name: '成长突破石', qty: 3, cost: 240, desc: '成长突破材料' }
+  ];
+  const items = Array.isArray(lastState?.guild_shop_items) && lastState.guild_shop_items.length
+    ? lastState.guild_shop_items.map((item) => ({
+        id: String(item?.id || '').trim(),
+        name: String(item?.name || item?.id || '').trim(),
+        qty: Math.max(1, Math.floor(Number(item?.qty || 1))),
+        cost: Math.max(1, Math.floor(Number(item?.cost || 1))),
+        desc: '行会贡献兑换'
+      })).filter((item) => item.id)
+    : fallbackItems;
+  await promptMultiSelectModal({
+    title: '行会商城',
+    text: `当前行会贡献：${contribution}`,
+    options: items.map((item) => ({
+      value: item.id,
+      label: `${item.name} x${item.qty}（${item.cost}贡献）`,
+      description: item.desc,
+      className: contribution >= item.cost ? 'activity-action-shop' : 'activity-action-muted'
+    })),
+    selectedValues: [],
+    singleSelect: true,
+    submitOnSelect: true,
+    closeOnSelect: true,
+    hideOk: true,
+    cancelText: '关闭',
+    optionsClassName: 'activity-center-options',
+    modalClassName: 'activity-center-prompt',
+    onSelect: (itemId) => {
+      if (!socket) return showToast('未连接服务器');
+      socket.emit('guild_shop_buy', { itemId });
+    }
+  });
+}
+
+async function showCommissionBoardModal() {
+    const board = lastState?.activities?.progress?.commission_board || {};
+    const tasks = Array.isArray(board.tasks) ? board.tasks : [];
+    const summaryLines = tasks.map((task) => {
+      const status = task.claimed ? '已领取' : (task.completed ? '可领取' : '进行中');
+      return `${task.name}：${task.progress}/${task.target}（${status}，奖励 ${Number(task.points || 0)} 活动积分）`;
+    });
+    const options = [];
+    if (tasks.some((task) => task.canClaim)) {
+      options.push({ value: 'claim:all', label: `一键领取（${Number(board.claimableCount || 0)}项）`, className: 'activity-action-primary' });
+      tasks.filter((task) => task.canClaim).forEach((task) => {
+        options.push({ value: `claim:${task.id}`, label: `领取：${task.name}`, description: `${task.desc} / ${task.progress}/${task.target}`, className: 'activity-action-shop' });
+      });
+    }
+    await promptMultiSelectModal({
+      title: '离线委托 / 日常任务板',
+      text: summaryLines.length ? summaryLines.join('\n') : '暂无委托任务。',
+      options,
+      selectedValues: [],
+      singleSelect: true,
+      submitOnSelect: true,
+      closeOnSelect: true,
+      hideOk: true,
+      cancelText: '关闭',
+      optionsClassName: 'activity-center-options',
+      modalClassName: 'activity-center-prompt',
+      onSelect: (value) => {
+        const raw = String(value || '');
+        if (!raw.startsWith('claim:')) return;
+        const taskId = raw.slice('claim:'.length) || 'all';
+        if (!socket) return showToast('未连接服务器');
+        socket.emit('commission_claim', { taskId });
+      }
+    });
+  }
+
+  async function showSpecializationModal() {
+    const specialization = lastState?.specialization || {};
+    const tracks = Array.isArray(specialization.tracks) ? specialization.tracks : [];
+    const summaryLines = tracks.map((track) => {
+      const nodes = Array.isArray(track.nodes) ? track.nodes : [];
+      const unlocked = nodes.filter((node) => node.unlocked).length;
+      const latestUnlocked = nodes.filter((node) => node.unlocked).map((node) => node).pop();
+      const latestText = latestUnlocked ? formatSpecializationBonusText(latestUnlocked.bonuses) : '等级不足';
+      return `${track.active ? '已选' : '可选'} ${track.name}：${track.desc}（已解锁 ${unlocked}/${nodes.length} 节，最近节点：${latestText}）`;
+    });
+    await promptMultiSelectModal({
+      title: '角色专精 / 天赋树',
+      text: summaryLines.length ? summaryLines.join('\n') : '当前职业暂无专精路线。',
+      options: tracks.map((track) => ({
+        value: track.id,
+        label: `${track.name}${track.active ? '（当前）' : ''}`,
+        description: `${track.desc} | ${formatSpecializationBonusText((track.nodes || []).filter((node) => node.unlocked).reduce((sum, node) => {
+          const bonuses = node?.bonuses || {};
+          Object.keys(bonuses).forEach((key) => {
+            sum[key] = Math.max(0, Number(sum[key] || 0)) + Math.max(0, Number(bonuses[key] || 0));
+          });
+          return sum;
+        }, {}))}`
+      })),
+      selectedValues: [],
+      singleSelect: true,
+      submitOnSelect: true,
+      closeOnSelect: true,
+      hideOk: true,
+      cancelText: '关闭',
+      optionsClassName: 'activity-center-options',
+      modalClassName: 'activity-center-prompt',
+      onSelect: (trackId) => {
+        if (!socket) return showToast('未连接服务器');
+        socket.emit('specialization_set', { trackId });
+      }
+    });
+  }
+
   function runActivityCenterAction(action) {
     if (!socket) {
       showToast('未连接服务器');
@@ -6215,6 +6350,14 @@ function showAutoFullBossModal() {
     if (action === 'shop') {
       socket.emit('cmd', { text: '活动 shop', source: 'ui' });
       showToast('已请求活动积分商城');
+      return;
+    }
+    if (action === 'commission_board') {
+      void showCommissionBoardModal();
+      return;
+    }
+    if (action === 'specialization') {
+      void showSpecializationModal();
       return;
     }
     if (action === 'harvest_sign') {
@@ -6329,6 +6472,7 @@ function showAutoFullBossModal() {
     const treasurePet = progress.treasure_pet_festival || {};
     const lucky = progress.lucky_drop_day || {};
     const harvest = progress.harvest_season || {};
+    const commission = progress.commission_board || {};
     const harvestChest = harvest.timedChest || {};
     const refine = progress.refine_carnival || {};
     const milestone = refine.milestones || {};
@@ -6352,6 +6496,7 @@ function showAutoFullBossModal() {
       activeList.length ? `当前活动：${activeList.map((a) => a.name).join('、')}` : '当前没有进行中的限时活动',
       `活动积分：${Number(currency.activity_points || 0)}（累计获得 ${Number(currency.activity_points_earned || 0)} / 消费 ${Number(currency.activity_points_spent || 0)}）`,
       `丰收季（每日全天）：签到 ${harvest.loginClaimed ? '已领取' : '未领取'} / 赐福 ${formatHarvestBlessingLabel(harvest.blessing, harvest.blessingClaimed)} / 补给 ${harvest.supplyClaimed ? '已领取' : '未领取'} / 宝箱 ${harvestChest.active ? `${harvestChest.name}${harvestChest.claimed ? '（已领）' : '（可领）'}` : `${harvestChest.name || '待开启'} ${harvestChest.startText || ''}${harvestChest.endText ? `-${harvestChest.endText}` : ''}`.trim()} / 挂机 ${Number(harvest.onlineMinutes || 0)} 分钟 / 巡礼 ${Number(harvest.patrolPoints || 0)}（全部统一计入活动积分）`,
+      `离线委托：已完成 ${Number(commission.completedCount || 0)}/${Array.isArray(commission.tasks) ? commission.tasks.length : 0} 项，可领取 ${Number(commission.claimableCount || 0)} 项`,
       `新手追赶计划（${scheduleText.newbie}）`,
       `双倍秘境（${scheduleText.double}）：${ddMeta.zoneName || doubleDungeon.zoneId || '-'}（击杀 ${Number(doubleDungeon.kills || 0)}）`,
       `世界BOSS悬赏（${scheduleText.bounty}）：${bountyMeta.mobName || bounty.mobId || '-'}（积分 ${Number(bounty.points || 0)} / 击杀 ${Number(bounty.kills || 0)}）`,
@@ -6372,6 +6517,8 @@ function showAutoFullBossModal() {
       options: [
         { value: 'harvest_sign', label: '丰收签到', className: 'activity-action-primary' },
         { value: 'harvest_chest', label: '丰收宝箱', className: 'activity-action-primary' },
+        { value: 'commission_board', label: '离线委托', className: 'activity-action-primary' },
+        { value: 'specialization', label: '角色专精', className: 'activity-action-primary' },
         { value: 'shop', label: '积分商城', className: 'activity-action-shop' },
         { value: 'beast_exchange', label: '神兽碎片兑换', className: 'activity-action-shop' },
         { value: 'rank_all', label: '查看全部排行榜', className: 'activity-action-rank all-rank' },
@@ -7431,6 +7578,102 @@ function renderGuildModal() {
     guildUi.leave.classList.remove('hidden');
   }
 
+  if (guildBuildingState) {
+    const canManageBuild = lastState?.guild_role === 'leader' || lastState?.guild_role === 'vice_leader';
+    const contribution = Math.max(0, Math.floor(Number(lastState?.guild_contribution || 0)));
+    const guildSystem = lastState?.guild_system || {};
+    const donateLimits = guildBuildingState.donationLimits || {};
+    const goldDonate = donateLimits.gold || { remaining: 0, limit: 0 };
+    const pointDonate = donateLimits.points || { remaining: 0, limit: 0 };
+    const goldDonateCost = Math.max(0, Math.floor(Number(guildSystem?.donateCost?.gold || 100000)));
+    const pointDonateCost = Math.max(0, Math.floor(Number(guildSystem?.donateCost?.points || 50)));
+    const goldContributionGain = Math.max(0, Math.floor(Number(guildSystem?.contributionGain?.gold || 10)));
+    const pointContributionGain = Math.max(0, Math.floor(Number(guildSystem?.contributionGain?.points || 50)));
+    const upgradeEndsAt = Number(guildBuildingState.upgradeEndsAt || 0);
+    const upgradeSec = upgradeEndsAt > Date.now()
+      ? Math.max(0, Math.ceil((upgradeEndsAt - Date.now()) / 1000))
+      : Math.max(0, Math.floor(Number(guildBuildingState.upgradeRemainingSec || 0)));
+    const upgradeTimeText = upgradeSec > 0
+      ? `${Math.floor(upgradeSec / 3600)}时${Math.floor((upgradeSec % 3600) / 60)}分${upgradeSec % 60}秒`
+      : '未在升级';
+    const branches = Array.isArray(guildBuildingState.branches) ? guildBuildingState.branches : [];
+    const buildCard = document.createElement('div');
+    buildCard.className = 'guild-build-card';
+    buildCard.innerHTML = `
+      <div class="guild-build-title">行会建设</div>
+      <div class="guild-build-stats">
+        <span>主殿 Lv${Number(guildBuildingState.level || 0)}</span>
+        <span>建设值 ${Number(guildBuildingState.exp || 0)}</span>
+        <span>成员上限 ${Number(guildBuildingState.memberLimit || 20)}</span>
+        <span>经验+${Number(guildBuildingState.expBonusPct || 0)}%</span>
+        <span>金币+${Number(guildBuildingState.goldBonusPct || 0)}%</span>
+      </div>
+      <div class="guild-build-next">个人行会贡献：${contribution}</div>
+      <div class="guild-build-next">当前升级：${guildBuildingState.upgrading ? `${guildBuildingState.activeUpgradeBranchLabel || '建筑'}（剩余 ${upgradeTimeText}）` : '当前无升级中的建筑'}</div>
+      <div class="guild-build-next">今日捐献剩余：金币 ${Number(goldDonate.remaining || 0)}/${Number(goldDonate.limit || 0)} 次，活动积分 ${Number(pointDonate.remaining || 0)}/${Number(pointDonate.limit || 0)} 次</div>
+      <div class="guild-build-next">战斗建筑：攻击+${Number(guildBuildingState.atkBonusPct || 0)}% / 魔法+${Number(guildBuildingState.magBonusPct || 0)}% / 道术+${Number(guildBuildingState.spiritBonusPct || 0)}% / 防御+${Number(guildBuildingState.defBonusPct || 0)}% / 魔御+${Number(guildBuildingState.mdefBonusPct || 0)}%</div>
+    `;
+    const branchWrap = document.createElement('div');
+    branchWrap.className = 'guild-build-branches';
+    branches.forEach((branch) => {
+      const branchCard = document.createElement('div');
+      branchCard.className = `guild-build-branch${branch.upgrading ? ' is-upgrading' : ''}${branch.readyToUpgrade ? ' is-ready' : ''}`;
+      const branchRemainSec = Number(branch.upgradeRemainingSec || 0);
+      const branchTimeText = branchRemainSec > 0
+        ? `${Math.floor(branchRemainSec / 3600)}时${Math.floor((branchRemainSec % 3600) / 60)}分${branchRemainSec % 60}秒`
+        : `${Math.max(0, Number(branch.nextDurationSec || 0))} 秒`;
+      branchCard.innerHTML = `
+        <div class="guild-build-branch-head">
+          <span class="guild-build-branch-name">${branch.label}</span>
+          <span class="guild-build-branch-level">Lv${Number(branch.level || 0)}</span>
+        </div>
+        <div class="guild-build-branch-bonus">${branch.bonusText || '无加成'}</div>
+        <div class="guild-build-branch-meta">${branch.nextThreshold ? `下级需建设值 ${Number(branch.nextThreshold || 0)}（还差 ${Number(branch.nextNeed || 0)}）` : '已达该分支上限'}</div>
+        <div class="guild-build-branch-meta">${branch.upgrading ? `升级中：剩余 ${branchTimeText}` : (branch.readyToUpgrade ? `可升级：耗时 ${branchTimeText}` : '尚未满足升级条件')}</div>
+      `;
+      const branchBtn = document.createElement('button');
+      branchBtn.type = 'button';
+      branchBtn.textContent = branch.upgrading ? '升级中' : `升级${branch.label}`;
+      branchBtn.disabled = !canManageBuild || Boolean(guildBuildingState.upgrading) || !branch.readyToUpgrade;
+      branchBtn.addEventListener('click', () => {
+        if (!socket) return showToast('未连接服务器');
+        socket.emit('guild_build_upgrade', { branchId: branch.id });
+      });
+      branchCard.appendChild(branchBtn);
+      branchWrap.appendChild(branchCard);
+    });
+    buildCard.appendChild(branchWrap);
+    const actionRow = document.createElement('div');
+    actionRow.className = 'guild-build-actions';
+    const goldBtn = document.createElement('button');
+    goldBtn.type = 'button';
+    goldBtn.textContent = `捐献${goldDonateCost}金币（+${goldContributionGain}贡献，剩余${Number(goldDonate.remaining || 0)}次）`;
+    goldBtn.disabled = Number(goldDonate.remaining || 0) <= 0;
+    goldBtn.addEventListener('click', () => {
+      if (!socket) return showToast('未连接服务器');
+      socket.emit('guild_donate', { type: 'gold' });
+    });
+    const pointBtn = document.createElement('button');
+    pointBtn.type = 'button';
+    pointBtn.textContent = `捐献${pointDonateCost}活动积分（+${pointContributionGain}贡献，剩余${Number(pointDonate.remaining || 0)}次）`;
+    pointBtn.disabled = Number(pointDonate.remaining || 0) <= 0;
+    pointBtn.addEventListener('click', () => {
+      if (!socket) return showToast('未连接服务器');
+      socket.emit('guild_donate', { type: 'points' });
+    });
+    const shopBtn = document.createElement('button');
+    shopBtn.type = 'button';
+    shopBtn.textContent = '行会商城';
+    shopBtn.addEventListener('click', () => {
+      void showGuildShopModal();
+    });
+    actionRow.appendChild(goldBtn);
+    actionRow.appendChild(pointBtn);
+    actionRow.appendChild(shopBtn);
+    buildCard.appendChild(actionRow);
+    guildUi.list.appendChild(buildCard);
+  }
+
   // 计算分页
   const totalPages = Math.max(1, Math.ceil(guildMembers.length / GUILD_PAGE_SIZE));
   guildPage = Math.min(Math.max(0, guildPage), totalPages - 1);
@@ -8004,6 +8247,12 @@ function isBossRoomState(state) {
 function renderState(state) {
   const prevState = lastState;
   lastState = state;
+  if (Object.prototype.hasOwnProperty.call(state || {}, 'guild_building')) {
+    guildBuildingState = state.guild_building || null;
+    if (guildUi?.modal && !guildUi.modal.classList.contains('hidden')) {
+      renderGuildModal();
+    }
+  }
   if (state?.high_tier_recycle_config) {
     cachedHighTierRecycleConfig = state.high_tier_recycle_config;
   }
@@ -9955,12 +10204,15 @@ function enterGame(name) {
     if (!payload || !payload.ok) {
       if (payload && payload.error) appendLine(payload.error);
       guildMembers = [];
+      guildBuildingState = null;
       if (guildUi.modal && !guildUi.modal.classList.contains('hidden')) {
         renderGuildModal();
       }
       return;
     }
     guildMembers = payload.members || [];
+    guildBuildingState = payload.building || null;
+    if (lastState) lastState.guild_building = guildBuildingState;
     if (guildUi.modal && !guildUi.modal.classList.contains('hidden')) {
       renderGuildModal();
     }
@@ -10021,6 +10273,39 @@ function enterGame(name) {
     } else {
       appendLine(payload.msg || '拒绝失败');
     }
+  });
+  socket.on('guild_donate_result', (payload) => {
+    if (!payload) return;
+    if (payload.building) guildBuildingState = payload.building;
+    if (lastState && payload.building) lastState.guild_building = payload.building;
+    noticeModal({ title: '行会建设', text: String(payload.msg || (payload.ok ? '捐献完成。' : '捐献失败。')) });
+    if (payload.ok && socket && guildUi.modal && !guildUi.modal.classList.contains('hidden')) {
+      socket.emit('guild_members');
+    }
+  });
+  socket.on('guild_build_upgrade_result', (payload) => {
+    if (!payload) return;
+    if (payload.building) guildBuildingState = payload.building;
+    if (lastState && payload.building) lastState.guild_building = payload.building;
+    noticeModal({ title: '行会建筑升级', text: String(payload.msg || (payload.ok ? '升级已开始。' : '升级发起失败。')) });
+    if (socket && guildUi.modal && !guildUi.modal.classList.contains('hidden')) {
+      socket.emit('guild_members');
+    }
+  });
+  socket.on('guild_shop_result', (payload) => {
+    if (!payload) return;
+    noticeModal({ title: '行会商城', text: String(payload.msg || (payload.ok ? '兑换成功。' : '兑换失败。')) });
+    if (payload.ok && socket && guildUi.modal && !guildUi.modal.classList.contains('hidden')) {
+      socket.emit('guild_members');
+    }
+  });
+  socket.on('commission_result', (payload) => {
+    if (!payload) return;
+    noticeModal({ title: '离线委托', text: String(payload.msg || (payload.ok ? '委托奖励已领取。' : '委托奖励领取失败。')) });
+  });
+  socket.on('specialization_result', (payload) => {
+    if (!payload) return;
+    noticeModal({ title: '角色专精', text: String(payload.msg || (payload.ok ? '专精切换完成。' : '专精切换失败。')) });
   });
   socket.on('sabak_info', (payload) => {
     if (!payload) return;

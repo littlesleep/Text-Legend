@@ -514,6 +514,35 @@ const equipmentRecycleList = document.getElementById('equipment-recycle-list');
 let equipmentRecycleRowsCache = [];
 let equipmentRecycleItemOptionsCache = [];
 let equipmentRecycleItemSearchKeyword = '';
+const guildSystemMsg = document.getElementById('guild-system-msg');
+const guildSystemLoadBtn = document.getElementById('guild-system-load-btn');
+const guildSystemShopAddBtn = document.getElementById('guild-system-shop-add-btn');
+const guildSystemSaveBtn = document.getElementById('guild-system-save-btn');
+const guildSystemLimitGoldInput = document.getElementById('guild-system-limit-gold');
+const guildSystemLimitPointsInput = document.getElementById('guild-system-limit-points');
+const guildSystemCostGoldInput = document.getElementById('guild-system-cost-gold');
+const guildSystemCostPointsInput = document.getElementById('guild-system-cost-points');
+const guildSystemGainGoldInput = document.getElementById('guild-system-gain-gold');
+const guildSystemGainPointsInput = document.getElementById('guild-system-gain-points');
+const guildSystemItemSearchInput = document.getElementById('guild-system-item-search');
+const guildSystemShopList = document.getElementById('guild-system-shop-list');
+let guildSystemShopRowsCache = [];
+let guildSystemItemOptionsCache = [];
+let guildSystemItemSearchKeyword = '';
+const guildBuildingMsg = document.getElementById('guild-building-msg');
+const guildBuildingLoadBtn = document.getElementById('guild-building-load-btn');
+const guildBuildingSaveBtn = document.getElementById('guild-building-save-btn');
+const guildBuildingLevelList = document.getElementById('guild-building-level-list');
+const guildBuildingMemberBaseInput = document.getElementById('guild-building-member-base');
+const guildBuildingMemberPerLevelInput = document.getElementById('guild-building-member-per-level');
+const guildBuildingExpPerLevelInput = document.getElementById('guild-building-exp-per-level');
+const guildBuildingGoldPerLevelInput = document.getElementById('guild-building-gold-per-level');
+const guildBuildingAtkPerLevelInput = document.getElementById('guild-building-atk-per-level');
+const guildBuildingMagPerLevelInput = document.getElementById('guild-building-mag-per-level');
+const guildBuildingSpiritPerLevelInput = document.getElementById('guild-building-spirit-per-level');
+const guildBuildingDefPerLevelInput = document.getElementById('guild-building-def-per-level');
+const guildBuildingMdefPerLevelInput = document.getElementById('guild-building-mdef-per-level');
+let guildBuildingLevelRowsCache = [];
 
 // 每日幸运玩家相关
 const dailyLuckyMsg = document.getElementById('daily-lucky-msg');
@@ -1259,6 +1288,243 @@ async function saveEquipmentRecycleConfig() {
   } catch (err) {
     equipmentRecycleMsg.textContent = `保存失败: ${err.message}`;
     equipmentRecycleMsg.style.color = 'red';
+  }
+}
+
+function guildSystemEmptyShopItem() {
+  return {
+    _id: `gs_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    id: '',
+    qty: 1,
+    cost: 1
+  };
+}
+
+function buildGuildSystemItemSelectHtml(selectedId = '', keyword = '') {
+  const selected = String(selectedId || '').trim();
+  const kw = String(keyword || guildSystemItemSearchKeyword || '').trim().toLowerCase();
+  const options = Array.isArray(guildSystemItemOptionsCache) ? guildSystemItemOptionsCache : [];
+  const filtered = kw
+    ? options.filter((it) => {
+        const id = String(it?.id || '').toLowerCase();
+        const name = String(it?.name || '').toLowerCase();
+        const type = String(it?.type || '').toLowerCase();
+        return id.includes(kw) || name.includes(kw) || type.includes(kw);
+      })
+    : options;
+  const selectedExists = filtered.some((it) => String(it?.id || '') === selected);
+  const selectedOption = !selectedExists && selected
+    ? options.find((it) => String(it?.id || '') === selected)
+    : null;
+  const finalList = selectedOption ? [selectedOption, ...filtered] : filtered;
+  const optionHtml = finalList.map((it) => {
+    const id = String(it?.id || '').replace(/"/g, '&quot;');
+    const text = String(it?.name || it?.id || '').replace(/"/g, '&quot;');
+    return `<option value="${id}"${id === selected ? ' selected' : ''}>${text}</option>`;
+  }).join('');
+  return `<select data-k="id"><option value="">请选择物品</option>${optionHtml}</select>`;
+}
+
+function renderGuildSystemShopRows() {
+  if (!guildSystemShopList) return;
+  const rows = Array.isArray(guildSystemShopRowsCache) ? guildSystemShopRowsCache : [];
+  guildSystemShopList.innerHTML = '';
+  if (!rows.length) {
+    guildSystemShopList.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">暂无商城商品，点击“添加商城商品”</td></tr>';
+    return;
+  }
+  rows.forEach((item, index) => {
+    const tr = document.createElement('tr');
+    tr.dataset.index = String(index);
+    tr.dataset.shopId = String(item?._id || '');
+    tr.innerHTML = `
+      <td>${buildGuildSystemItemSelectHtml(item.id)}</td>
+      <td><input data-k="qty" type="number" min="1" value="${Math.max(1, Number(item.qty || 1))}" style="width: 72px;"></td>
+      <td><input data-k="cost" type="number" min="1" value="${Math.max(1, Number(item.cost || 1))}" style="width: 88px;"></td>
+      <td><button type="button" class="btn-small" data-act="del">删除</button></td>
+    `;
+    guildSystemShopList.appendChild(tr);
+  });
+}
+
+function collectGuildSystemConfigFromUi() {
+  const shopItems = [];
+  if (guildSystemShopList) {
+    guildSystemShopList.querySelectorAll('tr[data-index]').forEach((tr) => {
+      const id = String(tr.querySelector('[data-k="id"]')?.value || '').trim();
+      if (!id) return;
+      shopItems.push({
+        id,
+        qty: Math.max(1, Math.floor(Number(tr.querySelector('[data-k="qty"]')?.value || 1))),
+        cost: Math.max(1, Math.floor(Number(tr.querySelector('[data-k="cost"]')?.value || 1)))
+      });
+    });
+  }
+  return {
+    donateLimits: {
+      gold: Math.max(0, Math.floor(Number(guildSystemLimitGoldInput?.value || 0))),
+      points: Math.max(0, Math.floor(Number(guildSystemLimitPointsInput?.value || 0)))
+    },
+    donateCost: {
+      gold: Math.max(0, Math.floor(Number(guildSystemCostGoldInput?.value || 0))),
+      points: Math.max(0, Math.floor(Number(guildSystemCostPointsInput?.value || 0)))
+    },
+    contributionGain: {
+      gold: Math.max(0, Math.floor(Number(guildSystemGainGoldInput?.value || 0))),
+      points: Math.max(0, Math.floor(Number(guildSystemGainPointsInput?.value || 0)))
+    },
+    shopItems
+  };
+}
+
+async function loadGuildSystemConfig() {
+  if (!guildSystemMsg) return;
+  guildSystemMsg.textContent = '';
+  try {
+    const data = await api('/admin/guild-system-settings', 'GET');
+    const config = data?.config || {};
+    guildSystemItemOptionsCache = Array.isArray(data?.itemOptions) ? data.itemOptions : [];
+    guildSystemShopRowsCache = (Array.isArray(config.shopItems) ? config.shopItems : []).map((item, index) => ({
+      _id: `gs_${index + 1}`,
+      id: String(item?.id || '').trim(),
+      qty: Math.max(1, Math.floor(Number(item?.qty || 1))),
+      cost: Math.max(1, Math.floor(Number(item?.cost || 1)))
+    })).filter((row) => row.id);
+    if (guildSystemLimitGoldInput) guildSystemLimitGoldInput.value = Math.max(0, Number(config?.donateLimits?.gold || 0));
+    if (guildSystemLimitPointsInput) guildSystemLimitPointsInput.value = Math.max(0, Number(config?.donateLimits?.points || 0));
+    if (guildSystemCostGoldInput) guildSystemCostGoldInput.value = Math.max(0, Number(config?.donateCost?.gold || 0));
+    if (guildSystemCostPointsInput) guildSystemCostPointsInput.value = Math.max(0, Number(config?.donateCost?.points || 0));
+    if (guildSystemGainGoldInput) guildSystemGainGoldInput.value = Math.max(0, Number(config?.contributionGain?.gold || 0));
+    if (guildSystemGainPointsInput) guildSystemGainPointsInput.value = Math.max(0, Number(config?.contributionGain?.points || 0));
+    renderGuildSystemShopRows();
+    guildSystemMsg.textContent = '加载成功';
+    guildSystemMsg.style.color = 'green';
+    setTimeout(() => { guildSystemMsg.textContent = ''; }, 1500);
+  } catch (err) {
+    guildSystemMsg.textContent = `加载失败: ${err.message}`;
+    guildSystemMsg.style.color = 'red';
+  }
+}
+
+async function saveGuildSystemConfig() {
+  if (!guildSystemMsg) return;
+  guildSystemMsg.textContent = '';
+  try {
+    const config = collectGuildSystemConfigFromUi();
+    const data = await api('/admin/guild-system-settings/update', 'POST', { config });
+    guildSystemItemOptionsCache = Array.isArray(guildSystemItemOptionsCache) ? guildSystemItemOptionsCache : [];
+    guildSystemShopRowsCache = (Array.isArray(data?.config?.shopItems) ? data.config.shopItems : config.shopItems).map((item, index) => ({
+      _id: `gs_${index + 1}`,
+      id: String(item?.id || '').trim(),
+      qty: Math.max(1, Math.floor(Number(item?.qty || 1))),
+      cost: Math.max(1, Math.floor(Number(item?.cost || 1)))
+    })).filter((row) => row.id);
+    renderGuildSystemShopRows();
+    guildSystemMsg.textContent = '保存成功';
+    guildSystemMsg.style.color = 'green';
+    setTimeout(() => { guildSystemMsg.textContent = ''; }, 1500);
+  } catch (err) {
+    guildSystemMsg.textContent = `保存失败: ${err.message}`;
+    guildSystemMsg.style.color = 'red';
+  }
+}
+
+function renderGuildBuildingLevelRows() {
+  if (!guildBuildingLevelList) return;
+  guildBuildingLevelList.innerHTML = '';
+  const rows = Array.isArray(guildBuildingLevelRowsCache) ? guildBuildingLevelRowsCache : [];
+  if (!rows.length) {
+    guildBuildingLevelList.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">暂无配置</td></tr>';
+    return;
+  }
+  rows.forEach((row, index) => {
+    const tr = document.createElement('tr');
+    tr.dataset.index = String(index);
+    tr.innerHTML = `
+      <td>${index}</td>
+      <td><input data-k="threshold" type="number" min="0" value="${Math.max(0, Math.floor(Number(row?.threshold || 0)))}" style="width: 120px;"></td>
+      <td><input data-k="durationSec" type="number" min="0" value="${Math.max(0, Math.floor(Number(row?.durationSec || 0)))}" style="width: 120px;"></td>
+    `;
+    guildBuildingLevelList.appendChild(tr);
+  });
+}
+
+function collectGuildBuildingConfigFromUi() {
+  const thresholds = [];
+  const durationsSec = [];
+  if (guildBuildingLevelList) {
+    guildBuildingLevelList.querySelectorAll('tr[data-index]').forEach((tr, idx) => {
+      thresholds.push(Math.max(0, Math.floor(Number(tr.querySelector('[data-k="threshold"]')?.value || 0))));
+      durationsSec.push(idx === 0 ? 0 : Math.max(0, Math.floor(Number(tr.querySelector('[data-k="durationSec"]')?.value || 0))));
+    });
+  }
+  return {
+    thresholds,
+    durationsSec,
+    gains: {
+      memberBaseLimit: Math.max(1, Math.floor(Number(guildBuildingMemberBaseInput?.value || 1))),
+      memberPerLevel: Math.max(1, Math.floor(Number(guildBuildingMemberPerLevelInput?.value || 1))),
+      expPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingExpPerLevelInput?.value || 0))),
+      goldPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingGoldPerLevelInput?.value || 0))),
+      atkPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingAtkPerLevelInput?.value || 0))),
+      magPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingMagPerLevelInput?.value || 0))),
+      spiritPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingSpiritPerLevelInput?.value || 0))),
+      defPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingDefPerLevelInput?.value || 0))),
+      mdefPctPerLevel: Math.max(0, Math.floor(Number(guildBuildingMdefPerLevelInput?.value || 0)))
+    }
+  };
+}
+
+async function loadGuildBuildingConfig() {
+  if (!guildBuildingMsg) return;
+  guildBuildingMsg.textContent = '';
+  try {
+    const data = await api('/admin/guild-building-settings', 'GET');
+    const config = data?.config || {};
+    const thresholds = Array.isArray(config.thresholds) ? config.thresholds : [];
+    const durationsSec = Array.isArray(config.durationsSec) ? config.durationsSec : [];
+    guildBuildingLevelRowsCache = thresholds.map((threshold, index) => ({
+      threshold: Math.max(0, Math.floor(Number(threshold || 0))),
+      durationSec: index === 0 ? 0 : Math.max(0, Math.floor(Number(durationsSec[index] || 0)))
+    }));
+    renderGuildBuildingLevelRows();
+    const gains = config.gains || {};
+    if (guildBuildingMemberBaseInput) guildBuildingMemberBaseInput.value = Math.max(1, Number(gains.memberBaseLimit || 20));
+    if (guildBuildingMemberPerLevelInput) guildBuildingMemberPerLevelInput.value = Math.max(1, Number(gains.memberPerLevel || 5));
+    if (guildBuildingExpPerLevelInput) guildBuildingExpPerLevelInput.value = Math.max(0, Number(gains.expPctPerLevel || 5));
+    if (guildBuildingGoldPerLevelInput) guildBuildingGoldPerLevelInput.value = Math.max(0, Number(gains.goldPctPerLevel || 5));
+    if (guildBuildingAtkPerLevelInput) guildBuildingAtkPerLevelInput.value = Math.max(0, Number(gains.atkPctPerLevel || 3));
+    if (guildBuildingMagPerLevelInput) guildBuildingMagPerLevelInput.value = Math.max(0, Number(gains.magPctPerLevel || 3));
+    if (guildBuildingSpiritPerLevelInput) guildBuildingSpiritPerLevelInput.value = Math.max(0, Number(gains.spiritPctPerLevel || 3));
+    if (guildBuildingDefPerLevelInput) guildBuildingDefPerLevelInput.value = Math.max(0, Number(gains.defPctPerLevel || 3));
+    if (guildBuildingMdefPerLevelInput) guildBuildingMdefPerLevelInput.value = Math.max(0, Number(gains.mdefPctPerLevel || 3));
+    guildBuildingMsg.textContent = '加载成功';
+    guildBuildingMsg.style.color = 'green';
+    setTimeout(() => { guildBuildingMsg.textContent = ''; }, 1500);
+  } catch (err) {
+    guildBuildingMsg.textContent = `加载失败: ${err.message}`;
+    guildBuildingMsg.style.color = 'red';
+  }
+}
+
+async function saveGuildBuildingConfig() {
+  if (!guildBuildingMsg) return;
+  guildBuildingMsg.textContent = '';
+  try {
+    const config = collectGuildBuildingConfigFromUi();
+    const data = await api('/admin/guild-building-settings/update', 'POST', { config });
+    const nextConfig = data?.config || config;
+    guildBuildingLevelRowsCache = (Array.isArray(nextConfig.thresholds) ? nextConfig.thresholds : []).map((threshold, index) => ({
+      threshold: Math.max(0, Math.floor(Number(threshold || 0))),
+      durationSec: index === 0 ? 0 : Math.max(0, Math.floor(Number(nextConfig?.durationsSec?.[index] || 0)))
+    }));
+    renderGuildBuildingLevelRows();
+    guildBuildingMsg.textContent = '保存成功';
+    guildBuildingMsg.style.color = 'green';
+    setTimeout(() => { guildBuildingMsg.textContent = ''; }, 1500);
+  } catch (err) {
+    guildBuildingMsg.textContent = `保存失败: ${err.message}`;
+    guildBuildingMsg.style.color = 'red';
   }
 }
 
@@ -7094,6 +7360,8 @@ async function initDashboard() {
     loadHarvestRewardConfig();
     loadDivineBeastFragmentExchangeConfig();
     loadEquipmentRecycleConfig();
+    loadGuildSystemConfig();
+    loadGuildBuildingConfig();
     loadFirstRechargeSettings();
     loadInviteRewardSettings();
     loadClassBonusConfig();
@@ -7145,6 +7413,16 @@ if (equipmentRecycleAddBtn) {
     renderEquipmentRecycleRows();
   });
 }
+if (guildSystemLoadBtn) guildSystemLoadBtn.addEventListener('click', loadGuildSystemConfig);
+if (guildSystemShopAddBtn) {
+  guildSystemShopAddBtn.addEventListener('click', () => {
+    if (!Array.isArray(guildSystemShopRowsCache)) guildSystemShopRowsCache = [];
+    guildSystemShopRowsCache.push(guildSystemEmptyShopItem());
+    renderGuildSystemShopRows();
+  });
+}
+if (guildBuildingLoadBtn) guildBuildingLoadBtn.addEventListener('click', loadGuildBuildingConfig);
+if (guildBuildingSaveBtn) guildBuildingSaveBtn.addEventListener('click', saveGuildBuildingConfig);
 
 async function resetPetSkillEffectsToDefault() {
   if (!petSettingsMsg) return;
@@ -7363,6 +7641,43 @@ if (equipmentRecycleList) {
     if (!Array.isArray(equipmentRecycleRowsCache)) equipmentRecycleRowsCache = [];
     equipmentRecycleRowsCache.splice(index, 1);
     renderEquipmentRecycleRows();
+  });
+}
+if (guildSystemSaveBtn) guildSystemSaveBtn.addEventListener('click', saveGuildSystemConfig);
+if (guildSystemItemSearchInput) {
+  guildSystemItemSearchInput.addEventListener('input', () => {
+    guildSystemItemSearchKeyword = String(guildSystemItemSearchInput.value || '').trim();
+    renderGuildSystemShopRows();
+  });
+}
+if (guildSystemShopList) {
+  guildSystemShopList.addEventListener('change', (e) => {
+    const target = e.target;
+    const tr = target?.closest?.('tr[data-index]');
+    const index = Number(tr?.dataset?.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    if (!Array.isArray(guildSystemShopRowsCache) || !guildSystemShopRowsCache[index]) return;
+    if (target?.matches?.('select[data-k="id"]')) {
+      guildSystemShopRowsCache[index].id = String(target.value || '').trim();
+      return;
+    }
+    if (target?.matches?.('input[data-k="qty"]')) {
+      guildSystemShopRowsCache[index].qty = Math.max(1, Math.floor(Number(target.value || 1)));
+      return;
+    }
+    if (target?.matches?.('input[data-k="cost"]')) {
+      guildSystemShopRowsCache[index].cost = Math.max(1, Math.floor(Number(target.value || 1)));
+    }
+  });
+  guildSystemShopList.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('button[data-act="del"]');
+    if (!btn) return;
+    const tr = btn.closest('tr[data-index]');
+    const index = Number(tr?.dataset?.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    if (!Array.isArray(guildSystemShopRowsCache)) guildSystemShopRowsCache = [];
+    guildSystemShopRowsCache.splice(index, 1);
+    renderGuildSystemShopRows();
   });
 }
 if (usersSearchBtn) {

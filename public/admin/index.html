@@ -607,6 +607,120 @@
 
         <div class="block" data-collapsible>
           <div class="block-title">
+            <h2>行会系统配置</h2>
+            <button class="btn-small block-toggle">折叠</button>
+          </div>
+          <div class="block-body">
+            <p class="muted" style="margin-bottom: 8px;">
+              配置行会捐献上限、捐献成本、贡献产出和行会商城商品（网页端立即读取）。
+            </p>
+            <div class="row" style="margin-bottom: 8px; gap: 8px;">
+              <button id="guild-system-load-btn" class="btn-small">加载</button>
+              <button id="guild-system-shop-add-btn" class="btn-small">+ 添加商城商品</button>
+              <button id="guild-system-save-btn" class="btn-small">保存</button>
+            </div>
+            <div class="table-container compact-config-table-container" style="margin-bottom: 12px;">
+              <table class="compact-config-table" style="font-size: 12px;">
+                <thead>
+                  <tr>
+                    <th>配置项</th>
+                    <th>金币捐献</th>
+                    <th>积分捐献</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>每日上限</td>
+                    <td><input id="guild-system-limit-gold" type="number" min="0" style="width: 90px;"></td>
+                    <td><input id="guild-system-limit-points" type="number" min="0" style="width: 90px;"></td>
+                  </tr>
+                  <tr>
+                    <td>单次消耗</td>
+                    <td><input id="guild-system-cost-gold" type="number" min="0" style="width: 90px;"></td>
+                    <td><input id="guild-system-cost-points" type="number" min="0" style="width: 90px;"></td>
+                  </tr>
+                  <tr>
+                    <td>贡献产出</td>
+                    <td><input id="guild-system-gain-gold" type="number" min="0" style="width: 90px;"></td>
+                    <td><input id="guild-system-gain-points" type="number" min="0" style="width: 90px;"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="row" style="margin-bottom: 8px; gap: 8px;">
+              <input id="guild-system-item-search" type="text" placeholder="搜索商城物品名/ID/类型" style="max-width: 240px;">
+            </div>
+            <div class="table-container compact-config-table-container equipment-recycle-config-container">
+              <table class="compact-config-table equipment-recycle-table" style="font-size: 12px;">
+                <thead>
+                  <tr>
+                    <th>物品</th>
+                    <th>数量</th>
+                    <th>贡献消耗</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="guild-system-shop-list">
+                  <tr><td colspan="4" style="text-align:center;color:#999;">点击加载</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="guild-system-msg" class="msg"></div>
+          </div>
+        </div>
+
+        <div class="block" data-collapsible>
+          <div class="block-title">
+            <h2>行会建筑配置</h2>
+            <button class="btn-small block-toggle">折叠</button>
+          </div>
+          <div class="block-body">
+            <p style="color: #666; margin-bottom: 8px; font-size: 13px;">
+              配置行会建筑分支的升级门槛、升级时间和每级加成（网页/安卓行会界面统一读取）。
+            </p>
+            <div class="row" style="margin-bottom: 8px;">
+              <button id="guild-building-load-btn" class="btn-small">加载</button>
+              <button id="guild-building-save-btn" class="btn-small">保存</button>
+            </div>
+            <div class="table-container">
+              <table style="font-size: 12px;">
+                <thead>
+                  <tr>
+                    <th>等级</th>
+                    <th>累计建设值</th>
+                    <th>升级时间(秒)</th>
+                  </tr>
+                </thead>
+                <tbody id="guild-building-level-list">
+                  <tr><td colspan="3" style="text-align:center;color:#999;">点击加载</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <table style="font-size: 12px; margin-top: 8px;">
+              <thead>
+                <tr>
+                  <th>属性</th>
+                  <th>值</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>成员基础上限</td><td><input id="guild-building-member-base" type="number" min="1" style="width: 100px;"></td></tr>
+                <tr><td>成员殿每级+人数</td><td><input id="guild-building-member-per-level" type="number" min="1" style="width: 100px;"></td></tr>
+                <tr><td>历练阁每级+经验%</td><td><input id="guild-building-exp-per-level" type="number" min="0" style="width: 100px;"></td></tr>
+                <tr><td>财库阁每级+金币%</td><td><input id="guild-building-gold-per-level" type="number" min="0" style="width: 100px;"></td></tr>
+                <tr><td>武殿每级+攻击%</td><td><input id="guild-building-atk-per-level" type="number" min="0" style="width: 100px;"></td></tr>
+                <tr><td>法殿每级+魔法%</td><td><input id="guild-building-mag-per-level" type="number" min="0" style="width: 100px;"></td></tr>
+                <tr><td>道殿每级+道术%</td><td><input id="guild-building-spirit-per-level" type="number" min="0" style="width: 100px;"></td></tr>
+                <tr><td>甲殿每级+防御%</td><td><input id="guild-building-def-per-level" type="number" min="0" style="width: 100px;"></td></tr>
+                <tr><td>灵盾阁每级+魔御%</td><td><input id="guild-building-mdef-per-level" type="number" min="0" style="width: 100px;"></td></tr>
+              </tbody>
+            </table>
+            <div id="guild-building-msg" class="msg"></div>
+          </div>
+        </div>
+
+        <div class="block" data-collapsible>
+          <div class="block-title">
             <h2>每日幸运玩家</h2>
             <button class="btn-small block-toggle">折叠</button>
           </div>

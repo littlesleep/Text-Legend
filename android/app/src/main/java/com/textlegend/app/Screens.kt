@@ -2690,6 +2690,7 @@ private fun SettingsScreen(vm: GameViewModel, onDismiss: () -> Unit) {
       val guildList by vm.guildList.collectAsState()
       var guildId by remember { mutableStateOf("") }
       var inviteName by remember { mutableStateOf(prefillName ?: "") }
+      var showGuildShop by remember { mutableStateOf(false) }
       val roleOrder = remember { mapOf("leader" to 0, "vice_leader" to 1, "admin" to 2, "member" to 3) }
       var manageTarget by remember { mutableStateOf<GuildMemberInfo?>(null) }
       val myName = state?.player?.name ?: ""
@@ -2706,6 +2707,16 @@ private fun SettingsScreen(vm: GameViewModel, onDismiss: () -> Unit) {
           val memberList = members?.members.orEmpty()
           val onlineCount = memberList.count { it.online }
           val myRole = memberList.firstOrNull { it.name == myName }?.role ?: ""
+          val building = state?.guild_building ?: members?.building
+          val contribution = state?.guild_contribution ?: 0
+          val guildSystem = state?.guild_system
+          val donateCost = guildSystem?.donateCost
+          val contributionGain = guildSystem?.contributionGain
+          val goldDonateCost = donateCost?.gold ?: 100000
+          val pointDonateCost = donateCost?.points ?: 50
+          val goldContributionGain = contributionGain?.gold ?: 10
+          val pointContributionGain = contributionGain?.points ?: 50
+          val canManageBuild = myRole == "leader" || myRole == "vice_leader"
 
           if (manageTarget != null) {
               val target = manageTarget!!
@@ -2769,6 +2780,143 @@ private fun SettingsScreen(vm: GameViewModel, onDismiss: () -> Unit) {
                   Spacer(modifier = Modifier.height(4.dp))
                   if (members?.ok == true) {
                       Text("成员：${memberList.size}（在线 ${onlineCount}）")
+                  }
+              }
+          }
+
+          if (building != null && members?.ok == true) {
+              Spacer(modifier = Modifier.height(10.dp))
+              Card(
+                  modifier = Modifier.fillMaxWidth(),
+                  colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                  elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+              ) {
+                  Column(modifier = Modifier.padding(12.dp)) {
+                      Text("行会建设", fontWeight = FontWeight.Bold)
+                      Spacer(modifier = Modifier.height(4.dp))
+                      Text("建设等级：Lv${building.level}")
+                      Text("建设值：${building.exp}")
+                      Text("成员上限：${building.memberLimit}")
+                      Text("历练加成：+${building.expBonusPct}%  金币加成：+${building.goldBonusPct}%")
+                      Text("战斗汇总：攻+${building.atkBonusPct}% 法+${building.magBonusPct}% 道+${building.spiritBonusPct}%")
+                      Text("防御汇总：防+${building.defBonusPct}% 魔御+${building.mdefBonusPct}%")
+                      Text("收益加成：+${building.rewardBonusPct}%  战斗加成：+${building.battleBonusPct}%")
+                      Text("个人行会贡献：$contribution")
+                      val goldDonate = building.donationLimits?.gold
+                      val pointDonate = building.donationLimits?.points
+                      if (goldDonate != null && pointDonate != null) {
+                          Text("今日捐献剩余：金币 ${goldDonate.remaining}/${goldDonate.limit} 次，活动积分 ${pointDonate.remaining}/${pointDonate.limit} 次")
+                      }
+                      val remainSec = building.upgradeEndsAt?.let { ((it - System.currentTimeMillis()) / 1000L).toInt().coerceAtLeast(0) }
+                          ?: building.upgradeRemainingSec
+                      val upgradeText = when {
+                          building.upgrading -> "${building.activeUpgradeBranchLabel ?: "建筑"}升级中（剩余 ${formatCountdown(remainSec)}）"
+                          building.readyToUpgrade -> "有分支可升级"
+                          building.nextThreshold == null -> "已达到当前建设上限"
+                          else -> "距离下级还差 ${building.nextNeed}"
+                      }
+                      Text("升级状态：$upgradeText")
+                      val branches = building.branches
+                      if (branches.isNotEmpty()) {
+                          Spacer(modifier = Modifier.height(10.dp))
+                          Text("建筑分支", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                          Spacer(modifier = Modifier.height(6.dp))
+                          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                              branches.forEach { branch ->
+                                  val branchRemainSec = branch.upgradeEndsAt
+                                      ?.let { ((it - System.currentTimeMillis()) / 1000L).toInt().coerceAtLeast(0) }
+                                      ?: branch.upgradeRemainingSec
+                                  val branchStatus = when {
+                                      branch.upgrading -> "升级中（剩余 ${formatCountdown(branchRemainSec)}）"
+                                      branch.readyToUpgrade -> "可升级（耗时 ${formatCountdown(branch.nextDurationSec)}）"
+                                      branch.nextThreshold == null -> "已满级"
+                                      else -> "距下级还差 ${branch.nextNeed}"
+                                  }
+                                  val branchCardColor = when {
+                                      branch.upgrading -> Color(0xFFE7F4EA)
+                                      branch.readyToUpgrade -> Color(0xFFF8F0D9)
+                                      else -> MaterialTheme.colorScheme.surface
+                                  }
+                                  val branchBorderColor = when {
+                                      branch.upgrading -> Color(0xFF4F8F62)
+                                      branch.readyToUpgrade -> Color(0xFFB68A2D)
+                                      else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                  }
+                                  Surface(
+                                      shape = RoundedCornerShape(10.dp),
+                                      color = branchCardColor,
+                                      border = BorderStroke(1.dp, branchBorderColor)
+                                  ) {
+                                      Column(modifier = Modifier.fillMaxWidth().padding(10.dp)) {
+                                          Row(
+                                              modifier = Modifier.fillMaxWidth(),
+                                              horizontalArrangement = Arrangement.SpaceBetween,
+                                              verticalAlignment = Alignment.CenterVertically
+                                          ) {
+                                              Text("${branch.label}  Lv${branch.level}", fontWeight = FontWeight.SemiBold)
+                                              val tagText = when {
+                                                  branch.upgrading -> "升级中"
+                                                  branch.readyToUpgrade -> "可升级"
+                                                  branch.nextThreshold == null -> "满级"
+                                                  else -> "建设中"
+                                              }
+                                              Text(
+                                                  tagText,
+                                                  color = branchBorderColor,
+                                                  fontSize = 12.sp,
+                                                  fontWeight = FontWeight.Medium
+                                              )
+                                          }
+                                          Spacer(modifier = Modifier.height(4.dp))
+                                          Text(branch.bonusText)
+                                          Text(branchStatus, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                          if (branch.nextThreshold != null) {
+                                              Text(
+                                                  "下级累计建设值 ${branch.nextThreshold}",
+                                                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                  fontSize = 12.sp
+                                              )
+                                          }
+                                          if (canManageBuild) {
+                                              Spacer(modifier = Modifier.height(8.dp))
+                                              Button(
+                                                  onClick = { vm.guildBuildUpgrade(branch.id) },
+                                                  enabled = !building.upgrading && branch.readyToUpgrade,
+                                                  modifier = Modifier.fillMaxWidth()
+                                              ) {
+                                                  Text(
+                                                      when {
+                                                          branch.upgrading -> "升级中"
+                                                          branch.nextThreshold == null -> "已满级"
+                                                          branch.readyToUpgrade -> "升级${branch.label}"
+                                                          else -> "暂不可升级"
+                                                      }
+                                                  )
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                      Spacer(modifier = Modifier.height(8.dp))
+                      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                          Button(
+                              onClick = { vm.guildDonate("gold") },
+                              enabled = (goldDonate?.remaining ?: 0) > 0,
+                              modifier = Modifier.weight(1f)
+                          ) { Text("捐献${goldDonateCost}金币（+${goldContributionGain}贡献）") }
+                          Button(
+                              onClick = { vm.guildDonate("points") },
+                              enabled = (pointDonate?.remaining ?: 0) > 0,
+                              modifier = Modifier.weight(1f)
+                          ) { Text("捐献${pointDonateCost}活动积分（+${pointContributionGain}贡献）") }
+                      }
+                      Spacer(modifier = Modifier.height(8.dp))
+                      Button(
+                          onClick = { showGuildShop = true },
+                          modifier = Modifier.fillMaxWidth()
+                      ) { Text("行会商城") }
                   }
               }
           }
@@ -2909,6 +3057,37 @@ private fun SettingsScreen(vm: GameViewModel, onDismiss: () -> Unit) {
             onClick = { if (inviteName.isNotBlank()) vm.sendCmd("guild invite ${inviteName.trim()}") },
             modifier = Modifier.fillMaxWidth()
         ) { Text("邀请") }
+
+        if (showGuildShop) {
+            val shopItems = state?.guild_shop_items?.takeIf { it.isNotEmpty() } ?: listOf(
+                GuildShopItemInfo("training_fruit", "修炼果", 5, 50),
+                GuildShopItemInfo("pet_training_fruit", "宠物修炼果", 5, 50),
+                GuildShopItemInfo("treasure_exp_material", "法宝经验丹", 10, 80),
+                GuildShopItemInfo("ultimate_growth_stone", "装备成长石", 5, 120),
+                GuildShopItemInfo("ultimate_growth_break", "成长突破石", 3, 240)
+            )
+            AlertDialog(
+                onDismissRequest = { showGuildShop = false },
+                title = { Text("行会商城") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("当前行会贡献：$contribution")
+                        shopItems.forEach { item ->
+                            Button(
+                                onClick = { vm.guildShopBuy(item.id); showGuildShop = false },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("${item.name} x${item.qty}（${item.cost}贡献）")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showGuildShop = false }) { Text("关闭") }
+                }
+            )
+        }
     }
 }
 

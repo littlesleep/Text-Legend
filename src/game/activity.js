@@ -56,6 +56,12 @@ const HARVEST_TIMED_CHEST_WINDOWS = [
   { id: 'night', name: '夜间宝箱', start: 21 * 60, end: 22 * 60, gold: 220000, points: 12 }
 ];
 const HARVEST_PATROL_DAILY_CAP = 100;
+const COMMISSION_BOARD_TASKS = [
+  { id: 'hangup', name: '离线托管', desc: '累计挂机 60 分钟', targetKey: 'onlineMinutes', target: 60, points: 20 },
+  { id: 'slay', name: '摸鱼清怪', desc: '累计击杀 120 只怪', targetKey: 'mobKills', target: 120, points: 25 },
+  { id: 'treasure', name: '法宝打磨', desc: '完成 5 次法宝升级/升段', targetKey: 'treasureOps', target: 5, points: 20 },
+  { id: 'pet', name: '灵宠照料', desc: '完成 3 次宠物养成', targetKey: 'petOps', target: 3, points: 20 }
+];
 
 function isHarvestPatrolWindow(now = Date.now()) {
   const t = getChinaDate(now);
@@ -355,6 +361,15 @@ export function normalizeActivityProgress(player, now = Date.now()) {
       blessing: null,
       timedChestClaims: {}
     };
+    ap.commissionBoard = {
+      counters: {
+        onlineMinutes: 0,
+        mobKills: 0,
+        treasureOps: 0,
+        petOps: 0
+      },
+      claimed: {}
+    };
     ap.refineCarnival = ap.refineCarnival && ap.refineCarnival._weekKey === t.weekKey
       ? ap.refineCarnival
       : { _weekKey: t.weekKey, attempts: 0, milestones: {} };
@@ -418,7 +433,88 @@ export function normalizeActivityProgress(player, now = Date.now()) {
   if (!ap.harvestSeason.timedChestClaims || typeof ap.harvestSeason.timedChestClaims !== 'object') {
     ap.harvestSeason.timedChestClaims = {};
   }
+  if (!ap.commissionBoard || typeof ap.commissionBoard !== 'object') {
+    ap.commissionBoard = { counters: {}, claimed: {} };
+  }
+  if (!ap.commissionBoard.counters || typeof ap.commissionBoard.counters !== 'object') {
+    ap.commissionBoard.counters = {};
+  }
+  if (!ap.commissionBoard.claimed || typeof ap.commissionBoard.claimed !== 'object') {
+    ap.commissionBoard.claimed = {};
+  }
+  ap.commissionBoard.counters.onlineMinutes = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.onlineMinutes || 0)));
+  ap.commissionBoard.counters.mobKills = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.mobKills || 0)));
+  ap.commissionBoard.counters.treasureOps = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.treasureOps || 0)));
+  ap.commissionBoard.counters.petOps = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.petOps || 0)));
   return ap;
+}
+
+function buildCommissionTaskPayload(ap, def) {
+  const progress = Math.max(0, Math.floor(Number(ap?.commissionBoard?.counters?.[def.targetKey] || 0)));
+  const claimed = Boolean(ap?.commissionBoard?.claimed?.[def.id]);
+  const completed = progress >= def.target;
+  return {
+    id: def.id,
+    name: def.name,
+    desc: def.desc,
+    target: def.target,
+    progress,
+    points: def.points,
+    claimed,
+    completed,
+    canClaim: completed && !claimed
+  };
+}
+
+export function getCommissionBoardState(player, now = Date.now()) {
+  const ap = normalizeActivityProgress(player, now);
+  const tasks = COMMISSION_BOARD_TASKS.map((def) => buildCommissionTaskPayload(ap, def));
+  return {
+    tasks,
+    claimableCount: tasks.filter((task) => task.canClaim).length,
+    completedCount: tasks.filter((task) => task.claimed).length
+  };
+}
+
+export function claimCommissionTask(player, taskId, now = Date.now()) {
+  const ap = normalizeActivityProgress(player, now);
+  const key = String(taskId || '').trim();
+  if (!key) return { ok: false, error: '无效任务。' };
+  const defs = key === 'all'
+    ? COMMISSION_BOARD_TASKS.filter((def) => buildCommissionTaskPayload(ap, def).canClaim)
+    : COMMISSION_BOARD_TASKS.filter((def) => def.id === key && buildCommissionTaskPayload(ap, def).canClaim);
+  if (!defs.length) {
+    return { ok: false, error: key === 'all' ? '当前没有可领取的委托奖励。' : '当前任务不可领取。' };
+  }
+  let totalPoints = 0;
+  defs.forEach((def) => {
+    ap.commissionBoard.claimed[def.id] = true;
+    totalPoints += def.points;
+  });
+  if (totalPoints > 0) addActivityPoints(player, totalPoints, now);
+  return {
+    ok: true,
+    points: totalPoints,
+    taskIds: defs.map((def) => def.id)
+  };
+}
+
+export function recordCommissionMobKill(player, amount = 1, now = Date.now()) {
+  if (!player) return;
+  const ap = normalizeActivityProgress(player, now);
+  ap.commissionBoard.counters.mobKills = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.mobKills || 0))) + Math.max(0, Math.floor(Number(amount || 0)));
+}
+
+export function recordCommissionTreasureOps(player, amount = 1, now = Date.now()) {
+  if (!player) return;
+  const ap = normalizeActivityProgress(player, now);
+  ap.commissionBoard.counters.treasureOps = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.treasureOps || 0))) + Math.max(0, Math.floor(Number(amount || 0)));
+}
+
+export function recordCommissionPetOps(player, amount = 1, now = Date.now()) {
+  if (!player) return;
+  const ap = normalizeActivityProgress(player, now);
+  ap.commissionBoard.counters.petOps = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.petOps || 0))) + Math.max(0, Math.floor(Number(amount || 0)));
 }
 
 export function getActivityPointBalance(player, now = Date.now()) {
@@ -648,6 +744,7 @@ export function recordHarvestOnlineMinute(player, now = Date.now()) {
   if (Number(ap.harvestSeason?.minuteStamp || 0) === minuteStamp) return false;
   ap.harvestSeason.minuteStamp = minuteStamp;
   ap.harvestSeason.onlineMinutes = Math.max(0, Math.floor(Number(ap.harvestSeason.onlineMinutes || 0))) + 1;
+  ap.commissionBoard.counters.onlineMinutes = Math.max(0, Math.floor(Number(ap.commissionBoard.counters.onlineMinutes || 0))) + 1;
   return true;
 }
 
@@ -682,6 +779,7 @@ export function getActivityStatePayload(player, now = Date.now()) {
         ...(ap.harvestSeason || { loginClaimed: false, onlineMinutes: 0, patrolPoints: 0, blessingClaimed: false, supplyClaimed: false, blessing: null, timedChestClaims: {} }),
         timedChest: getHarvestTimedChestState(ap, now)
       },
+      commission_board: getCommissionBoardState(player, now),
       refine_carnival: {
         attempts: Number(ap.refineCarnival?.attempts || 0),
         milestones: ap.refineCarnival?.milestones || {}
@@ -691,6 +789,7 @@ export function getActivityStatePayload(player, now = Date.now()) {
 }
 
 export function getMobRewardActivityBonus(member, mobTemplate, now = Date.now(), { zoneId = '' } = {}) {
+  recordCommissionMobKill(member, 1, now);
   let expMult = 1;
   let goldMult = 1;
   const notes = [];
@@ -789,6 +888,10 @@ export function recordTreasurePetFestivalActivity(player, {
 
   const treasureDelta = Math.max(0, Number(treasureUpgrades || 0)) + Math.max(0, Number(treasureAdvances || 0));
   const petDelta = Math.max(0, Number(petBookUses || 0)) * 2 + Math.max(0, Number(petSyntheses || 0)) * 8;
+  if (treasureDelta > 0) recordCommissionTreasureOps(player, treasureDelta, now);
+  if (Math.max(0, Number(petBookUses || 0)) + Math.max(0, Number(petSyntheses || 0)) > 0) {
+    recordCommissionPetOps(player, Math.max(0, Number(petBookUses || 0)) + Math.max(0, Number(petSyntheses || 0)), now);
+  }
 
   if (isActivityActive('treasure_pet_festival', now)) {
     const fest = ap.treasurePetFestival || (ap.treasurePetFestival = {

@@ -5832,6 +5832,109 @@ body.dark .rank-tab.active {
   margin: 8px 0 12px;
 }
 
+.guild-build-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(201, 142, 70, 0.28);
+  background: rgba(255, 241, 220, 0.08);
+  padding: 12px;
+  margin-bottom: 6px;
+}
+
+.guild-build-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f4d4aa;
+}
+
+.guild-build-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: rgba(245, 226, 198, 0.92);
+}
+
+.guild-build-stats span {
+  border-radius: 999px;
+  border: 1px solid rgba(210, 129, 42, 0.24);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px 8px;
+}
+
+.guild-build-next {
+  font-size: 0.75rem;
+  color: rgba(245, 226, 198, 0.7);
+}
+
+.guild-build-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.guild-build-actions button {
+  min-width: 120px;
+}
+
+.guild-build-branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.guild-build-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(201, 142, 70, 0.22);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px;
+}
+
+.guild-build-branch.is-ready {
+  border-color: rgba(225, 175, 84, 0.45);
+  box-shadow: 0 0 0 1px rgba(225, 175, 84, 0.12) inset;
+}
+
+.guild-build-branch.is-upgrading {
+  border-color: rgba(111, 181, 255, 0.4);
+  box-shadow: 0 0 0 1px rgba(111, 181, 255, 0.1) inset;
+}
+
+.guild-build-branch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.guild-build-branch-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f4d4aa;
+}
+
+.guild-build-branch-level {
+  font-size: 0.74rem;
+  color: rgba(245, 226, 198, 0.8);
+}
+
+.guild-build-branch-bonus,
+.guild-build-branch-meta {
+  font-size: 0.74rem;
+  color: rgba(245, 226, 198, 0.72);
+}
+
+.guild-build-branch button {
+  align-self: flex-start;
+  min-width: 96px;
+  margin-top: 2px;
+}
+
 .guild-member {
   display: flex;
   align-items: center;

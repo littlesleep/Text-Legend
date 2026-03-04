@@ -196,6 +196,18 @@ class SocketManager(private val json: Json) {
                 val payload = args.firstOrNull() as? JSONObject ?: return@on
                 runCatching { onSimpleResult(json.decodeFromString(SimpleResult.serializer(), payload.toString())) }
             }
+            on("guild_donate_result") { args ->
+                val payload = args.firstOrNull() as? JSONObject ?: return@on
+                runCatching { onSimpleResult(json.decodeFromString(SimpleResult.serializer(), payload.toString())) }
+            }
+            on("guild_build_upgrade_result") { args ->
+                val payload = args.firstOrNull() as? JSONObject ?: return@on
+                runCatching { onSimpleResult(json.decodeFromString(SimpleResult.serializer(), payload.toString())) }
+            }
+            on("guild_shop_result") { args ->
+                val payload = args.firstOrNull() as? JSONObject ?: return@on
+                runCatching { onSimpleResult(json.decodeFromString(SimpleResult.serializer(), payload.toString())) }
+            }
             on("sabak_info") { args ->
                 val payload = args.firstOrNull() as? JSONObject ?: return@on
                 runCatching { onSabakInfo(json.decodeFromString(SabakInfoResponse.serializer(), payload.toString())) }
@@ -353,6 +365,18 @@ class SocketManager(private val json: Json) {
 
     fun guildReject(charName: String) {
         socket?.emit("guild_reject", JSONObject().apply { put("charName", charName) })
+    }
+
+    fun guildDonate(type: String) {
+        socket?.emit("guild_donate", JSONObject().apply { put("type", type) })
+    }
+
+    fun guildBuildUpgrade(branchId: String = "exp") {
+        socket?.emit("guild_build_upgrade", JSONObject().apply { put("branchId", branchId) })
+    }
+
+    fun guildShopBuy(itemId: String) {
+        socket?.emit("guild_shop_buy", JSONObject().apply { put("itemId", itemId) })
     }
 
     fun sabakInfo() {

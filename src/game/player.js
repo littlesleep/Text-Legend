@@ -12,8 +12,151 @@ import { getTreasureBonus, getTreasureRandomAttrBonus, normalizeTreasureState } 
 const EQUIP_BASE_ROLL_MIN_PCT = 100;
 const EQUIP_BASE_ROLL_MAX_PCT = 200;
 
+export const SPECIALIZATION_DEFS = {
+  warrior: [
+    {
+      id: 'berserker',
+      name: '狂战专精',
+      desc: '偏输出，适合长线挂机清怪',
+      nodes: [
+        { level: 30, label: '猛攻', bonuses: { atkPct: 0.08 } },
+        { level: 80, label: '续战', bonuses: { maxHpPct: 0.06 } },
+        { level: 140, label: '压制', bonuses: { atkPct: 0.1 } },
+        { level: 180, label: '狂怒', bonuses: { atkPct: 0.12, defPct: 0.05 } }
+      ]
+    },
+    {
+      id: 'guardian',
+      name: '守御专精',
+      desc: '偏生存，适合扛线与托管稳定',
+      nodes: [
+        { level: 30, label: '铁壁', bonuses: { defPct: 0.08, mdefPct: 0.08 } },
+        { level: 80, label: '厚甲', bonuses: { maxHpPct: 0.08 } },
+        { level: 140, label: '稳阵', bonuses: { defPct: 0.1, mdefPct: 0.1 } },
+        { level: 180, label: '镇岳', bonuses: { defPct: 0.12, maxHpPct: 0.08 } }
+      ]
+    }
+  ],
+  mage: [
+    {
+      id: 'burst',
+      name: '爆发专精',
+      desc: '偏法术爆发，适合速刷',
+      nodes: [
+        { level: 30, label: '蓄势', bonuses: { magPct: 0.08 } },
+        { level: 80, label: '聚能', bonuses: { maxMpPct: 0.08 } },
+        { level: 140, label: '雷鸣', bonuses: { magPct: 0.1 } },
+        { level: 180, label: '焚天', bonuses: { magPct: 0.12, mdefPct: 0.05 } }
+      ]
+    },
+    {
+      id: 'focus',
+      name: '凝神专精',
+      desc: '偏续航与稳态挂机',
+      nodes: [
+        { level: 30, label: '明心', bonuses: { maxMpPct: 0.1 } },
+        { level: 80, label: '法盾', bonuses: { mdefPct: 0.08, defPct: 0.05 } },
+        { level: 140, label: '静观', bonuses: { magPct: 0.08, dexPct: 0.08 } },
+        { level: 180, label: '归一', bonuses: { magPct: 0.1, maxMpPct: 0.1 } }
+      ]
+    }
+  ],
+  taoist: [
+    {
+      id: 'summoner',
+      name: '御灵专精',
+      desc: '偏道术与召唤协同',
+      nodes: [
+        { level: 30, label: '聚灵', bonuses: { spiritPct: 0.08 } },
+        { level: 80, label: '养神', bonuses: { maxMpPct: 0.08 } },
+        { level: 140, label: '通玄', bonuses: { spiritPct: 0.1, mdefPct: 0.05 } },
+        { level: 180, label: '御兽', bonuses: { spiritPct: 0.12, maxHpPct: 0.06 } }
+      ]
+    },
+    {
+      id: 'ward',
+      name: '护持专精',
+      desc: '偏生存与辅助稳态',
+      nodes: [
+        { level: 30, label: '护体', bonuses: { defPct: 0.06, mdefPct: 0.08 } },
+        { level: 80, label: '养息', bonuses: { maxHpPct: 0.08 } },
+        { level: 140, label: '清心', bonuses: { spiritPct: 0.08, dexPct: 0.08 } },
+        { level: 180, label: '镇灵', bonuses: { defPct: 0.08, mdefPct: 0.1, maxHpPct: 0.08 } }
+      ]
+    }
+  ]
+};
+
 function randomEquipBaseRollPct() {
   return Math.floor(Math.random() * (EQUIP_BASE_ROLL_MAX_PCT - EQUIP_BASE_ROLL_MIN_PCT + 1)) + EQUIP_BASE_ROLL_MIN_PCT;
+}
+
+export function normalizeSpecializationState(player) {
+  if (!player?.flags) player.flags = {};
+  const defs = SPECIALIZATION_DEFS[player.classId] || [];
+  const byId = new Set(defs.map((entry) => entry.id));
+  if (!player.flags.specialization || typeof player.flags.specialization !== 'object') {
+    player.flags.specialization = { trackId: '' };
+  }
+  const current = String(player.flags.specialization.trackId || '').trim();
+  if (current && !byId.has(current)) {
+    player.flags.specialization.trackId = '';
+  }
+  return player.flags.specialization;
+}
+
+function getSpecializationTrackDef(player) {
+  const state = normalizeSpecializationState(player);
+  const defs = SPECIALIZATION_DEFS[player?.classId] || [];
+  return defs.find((entry) => entry.id === state.trackId) || null;
+}
+
+function getUnlockedSpecializationNodes(player, trackDef = null) {
+  const level = Math.max(1, Math.floor(Number(player?.level || 1)));
+  const track = trackDef || getSpecializationTrackDef(player);
+  if (!track) return [];
+  return (track.nodes || []).filter((node) => level >= Math.max(1, Math.floor(Number(node.level || 1))));
+}
+
+function getSpecializationBonusTotals(player) {
+  const track = getSpecializationTrackDef(player);
+  const totals = {
+    atkPct: 0,
+    defPct: 0,
+    magPct: 0,
+    spiritPct: 0,
+    mdefPct: 0,
+    dexPct: 0,
+    maxHpPct: 0,
+    maxMpPct: 0
+  };
+  getUnlockedSpecializationNodes(player, track).forEach((node) => {
+    const bonuses = node?.bonuses || {};
+    Object.keys(totals).forEach((key) => {
+      totals[key] += Math.max(0, Number(bonuses[key] || 0));
+    });
+  });
+  return { track, totals };
+}
+
+export function buildSpecializationPayload(player) {
+  const defs = SPECIALIZATION_DEFS[player?.classId] || [];
+  const state = normalizeSpecializationState(player);
+  return {
+    activeTrackId: String(state.trackId || '').trim(),
+    tracks: defs.map((track) => ({
+      id: track.id,
+      name: track.name,
+      desc: track.desc,
+      active: track.id === state.trackId,
+      nodes: (track.nodes || []).map((node) => ({
+        level: node.level,
+        label: node.label,
+        unlocked: Math.max(1, Math.floor(Number(player?.level || 1))) >= Math.max(1, Math.floor(Number(node.level || 1))),
+        bonuses: { ...(node.bonuses || {}) }
+      }))
+    }))
+  };
 }
 
 function normalizeEquipBaseRollPct(item, value, fallback = 100) {
@@ -317,6 +460,7 @@ export function computeDerived(player) {
     player.flags.trainingFruit = { hp: 0, mp: 0, atk: 0, def: 0, mag: 0, mdef: 0, spirit: 0, dex: 0 };
   }
   normalizeTreasureState(player);
+  normalizeSpecializationState(player);
   // 修炼果系数：从后台配置读取
   const TRAINING_FRUIT_COEFFICIENT = getTrainingFruitCoefficient();
   const SET_BONUS_RATE = 1.2;
@@ -1026,6 +1170,53 @@ export function computeDerived(player) {
       default:
         break;
     }
+  }
+  const specializationBonus = getSpecializationBonusTotals(player).totals;
+  player.atk += Math.floor(baseDerivedStats.atk * specializationBonus.atkPct);
+  player.def += Math.floor(baseDerivedStats.def * specializationBonus.defPct);
+  player.mag += Math.floor(baseDerivedStats.mag * specializationBonus.magPct);
+  player.spirit += Math.floor(baseDerivedStats.spirit * specializationBonus.spiritPct);
+  player.mdef += Math.floor(baseDerivedStats.mdef * specializationBonus.mdefPct);
+  player.dex += Math.floor(baseDerivedStats.dex * specializationBonus.dexPct);
+  player.max_hp += Math.floor(baseDerivedStats.max_hp * specializationBonus.maxHpPct);
+  player.max_mp += Math.floor(baseDerivedStats.max_mp * specializationBonus.maxMpPct);
+  const guildAtkBonusPct = Math.max(0, Number(player?.guild?.buildAtkBonusPct || 0)) / 100;
+  const guildMagBonusPct = Math.max(0, Number(player?.guild?.buildMagBonusPct || 0)) / 100;
+  const guildSpiritBonusPct = Math.max(0, Number(player?.guild?.buildSpiritBonusPct || 0)) / 100;
+  const guildDefBonusPct = Math.max(0, Number(player?.guild?.buildDefBonusPct || 0)) / 100;
+  const guildMdefBonusPct = Math.max(0, Number(player?.guild?.buildMdefBonusPct || 0)) / 100;
+  const guildBattleBonusPct = Math.max(0, Number(player?.guild?.buildBattleBonusPct || 0)) / 100;
+  if (guildAtkBonusPct > 0) {
+    player.atk += Math.floor(baseDerivedStats.atk * guildAtkBonusPct);
+  }
+  if (guildMagBonusPct > 0) {
+    player.mag += Math.floor(baseDerivedStats.mag * guildMagBonusPct);
+  }
+  if (guildSpiritBonusPct > 0) {
+    player.spirit += Math.floor(baseDerivedStats.spirit * guildSpiritBonusPct);
+  }
+  if (guildDefBonusPct > 0) {
+    player.def += Math.floor(baseDerivedStats.def * guildDefBonusPct);
+  }
+  if (guildMdefBonusPct > 0) {
+    player.mdef += Math.floor(baseDerivedStats.mdef * guildMdefBonusPct);
+  }
+  if (
+    guildBattleBonusPct > 0 &&
+    guildAtkBonusPct <= 0 &&
+    guildMagBonusPct <= 0 &&
+    guildSpiritBonusPct <= 0 &&
+    guildDefBonusPct <= 0 &&
+    guildMdefBonusPct <= 0
+  ) {
+    player.atk += Math.floor(baseDerivedStats.atk * guildBattleBonusPct);
+    player.def += Math.floor(baseDerivedStats.def * guildBattleBonusPct);
+    player.mag += Math.floor(baseDerivedStats.mag * guildBattleBonusPct);
+    player.spirit += Math.floor(baseDerivedStats.spirit * guildBattleBonusPct);
+    player.mdef += Math.floor(baseDerivedStats.mdef * guildBattleBonusPct);
+    player.dex += Math.floor(baseDerivedStats.dex * guildBattleBonusPct);
+    player.max_hp += Math.floor(baseDerivedStats.max_hp * (guildBattleBonusPct * 0.8));
+    player.max_mp += Math.floor(baseDerivedStats.max_mp * (guildBattleBonusPct * 0.8));
   }
 
   // 锻造/修炼/修炼果属性最后加入，不参与其他百分比加成

@@ -1,6 +1,124 @@
 import knex from './index.js';
 import { validateGuildName } from '../game/validator.js';
 
+const GUILD_BUILD_LEVEL_THRESHOLDS = [
+  0,
+  100000,
+  300000,
+  600000,
+  1000000,
+  1600000,
+  2400000,
+  3600000,
+  5200000,
+  7200000
+];
+const GUILD_BUILD_UPGRADE_DURATION_SEC = [
+  0,
+  300,
+  900,
+  1800,
+  3600,
+  7200,
+  10800,
+  14400,
+  21600,
+  28800
+];
+const GUILD_BUILD_MAX_LEVEL = GUILD_BUILD_LEVEL_THRESHOLDS.length - 1;
+
+export function getGuildBuildLevel(buildExp = 0) {
+  const exp = Math.max(0, Math.floor(Number(buildExp || 0)));
+  let level = 0;
+  for (let i = 0; i < GUILD_BUILD_LEVEL_THRESHOLDS.length; i += 1) {
+    if (exp >= GUILD_BUILD_LEVEL_THRESHOLDS[i]) level = i;
+    else break;
+  }
+  return level;
+}
+
+function parseGuildBuildTimeMs(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const ms = Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+async function syncGuildBuildLevelBaseline(guild) {
+  if (!guild?.id) return guild || null;
+  const legacyLevel = getGuildBuildLevel(guild.build_exp || 0);
+  const storedLevel = Math.max(0, Math.floor(Number(guild.build_level || 0)));
+  if (legacyLevel > storedLevel) {
+    await knex('guilds').where({ id: guild.id }).update({ build_level: legacyLevel });
+    return { ...guild, build_level: legacyLevel };
+  }
+  return guild;
+}
+
+async function getGuildBuildingRow(guildId) {
+  if (!guildId) return null;
+  const guild = await knex('guilds')
+    .where({ id: guildId })
+    .select('id', 'build_exp', 'build_gold', 'build_points', 'build_level', 'build_upgrade_started_at', 'build_upgrade_ends_at')
+    .first();
+  if (!guild) return null;
+  return syncGuildBuildLevelBaseline(guild);
+}
+
+async function completeGuildBuildingUpgradeIfReady(guildId) {
+  const guild = await getGuildBuildingRow(guildId);
+  if (!guild) return null;
+  const endsAtMs = parseGuildBuildTimeMs(guild.build_upgrade_ends_at);
+  if (!endsAtMs || endsAtMs > Date.now()) return guild;
+  const baseLevel = Math.max(0, Math.floor(Number(guild.build_level || 0)));
+  const nextLevel = Math.min(GUILD_BUILD_MAX_LEVEL, baseLevel + 1);
+  await knex('guilds').where({ id: guildId }).update({
+    build_level: nextLevel,
+    build_upgrade_started_at: null,
+    build_upgrade_ends_at: null
+  });
+  return getGuildBuildingRow(guildId);
+}
+
+export function buildGuildBuildingPayload(guild) {
+  const buildExp = Math.max(0, Math.floor(Number(guild?.build_exp || 0)));
+  const buildGold = Math.max(0, Math.floor(Number(guild?.build_gold || 0)));
+  const buildPoints = Math.max(0, Math.floor(Number(guild?.build_points || 0)));
+  const legacyLevel = getGuildBuildLevel(buildExp);
+  const level = Math.max(
+    Math.min(GUILD_BUILD_MAX_LEVEL, Math.max(0, Math.floor(Number(guild?.build_level || 0)))),
+    legacyLevel
+  );
+  const currentThreshold = GUILD_BUILD_LEVEL_THRESHOLDS[level] || 0;
+  const nextThreshold = GUILD_BUILD_LEVEL_THRESHOLDS[level + 1] || null;
+  const upgradeStartedAt = parseGuildBuildTimeMs(guild?.build_upgrade_started_at);
+  const upgradeEndsAt = parseGuildBuildTimeMs(guild?.build_upgrade_ends_at);
+  const upgrading = Boolean(upgradeEndsAt && upgradeEndsAt > Date.now());
+  const nextDurationSec = nextThreshold == null
+    ? 0
+    : Math.max(0, Math.floor(Number(GUILD_BUILD_UPGRADE_DURATION_SEC[level + 1] || 0)));
+  return {
+    level,
+    exp: buildExp,
+    gold: buildGold,
+    points: buildPoints,
+    currentThreshold,
+    nextThreshold,
+    nextNeed: nextThreshold == null ? 0 : Math.max(0, nextThreshold - buildExp),
+    nextDurationSec,
+    upgrading,
+    upgradeStartedAt,
+    upgradeEndsAt,
+    upgradeRemainingSec: upgrading ? Math.max(0, Math.ceil((upgradeEndsAt - Date.now()) / 1000)) : 0,
+    readyToUpgrade: !upgrading && nextThreshold != null && buildExp >= nextThreshold,
+    rewardBonusPct: Math.min(30, level * 3),
+    battleBonusPct: Math.min(18, level * 2)
+  };
+}
+
 export async function getGuildByName(name) {
   return knex('guilds').where({ name }).first();
 }
@@ -14,7 +132,7 @@ export async function getGuildById(id) {
 }
 
 export async function createGuild(name, leaderUserId, leaderCharName, realmId = 1) {
-  // 验证公会名
+  // 验证行会名称
   const nameResult = validateGuildName(name);
   if (!nameResult.ok) {
     const error = new Error(nameResult.error);
@@ -96,7 +214,7 @@ export async function setGuildMemberRole(guildId, userId, charName, role, realmI
     .where({ guild_id: guildId, user_id: userId, char_name: charName, realm_id: realmId })
     .update({ role });
   if (updated === 0) {
-    throw new Error('成员记录不存在');
+    throw new Error('成员记录不存在。');
   }
 }
 
@@ -106,13 +224,13 @@ export async function transferGuildLeader(guildId, oldLeaderUserId, oldLeaderCha
       .where({ guild_id: guildId, user_id: oldLeaderUserId, char_name: oldLeaderCharName, realm_id: realmId })
       .update({ role: 'member' });
     if (oldLeaderRows === 0) {
-      throw new Error('旧会长记录不存在或已更新');
+      throw new Error('旧会长记录不存在或已更新。');
     }
     const newLeaderRows = await trx('guild_members')
       .where({ guild_id: guildId, user_id: newLeaderUserId, char_name: newLeaderCharName, realm_id: realmId })
       .update({ role: 'leader' });
     if (newLeaderRows === 0) {
-      throw new Error('新会长记录不存在');
+      throw new Error('新会长记录不存在。');
     }
     await trx('guilds')
       .where({ id: guildId })
@@ -223,7 +341,7 @@ export async function approveGuildApplication(guildId, userId, charName, realmId
       .first();
     if (existingMember) {
       const existingGuild = await trx('guilds').where({ id: existingMember.guild_id }).first();
-      throw new Error(`该玩家已经在行会「${existingGuild.name}」中`);
+      throw new Error(`该玩家已经在行会“${existingGuild.name}”中`);
     }
 
     // 删除申请记录
@@ -245,4 +363,52 @@ export async function getApplicationByUser(userId, realmId = 1) {
 
 export async function listAllGuilds(realmId = 1) {
   return knex('guilds').where({ realm_id: realmId }).select('id', 'name', 'leader_char_name').orderBy('name');
+}
+
+export async function getGuildBuildingInfo(guildId) {
+  const guild = await completeGuildBuildingUpgradeIfReady(guildId);
+  if (!guild) return null;
+  return buildGuildBuildingPayload(guild);
+}
+
+export async function startGuildBuildingUpgrade(guildId) {
+  const guild = await completeGuildBuildingUpgradeIfReady(guildId);
+  if (!guild) return { ok: false, error: '行会不存在。', building: null };
+  const building = buildGuildBuildingPayload(guild);
+  if (building.upgrading) {
+    return { ok: false, error: '行会建筑正在升级中。', building };
+  }
+  if (building.nextThreshold == null) {
+    return { ok: false, error: '行会建筑已达到最高等级。', building };
+  }
+  if (building.exp < building.nextThreshold) {
+    return { ok: false, error: `建设值不足，距离下一级还差 ${building.nextNeed}。`, building };
+  }
+  const startedAt = new Date();
+  const endsAt = new Date(startedAt.getTime() + Math.max(0, Number(building.nextDurationSec || 0)) * 1000);
+  await knex('guilds')
+    .where({ id: guildId })
+    .update({
+      build_upgrade_started_at: startedAt,
+      build_upgrade_ends_at: endsAt
+    });
+  const nextGuild = await getGuildBuildingRow(guildId);
+  return { ok: true, building: buildGuildBuildingPayload(nextGuild) };
+}
+
+export async function addGuildBuildingContribution(guildId, { gold = 0, points = 0 } = {}) {
+  const goldValue = Math.max(0, Math.floor(Number(gold || 0)));
+  const pointValue = Math.max(0, Math.floor(Number(points || 0)));
+  const expGain = goldValue + pointValue * 10000;
+  if (expGain <= 0) {
+    return getGuildBuildingInfo(guildId);
+  }
+  await knex('guilds')
+    .where({ id: guildId })
+    .update({
+      build_exp: knex.raw('COALESCE(build_exp, 0) + ?', [expGain]),
+      build_gold: knex.raw('COALESCE(build_gold, 0) + ?', [goldValue]),
+      build_points: knex.raw('COALESCE(build_points, 0) + ?', [pointValue])
+    });
+  return getGuildBuildingInfo(guildId);
 }

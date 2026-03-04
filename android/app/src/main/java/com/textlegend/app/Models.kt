@@ -61,6 +61,10 @@ data class GameState(
     val equipment: List<EquipmentInfo> = emptyList(),
     val guild: String? = null,
     val guild_role: String? = null,
+    val guild_contribution: Int = 0,
+    val guild_system: GuildSystemInfo? = null,
+    val guild_shop_items: List<GuildShopItemInfo> = emptyList(),
+    val guild_building: GuildBuildingInfo? = null,
     val party: PartyInfo? = null,
     val training: TrainingInfo? = null,
     val online: OnlineInfo? = null,
@@ -89,6 +93,96 @@ data class GameState(
     val treasure: TreasureStateInfo? = null,
     val pet: PetState? = null,
     val activities: JsonElement? = null
+)
+
+@Serializable
+data class GuildSystemDonateCost(
+    val gold: Int = 0,
+    val points: Int = 0
+)
+
+@Serializable
+data class GuildSystemContributionGain(
+    val gold: Int = 0,
+    val points: Int = 0
+)
+
+@Serializable
+data class GuildSystemInfo(
+    val donateCost: GuildSystemDonateCost? = null,
+    val contributionGain: GuildSystemContributionGain? = null
+)
+
+@Serializable
+data class GuildShopItemInfo(
+    val id: String = "",
+    val name: String = "",
+    val qty: Int = 1,
+    val cost: Int = 0
+)
+
+@Serializable
+data class GuildDonateLimitInfo(
+    val limit: Int = 0,
+    val used: Int = 0,
+    val remaining: Int = 0
+)
+
+@Serializable
+data class GuildDonateLimits(
+    val dateKey: String? = null,
+    val gold: GuildDonateLimitInfo? = null,
+    val points: GuildDonateLimitInfo? = null
+)
+
+@Serializable
+data class GuildBuildingBranchInfo(
+    val id: String = "",
+    val label: String = "",
+    val level: Int = 0,
+    val currentThreshold: Int = 0,
+    val nextThreshold: Int? = null,
+    val nextNeed: Int = 0,
+    val nextDurationSec: Int = 0,
+    val readyToUpgrade: Boolean = false,
+    val upgrading: Boolean = false,
+    val upgradeStartedAt: Long? = null,
+    val upgradeEndsAt: Long? = null,
+    val upgradeRemainingSec: Int = 0,
+    val bonusKind: String = "",
+    val bonusValue: Int = 0,
+    val bonusText: String = ""
+)
+
+@Serializable
+data class GuildBuildingInfo(
+    val level: Int = 0,
+    val exp: Int = 0,
+    val gold: Int = 0,
+    val points: Int = 0,
+    val currentThreshold: Int = 0,
+    val nextThreshold: Int? = null,
+    val nextNeed: Int = 0,
+    val nextDurationSec: Int = 0,
+    val upgrading: Boolean = false,
+    val upgradeStartedAt: Long? = null,
+    val upgradeEndsAt: Long? = null,
+    val upgradeRemainingSec: Int = 0,
+    val readyToUpgrade: Boolean = false,
+    val activeUpgradeBranch: String? = null,
+    val activeUpgradeBranchLabel: String? = null,
+    val rewardBonusPct: Int = 0,
+    val battleBonusPct: Int = 0,
+    val memberLimit: Int = 0,
+    val expBonusPct: Int = 0,
+    val goldBonusPct: Int = 0,
+    val atkBonusPct: Int = 0,
+    val magBonusPct: Int = 0,
+    val spiritBonusPct: Int = 0,
+    val defBonusPct: Int = 0,
+    val mdefBonusPct: Int = 0,
+    val donationLimits: GuildDonateLimits? = null,
+    val branches: List<GuildBuildingBranchInfo> = emptyList()
 )
 
 @Serializable
@@ -497,6 +591,7 @@ data class GuildMembersResponse(
     val error: String? = null,
     val guildId: Int? = null,
     val guildName: String? = null,
+    val building: GuildBuildingInfo? = null,
     val members: List<GuildMemberInfo> = emptyList()
 )
 
