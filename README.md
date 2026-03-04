@@ -79,6 +79,8 @@ node src/index.js
 - `DB_FILENAME`：SQLite 文件路径
 - `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`：MySQL 连接信息
 - `DB_POOL_MAX`：数据库连接池大小（SQLite 建议 `1`）
+- `DB_SLOW_QUERY_LOG`：是否开启慢查询日志（默认开启）
+- `DB_SLOW_QUERY_MS`：慢查询阈值毫秒（默认 `mysql=200`、`sqlite=500`）
 
 ### SQLite 优化（仅 SQLite 生效）
 

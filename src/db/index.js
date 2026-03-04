@@ -29,4 +29,44 @@ if (isSqlite) {
   }
 }
 
+function toCompactSql(sqlText) {
+  return String(sqlText || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+if (config.db.slowQueryLog && Number.isFinite(config.db.slowQueryMs) && config.db.slowQueryMs > 0) {
+  const slowThresholdMs = Math.max(1, Math.floor(config.db.slowQueryMs));
+  const queryStartAt = new Map();
+
+  const begin = (query) => {
+    if (!query || query.__knexQueryUid === undefined || query.__knexQueryUid === null) return;
+    queryStartAt.set(query.__knexQueryUid, Date.now());
+  };
+
+  const finish = (query, error = null) => {
+    if (!query || query.__knexQueryUid === undefined || query.__knexQueryUid === null) return;
+    const startedAt = queryStartAt.get(query.__knexQueryUid);
+    queryStartAt.delete(query.__knexQueryUid);
+    if (!startedAt) return;
+
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs < slowThresholdMs) return;
+
+    const sql = toCompactSql(query.sql).slice(0, 300);
+    const bindingsCount = Array.isArray(query.bindings) ? query.bindings.length : 0;
+    const tag = error ? '[db][slow][error]' : '[db][slow]';
+    const suffix = error ? ` err=${String(error?.message || error)}` : '';
+    console.warn(`${tag} ${elapsedMs}ms bindings=${bindingsCount} sql="${sql}"${suffix}`);
+  };
+
+  knex.on('query', begin);
+  knex.on('query-response', (_response, query) => {
+    finish(query, null);
+  });
+  knex.on('query-error', (error, query) => {
+    finish(query, error);
+  });
+}
+
 export default knex;

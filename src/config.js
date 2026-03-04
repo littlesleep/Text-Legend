@@ -14,7 +14,12 @@ const config = {
     sqlite: {
       wal: process.env.SQLITE_WAL !== 'false',
       synchronous: process.env.SQLITE_SYNCHRONOUS || 'NORMAL'
-    }
+    },
+    slowQueryLog: process.env.DB_SLOW_QUERY_LOG !== 'false',
+    slowQueryMs: Number(
+      process.env.DB_SLOW_QUERY_MS
+      || (dbClient === 'sqlite' ? 500 : 200)
+    )
   },
   sessionTtlMin: Number(process.env.SESSION_TTL_MIN || 120),
   consignmentHistoryRetentionDays: Math.max(1, Number(process.env.CONSIGNMENT_HISTORY_RETENTION_DAYS || 90)),

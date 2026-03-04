@@ -27,7 +27,6 @@ import {
   clearMobRespawn,
   saveMobState,
   clearInvalidCrossWorldBossRespawns,
-  cleanupExpiredMobRespawns,
   cleanupExpiredMobRespawnsBatch
 } from './db/mobs.js';
 import {
@@ -5284,6 +5283,9 @@ let runtimeMobRowsCacheAt = 0;
 let runtimeMobRowsCachedValue = 'n/a';
 const STARTUP_MOB_CLEANUP_BATCH_SIZE = 1000;
 const STARTUP_MOB_CLEANUP_DELAY_MS = 250;
+const MOB_RESPAWN_CLEANUP_BATCH_SIZE = 2000;
+const MOB_RESPAWN_CLEANUP_MAX_ROUNDS = 6;
+const MOB_RESPAWN_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 
 function createSabakState() {
   return {
@@ -7164,6 +7166,9 @@ function dropLoot(mobTemplate, bonus = 1) {
 
 const PLAYER_SAVE_DEBOUNCE_MS = 1500;
 const PLAYER_SAVE_MIN_INTERVAL_MS = 8000;
+const PLAYER_SAVE_MANAGED_MIN_INTERVAL_MS = 20000;
+const PLAYER_SAVE_DETACHED_MIN_INTERVAL_MS = 15000;
+const PLAYER_SAVE_MAX_WRITES_PER_FLUSH = 80;
 const pendingPlayerSaves = new Map();
 let pendingPlayerSaveTimer = null;
 let pendingPlayerSaveDueAt = 0;
@@ -7171,6 +7176,16 @@ const playerLastPersistAt = new Map();
 
 function getPlayerSaveKey(player) {
   return `${Number(player?.userId || 0)}:${Number(player?.realmId || 1)}:${String(player?.name || '')}`;
+}
+
+function getPlayerSaveMinIntervalMs(player) {
+  if (player?.flags?.offlineManagedAuto || player?.flags?.offlineManagedPending) {
+    return PLAYER_SAVE_MANAGED_MIN_INTERVAL_MS;
+  }
+  if (!player?.socket?.emit) {
+    return PLAYER_SAVE_DETACHED_MIN_INTERVAL_MS;
+  }
+  return PLAYER_SAVE_MIN_INTERVAL_MS;
 }
 
 async function savePlayerNow(player) {
@@ -7209,9 +7224,16 @@ async function flushPendingPlayerSaves() {
   const batch = Array.from(pendingPlayerSaves.entries());
   pendingPlayerSaves.clear();
   let nextDelayMs = 0;
+  let writes = 0;
   for (const [saveKey, queuedPlayer] of batch) {
+    if (writes >= PLAYER_SAVE_MAX_WRITES_PER_FLUSH) {
+      pendingPlayerSaves.set(saveKey, queuedPlayer);
+      nextDelayMs = nextDelayMs > 0 ? Math.min(nextDelayMs, PLAYER_SAVE_DEBOUNCE_MS) : PLAYER_SAVE_DEBOUNCE_MS;
+      continue;
+    }
     const lastPersistAt = playerLastPersistAt.get(saveKey) || 0;
-    const remaining = PLAYER_SAVE_MIN_INTERVAL_MS - (Date.now() - lastPersistAt);
+    const minIntervalMs = getPlayerSaveMinIntervalMs(queuedPlayer);
+    const remaining = minIntervalMs - (Date.now() - lastPersistAt);
     if (remaining > 0) {
       pendingPlayerSaves.set(saveKey, queuedPlayer);
       nextDelayMs = nextDelayMs > 0 ? Math.min(nextDelayMs, remaining) : remaining;
@@ -7219,6 +7241,7 @@ async function flushPendingPlayerSaves() {
     }
     try {
       await savePlayerNow(queuedPlayer);
+      writes += 1;
       playerLastPersistAt.set(saveKey, Date.now());
     } catch (err) {
       console.warn('[savePlayer] deferred flush failed:', err?.message || err);
@@ -7231,16 +7254,29 @@ async function flushPendingPlayerSaves() {
   }
 }
 
-async function runStartupMobRespawnCleanup() {
+async function runMobRespawnCleanupSweep(options = {}) {
+  const batchSize = Math.max(100, Math.floor(Number(options.batchSize || MOB_RESPAWN_CLEANUP_BATCH_SIZE)));
+  const maxRounds = Math.max(1, Math.floor(Number(options.maxRounds || MOB_RESPAWN_CLEANUP_MAX_ROUNDS)));
+  const delayMs = Math.max(0, Math.floor(Number(options.delayMs || 0)));
   let totalDeleted = 0;
-  while (true) {
-    const deleted = Number(await cleanupExpiredMobRespawnsBatch(Date.now(), STARTUP_MOB_CLEANUP_BATCH_SIZE) || 0);
+  for (let round = 0; round < maxRounds; round += 1) {
+    const deleted = Number(await cleanupExpiredMobRespawnsBatch(Date.now(), batchSize) || 0);
     if (deleted <= 0) break;
     totalDeleted += deleted;
-    console.log(`[mob_respawns] startup batch cleaned: ${deleted} (total ${totalDeleted})`);
-    if (deleted < STARTUP_MOB_CLEANUP_BATCH_SIZE) break;
-    await new Promise((resolve) => setTimeout(resolve, STARTUP_MOB_CLEANUP_DELAY_MS));
+    if (deleted < batchSize) break;
+    if (delayMs > 0 && round < maxRounds - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
+  return totalDeleted;
+}
+
+async function runStartupMobRespawnCleanup() {
+  const totalDeleted = await runMobRespawnCleanupSweep({
+    batchSize: STARTUP_MOB_CLEANUP_BATCH_SIZE,
+    maxRounds: 200,
+    delayMs: STARTUP_MOB_CLEANUP_DELAY_MS
+  });
   if (totalDeleted > 0) {
     console.log(`[mob_respawns] startup background cleanup finished: ${totalDeleted}`);
   }
@@ -19810,19 +19846,27 @@ async function start() {
     }
   }, 60000);
 
-  // 定期清理 mob_respawns 中已过期且无血量快照的无效记录（每1小时）
+  // 定期分批清理 mob_respawns 中已过期且无血量快照的无效记录，避免大事务长时间锁表
   setInterval(async () => {
     try {
-      const deleted = await cleanupExpiredMobRespawns(Date.now());
+      const deleted = await runMobRespawnCleanupSweep({
+        batchSize: MOB_RESPAWN_CLEANUP_BATCH_SIZE,
+        maxRounds: MOB_RESPAWN_CLEANUP_MAX_ROUNDS,
+        delayMs: 20
+      });
       if (Number(deleted || 0) > 0) {
         console.log(`[mob_respawns] cleaned expired rows: ${deleted}`);
       }
     } catch (err) {
       console.warn('Failed to cleanup expired mob respawns:', err);
     }
-  }, 60 * 60 * 1000);
+  }, MOB_RESPAWN_CLEANUP_INTERVAL_MS);
   try {
-    const deleted = await cleanupExpiredMobRespawns(Date.now());
+    const deleted = await runMobRespawnCleanupSweep({
+      batchSize: MOB_RESPAWN_CLEANUP_BATCH_SIZE,
+      maxRounds: MOB_RESPAWN_CLEANUP_MAX_ROUNDS,
+      delayMs: 10
+    });
     if (Number(deleted || 0) > 0) {
       console.log(`[mob_respawns] startup cleaned expired rows: ${deleted}`);
     }
