@@ -1580,6 +1580,45 @@ body.log-collapsed .game-layout {
   cursor: not-allowed;
 }
 
+.status-row.realm-line-row {
+  align-items: center;
+}
+
+.realm-line-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.realm-line-meta strong {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-name-btn {
+  margin-left: 0;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  border-radius: 6px;
+  border: 1px solid rgba(214, 140, 60, 0.4);
+  background: rgba(214, 140, 60, 0.15);
+  color: #c07a36;
+}
+
+.line-name-btn:hover {
+  filter: brightness(1.06);
+}
+
+.line-name-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .status-row.cultivation-row .mini-btn:hover,
 .status-row.activity-points-row .mini-btn:hover,
 .status-row.yuanbao-row .mini-btn:hover {

@@ -347,6 +347,7 @@ const directionLabels = {
 };
 const ui = {
   realm: document.getElementById('ui-realm'),
+  lineName: document.getElementById('ui-line-name'),
   name: document.getElementById('ui-name'),
   classLevel: document.getElementById('ui-class'),
   guild: document.getElementById('ui-guild'),
@@ -1009,6 +1010,9 @@ let activeRouteLine = {
   enabled: true,
   priority: 100
 };
+let activeRouteLineMode = 'auto';
+let routeSwitching = false;
+let currentRealmDisplayName = '';
 let sponsorNames = new Set(); // 存储赞助玩家名称
 let sponsorCustomTitles = new Map(); // 存储赞助玩家自定义称号
 
@@ -1060,6 +1064,26 @@ function buildApiUrl(path) {
 function setLineAutoStatus(text) {
   if (!lineAutoStatus) return;
   lineAutoStatus.textContent = text;
+}
+
+function getCurrentRealmName() {
+  const realm = realmList.find((item) => item.id === currentRealmId) || realmList[0];
+  return realm?.name || `新区${currentRealmId}`;
+}
+
+function refreshRealmLineDisplay(realmNameOverride = '') {
+  const realmName = String(realmNameOverride || currentRealmDisplayName || getCurrentRealmName()).trim() || getCurrentRealmName();
+  currentRealmDisplayName = realmName;
+  const lineName = String(activeRouteLine?.name || '默认线路').trim() || '默认线路';
+  if (ui.realm) {
+    ui.realm.textContent = realmName;
+  }
+  if (ui.lineName) {
+    const enabledCount = (Array.isArray(routeLines) ? routeLines : []).filter((line) => line.enabled !== false).length;
+    ui.lineName.disabled = routeSwitching || enabledCount <= 1;
+    ui.lineName.textContent = routeSwitching ? '线路切换中...' : `${lineName}`;
+    ui.lineName.title = routeSwitching ? '正在切换线路...' : '点击查看延迟并切换线路';
+  }
 }
 
 function sanitizeAutoAfkSkillIds(ids) {
@@ -5024,19 +5048,24 @@ function renderTreasureModal() {
   }
 }
 
-function setActiveRouteLine(nextLine) {
+function setActiveRouteLine(nextLine, options = {}) {
   const normalized = normalizeRouteLine(nextLine || {}, 0);
   activeRouteLine = normalized;
+  activeRouteLineMode = options?.mode === 'manual'
+    ? 'manual'
+    : (options?.mode === 'fallback' ? 'fallback' : 'auto');
   try {
     localStorage.setItem('preferredRouteLineId', normalized.id);
   } catch {
     // ignore storage errors
   }
-  const apiBase = normalizeRouteBase(normalized.apiBase);
-  const status = apiBase
-    ? `线路：${normalized.name}（自动）`
-    : `线路：${normalized.name}`;
+  const status = activeRouteLineMode === 'manual'
+    ? `线路：${normalized.name}（手动）`
+    : (activeRouteLineMode === 'fallback'
+      ? `线路：${normalized.name}（回退）`
+      : `线路：${normalized.name}（自动）`);
   setLineAutoStatus(status);
+  refreshRealmLineDisplay();
 }
 
 async function measureRouteLatency(line, timeoutMs = 2200) {
@@ -5078,7 +5107,7 @@ async function measureRouteLatency(line, timeoutMs = 2200) {
 async function autoSelectBestRouteLine(force = false) {
   const enabledLines = (Array.isArray(routeLines) ? routeLines : []).filter((line) => line.enabled !== false);
   if (enabledLines.length <= 0) {
-    setActiveRouteLine({ id: 'default', name: '默认线路', apiBase: '', socketBase: '', enabled: true, priority: 100 });
+    setActiveRouteLine({ id: 'default', name: '默认线路', apiBase: '', socketBase: '', enabled: true, priority: 100 }, { mode: 'fallback' });
     return activeRouteLine;
   }
   let preferredId = '';
@@ -5090,7 +5119,7 @@ async function autoSelectBestRouteLine(force = false) {
   if (!force && preferredId) {
     const preferred = enabledLines.find((line) => line.id === preferredId);
     if (preferred) {
-      setActiveRouteLine(preferred);
+      setActiveRouteLine(preferred, { mode: 'auto' });
       return preferred;
     }
   }
@@ -5106,13 +5135,15 @@ async function autoSelectBestRouteLine(force = false) {
       return (a.line.priority - b.line.priority) || String(a.line.id).localeCompare(String(b.line.id));
     })[0];
   if (best?.line) {
-    setActiveRouteLine(best.line);
+    setActiveRouteLine(best.line, { mode: 'auto' });
     setLineAutoStatus(`线路：${best.line.name}（${best.latency}ms）`);
+    refreshRealmLineDisplay();
     return best.line;
   }
   const fallback = enabledLines.slice().sort((a, b) => (a.priority - b.priority) || String(a.id).localeCompare(String(b.id)))[0];
-  setActiveRouteLine(fallback);
+  setActiveRouteLine(fallback, { mode: 'fallback' });
   setLineAutoStatus(`线路：${fallback.name}（超时，使用回退）`);
+  refreshRealmLineDisplay();
   return fallback;
 }
 
@@ -5135,6 +5166,114 @@ function ensureRouteLinesLoaded() {
     routeLinesInitPromise = loadRouteLines();
   }
   return routeLinesInitPromise;
+}
+
+async function reconnectByRouteSwitch(lineName) {
+  if (!activeChar || !token) return false;
+  const target = String(activeChar || '').trim();
+  if (!target) return false;
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(Boolean(ok));
+    };
+    const timer = setTimeout(() => done(false), 12000);
+    enterGame(target, {
+      reconnect: true,
+      preserveLog: true,
+      reconnectMessage: `正在切换线路到 ${lineName}，请稍候...`,
+      suppressAuthFailActions: true,
+      onReady: () => done(true),
+      onFail: () => done(false)
+    });
+  });
+}
+
+async function switchRouteLineManually(nextLine) {
+  const normalizedNext = normalizeRouteLine(nextLine || {}, 0);
+  if (!normalizedNext?.id) return;
+  if (String(normalizedNext.id) === String(activeRouteLine?.id)) {
+    showToast(`当前已是线路：${normalizedNext.name}`);
+    return;
+  }
+  const prevLine = { ...activeRouteLine };
+  setActiveRouteLine(normalizedNext, { mode: 'manual' });
+
+  const inGame = Boolean(activeChar && token && !gameSection.classList.contains('hidden'));
+  if (!inGame) {
+    showToast(`已切换线路：${normalizedNext.name}`);
+    return;
+  }
+
+  routeSwitching = true;
+  refreshRealmLineDisplay();
+  const switched = await reconnectByRouteSwitch(normalizedNext.name);
+  routeSwitching = false;
+  refreshRealmLineDisplay();
+  if (switched) {
+    showToast(`线路已切换：${normalizedNext.name}`);
+    return;
+  }
+
+  setActiveRouteLine(prevLine, { mode: 'manual' });
+  routeSwitching = true;
+  refreshRealmLineDisplay();
+  const rolledBack = await reconnectByRouteSwitch(prevLine.name || '原线路');
+  routeSwitching = false;
+  refreshRealmLineDisplay();
+  noticeModal({
+    title: '切换线路',
+    text: rolledBack
+      ? `切换到 ${normalizedNext.name} 失败，已自动回退到 ${prevLine.name || '原线路'}。`
+      : `切换到 ${normalizedNext.name} 失败，且回退重连失败，请手动重进游戏。`
+  });
+}
+
+async function openRouteSwitchModal() {
+  if (routeSwitching) return;
+  await ensureRouteLinesLoaded();
+  const enabledLines = (Array.isArray(routeLines) ? routeLines : [])
+    .filter((line) => line.enabled !== false)
+    .sort((a, b) => (a.priority - b.priority) || String(a.id).localeCompare(String(b.id)));
+  if (enabledLines.length <= 1) {
+    showToast('当前仅有一条可用线路');
+    return;
+  }
+  setLineAutoStatus('线路：手动测速中...');
+  const probes = await Promise.all(enabledLines.map(async (line) => ({
+    line,
+    latency: await measureRouteLatency(line, 1800)
+  })));
+  const latencyMap = new Map(probes.map((entry) => [String(entry.line?.id || ''), entry.latency]));
+  const picked = await promptMultiSelectModal({
+    title: '手动切换线路',
+    text: '点击线路立即切换（会快速重连恢复角色）',
+    options: enabledLines.map((line) => ({
+      value: line.id,
+      label: String(line.name || line.id),
+      description: (() => {
+        const latency = Number(latencyMap.get(String(line.id)) || 0);
+        const latencyText = Number.isFinite(latency) && latency > 0 && latency < Number.POSITIVE_INFINITY
+          ? `${latency}ms`
+          : '超时';
+        return `延迟 ${latencyText} · 优先级 ${Math.max(1, Math.floor(Number(line.priority || 100)))}${String(line.id) === String(activeRouteLine?.id) ? ' · 当前线路' : ''}`;
+      })()
+    })),
+    selectedValues: [activeRouteLine?.id],
+    singleSelect: true,
+    submitOnSelect: true,
+    closeOnSelect: true,
+    hideOk: true
+  });
+  const lineId = Array.isArray(picked) && picked[0] ? String(picked[0]) : '';
+  setLineAutoStatus(`线路：${String(activeRouteLine?.name || '默认线路')}`);
+  if (!lineId) return;
+  const nextLine = enabledLines.find((line) => String(line.id) === lineId);
+  if (!nextLine) return;
+  await switchRouteLineManually(nextLine);
 }
 
 function showTreasureModal() {
@@ -8531,6 +8670,7 @@ function renderState(state) {
     // 如果当前 realmId 不在列表中，使用第一个可用服务器
     const realm = realmList.find(r => r.id === currentRealmId) || realmList[0];
     const realmName = realm?.name || `新区${currentRealmId}`;
+    currentRealmDisplayName = realmName;
     // 自动更新 currentRealmId 为有效的服务器ID
     if (realm && realm.id !== currentRealmId) {
       currentRealmId = realm.id;
@@ -8541,7 +8681,7 @@ function renderState(state) {
       }
     }
     dlog(`renderState: currentRealmId=${currentRealmId}, realmList=${JSON.stringify(realmList.map(r => ({id: r.id, name: r.name})))}, realmName=${realmName}`);
-    if (ui.realm) ui.realm.textContent = realmName;
+    refreshRealmLineDisplay(realmName);
     ui.name.textContent = state.player.name || '-';
     const classLabel = classNames[state.player.classId] || state.player.classId || '-';
     ui.classLevel.textContent = `${classLabel} | Lv ${state.player.level}`;
@@ -10239,7 +10379,24 @@ async function createCharacter() {
   }
 }
 
-function enterGame(name) {
+function enterGame(name, options = {}) {
+  const reconnect = options?.reconnect === true;
+  const preserveLog = options?.preserveLog === true || reconnect;
+  const reconnectMessage = String(options?.reconnectMessage || '正在重连...').trim() || '正在重连...';
+  const suppressAuthFailActions = options?.suppressAuthFailActions === true;
+  const onReady = typeof options?.onReady === 'function' ? options.onReady : null;
+  const onFail = typeof options?.onFail === 'function' ? options.onFail : null;
+  let connectionSettled = false;
+  const notifyReady = () => {
+    if (connectionSettled) return;
+    connectionSettled = true;
+    if (onReady) onReady();
+  };
+  const notifyFail = (reason = '') => {
+    if (connectionSettled) return;
+    connectionSettled = true;
+    if (onFail) onFail(reason);
+  };
   // 断开旧的 socket 连接
   if (socket) {
     socket.disconnect();
@@ -10250,25 +10407,31 @@ function enterGame(name) {
   const username = localStorage.getItem('rememberedUser');
   const storageKey = getUserStorageKey('lastCharacter', username, currentRealmId);
   localStorage.setItem(storageKey, name);
-  lastSavedLevel = null;
+  if (!reconnect) {
+    lastSavedLevel = null;
+  }
   show(gameSection);
-  log.innerHTML = '';
+  if (!preserveLog) {
+    log.innerHTML = '';
+  }
   setTradeStatus('\u672a\u5728\u4ea4\u6613\u4e2d');
   if (shopUi.modal) shopUi.modal.classList.add('hidden');
-  appendLine('正在连接...');
-  ui.name.textContent = name;
-  ui.classLevel.textContent = '-';
-  ui.guild.textContent = '-';
-  ui.pk.textContent = '-';
-  ui.vip.textContent = '-';
-  ui.gold.textContent = '0';
-  if (ui.yuanbao) ui.yuanbao.textContent = '0';
-  if (ui.activityPoints) ui.activityPoints.textContent = '0';
-  if (ui.cultivation) ui.cultivation.textContent = '-';
-  if (ui.cultivationUpgrade) ui.cultivationUpgrade.classList.add('hidden');
-  setBar(ui.hp, 0, 1);
-  setBar(ui.mp, 0, 1);
-  setBar(ui.exp, 0, 1);
+  appendLine(reconnect ? reconnectMessage : '正在连接...');
+  if (!reconnect) {
+    ui.name.textContent = name;
+    ui.classLevel.textContent = '-';
+    ui.guild.textContent = '-';
+    ui.pk.textContent = '-';
+    ui.vip.textContent = '-';
+    ui.gold.textContent = '0';
+    if (ui.yuanbao) ui.yuanbao.textContent = '0';
+    if (ui.activityPoints) ui.activityPoints.textContent = '0';
+    if (ui.cultivation) ui.cultivation.textContent = '-';
+    if (ui.cultivationUpgrade) ui.cultivationUpgrade.classList.add('hidden');
+    setBar(ui.hp, 0, 1);
+    setBar(ui.mp, 0, 1);
+    setBar(ui.exp, 0, 1);
+  }
   antiKey = '';
   antiSeq = 0;
   pendingCmds = [];
@@ -10307,6 +10470,11 @@ function enterGame(name) {
   socket.on('auth_error', (payload) => {
     const errText = String(payload?.error || '认证失败');
     appendLine(`认证失败: ${errText}`);
+    notifyFail(errText);
+    if (suppressAuthFailActions) {
+      showToast(errText);
+      return;
+    }
     // 如果是"新区不存在"错误,清除旧的realmId并提示用户
     if (errText.includes('新区不存在')) {
       const username = localStorage.getItem('rememberedUser');
@@ -10331,6 +10499,11 @@ function enterGame(name) {
         switchCharacter();
       }
     }
+  });
+  socket.on('connect_error', (err) => {
+    const message = String(err?.message || '连接失败');
+    appendLine(`连接失败: ${message}`);
+    notifyFail(message);
   });
   socket.on('disconnect', () => {
     antiKey = '';
@@ -10642,6 +10815,7 @@ function enterGame(name) {
   socket.on('state', (payload) => {
     dlog('Received state payload:', payload);
     handleIncomingState(mergeStatePayloadWithLast(payload));
+    notifyReady();
   });
   socket.on('room_state', (payload) => {
     handleIncomingRoomState(payload);
@@ -10767,6 +10941,13 @@ if (realmSelect) {
     }
   });
 }
+if (ui.lineName) {
+  ui.lineName.addEventListener('click', () => {
+    openRouteSwitchModal().catch((err) => {
+      showToast(err?.message || '打开线路列表失败');
+    });
+  });
+}
 if (ui.changePasswordButtons && ui.changePasswordButtons.length) {
   ui.changePasswordButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -10860,6 +11041,7 @@ if (captchaUi.registerImg) {
 }
 (async () => {
   await ensureRouteLinesLoaded();
+  refreshRealmLineDisplay();
   refreshCaptcha('login');
   refreshCaptcha('register');
 })();
