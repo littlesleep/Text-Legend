@@ -8835,6 +8835,14 @@ function renderState(state) {
       const expBonusPct = Math.max(0, Math.round(Number(state.stats?.exp_bonus_pct ?? state.stats?.exp_gold_bonus_pct ?? 0)));
       const goldBonusPct = Math.max(0, Math.round(Number(state.stats?.gold_bonus_pct ?? state.stats?.exp_gold_bonus_pct ?? 0)));
       ui.bonusLine.textContent = `套装加成：${setText} | 经验加成：${expBonusPct}% | 金币加成：${goldBonusPct}%`;
+      const expSources = Array.isArray(state.stats?.exp_bonus_sources) ? state.stats.exp_bonus_sources : [];
+      const goldSources = Array.isArray(state.stats?.gold_bonus_sources) ? state.stats.gold_bonus_sources : [];
+      const formatSources = (label, list) => {
+        if (!Array.isArray(list) || list.length === 0) return `${label}来源：无`;
+        const parts = list.map((entry) => `${entry?.label || entry?.key || '未知'} +${Math.max(0, Number(entry?.pct || 0))}%`);
+        return `${label}来源：${parts.join(' / ')}`;
+      };
+      ui.bonusLine.title = `${formatSources('经验', expSources)}\n${formatSources('金币', goldSources)}`;
     }
     if (ui.luckyLine) {
       const lucky = state.daily_lucky;
