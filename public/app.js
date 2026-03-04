@@ -5192,6 +5192,39 @@ async function reconnectByRouteSwitch(lineName) {
   });
 }
 
+async function probeRouteSocketLine(line, timeoutMs = 5000) {
+  const base = resolveRouteBaseToAbsolute(line?.socketBase || line?.apiBase || '');
+  return new Promise((resolve) => {
+    let settled = false;
+    let probeSocket = null;
+    const finish = (ok, reason = '') => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try {
+        probeSocket?.removeAllListeners?.();
+        probeSocket?.disconnect?.();
+      } catch {
+        // ignore probe cleanup errors
+      }
+      resolve({ ok: Boolean(ok), reason: String(reason || '') });
+    };
+    const timer = setTimeout(() => finish(false, '探测超时'), Math.max(1200, Math.floor(Number(timeoutMs || 0))));
+    try {
+      const opts = {
+        transports: ['websocket', 'polling'],
+        reconnection: false,
+        timeout: Math.max(1000, Math.floor(Number(timeoutMs || 0)))
+      };
+      probeSocket = base ? io(base, opts) : io(undefined, opts);
+      probeSocket.on('connect', () => finish(true));
+      probeSocket.on('connect_error', (err) => finish(false, err?.message || '连接失败'));
+    } catch (err) {
+      finish(false, err?.message || '探测失败');
+    }
+  });
+}
+
 async function switchRouteLineManually(nextLine) {
   const normalizedNext = normalizeRouteLine(nextLine || {}, 0);
   if (!normalizedNext?.id) return;
@@ -5200,16 +5233,38 @@ async function switchRouteLineManually(nextLine) {
     return;
   }
   const prevLine = { ...activeRouteLine };
-  setActiveRouteLine(normalizedNext, { mode: 'manual' });
 
   const inGame = Boolean(activeChar && token && !gameSection.classList.contains('hidden'));
   if (!inGame) {
+    const probeIdle = await probeRouteSocketLine(normalizedNext, 4500);
+    if (!probeIdle.ok) {
+      setLineAutoStatus(`线路：${String(activeRouteLine?.name || '默认线路')}`);
+      noticeModal({
+        title: '切换线路',
+        text: `线路 ${normalizedNext.name} 探测失败：${probeIdle.reason || '不可达'}`
+      });
+      return;
+    }
+    setActiveRouteLine(normalizedNext, { mode: 'manual' });
     showToast(`已切换线路：${normalizedNext.name}`);
     return;
   }
 
   routeSwitching = true;
   refreshRealmLineDisplay();
+  setLineAutoStatus(`线路：探测 ${normalizedNext.name}...`);
+  const probe = await probeRouteSocketLine(normalizedNext, 5000);
+  if (!probe.ok) {
+    routeSwitching = false;
+    refreshRealmLineDisplay();
+    setLineAutoStatus(`线路：${String(activeRouteLine?.name || '默认线路')}`);
+    noticeModal({
+      title: '切换线路',
+      text: `线路 ${normalizedNext.name} 探测失败：${probe.reason || '不可达'}`
+    });
+    return;
+  }
+  setActiveRouteLine(normalizedNext, { mode: 'manual' });
   const switched = await reconnectByRouteSwitch(normalizedNext.name);
   routeSwitching = false;
   refreshRealmLineDisplay();
