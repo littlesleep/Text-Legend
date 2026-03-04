@@ -29,6 +29,17 @@ function isBossTemplate(tpl) {
   );
 }
 
+function shouldPersistMobTemplate(tpl) {
+  if (!tpl) return false;
+  if (tpl.summoned) return false;
+  if (tpl.worldBoss || tpl.specialBoss || tpl.sabakBoss) return true;
+  if (tpl.id === 'vip_personal_boss' || tpl.id === 'svip_personal_boss') return true;
+  if (tpl.id === 'cross_world_boss') return true;
+  if (typeof tpl.id === 'string' && tpl.id.startsWith('cultivation_boss_')) return true;
+  if (tpl.respawnMs && Number(tpl.respawnMs) > 0) return true;
+  return isBossTemplate(tpl);
+}
+
 function getZhuxianTowerFloorScale(zoneId, roomId) {
   if (zoneId !== 'zxft') return 1;
   const room = getRoom(zoneId, roomId);
@@ -139,6 +150,10 @@ export function getRoomMobs(zoneId, roomId, realmId = 1) {
 
 export function seedRespawnCache(records) {
   RESPAWN_CACHE.clear();
+  appendRespawnCache(records);
+}
+
+export function appendRespawnCache(records) {
   if (!Array.isArray(records)) return;
   records.forEach((row) => {
     if (!row) return;
@@ -447,8 +462,11 @@ export function removeMob(zoneId, roomId, mobId, realmId = 1) {
         templateId: mob.templateId,
         respawnAt: mob.respawnAt
       });
-      if (respawnStore && respawnStore.set) {
+      if (respawnStore && respawnStore.set && shouldPersistMobTemplate(tpl)) {
         respawnStore.set(realmId, zoneId, roomId, mob.slotIndex, mob.templateId, mob.respawnAt);
+      } else if (respawnStore && respawnStore.clear) {
+        // Stop persisting normal-mob respawn rows and clean up stale records gradually.
+        respawnStore.clear(realmId, zoneId, roomId, mob.slotIndex);
       }
     } else {
       RESPAWN_CACHE.delete(respawnKey(realmId, zoneId, roomId, mob.slotIndex));

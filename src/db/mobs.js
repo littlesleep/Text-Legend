@@ -36,6 +36,38 @@ export async function listMobRespawns(realmId = 1) {
     .select('zone_id', 'room_id', 'slot_index', 'template_id', 'respawn_at', 'current_hp', 'status', 'realm_id');
 }
 
+export async function listMobRespawnsPage(realmId = 1, options = {}) {
+  const limit = Math.max(100, Math.min(5000, Math.floor(Number(options.limit) || 2000)));
+  const cursor = options.cursor && typeof options.cursor === 'object' ? options.cursor : null;
+  const templateIds = Array.isArray(options.templateIds) ? options.templateIds : [];
+  const query = knex('mob_respawns')
+    .where({ realm_id: realmId })
+    .select('zone_id', 'room_id', 'slot_index', 'template_id', 'respawn_at', 'current_hp', 'status', 'realm_id')
+    .orderBy('zone_id', 'asc')
+    .orderBy('room_id', 'asc')
+    .orderBy('slot_index', 'asc')
+    .limit(limit);
+  if (templateIds.length > 0) {
+    query.whereIn('template_id', templateIds);
+  }
+
+  if (cursor && cursor.zone_id !== undefined && cursor.room_id !== undefined && cursor.slot_index !== undefined) {
+    query.andWhere((q) => {
+      q.where('zone_id', '>', String(cursor.zone_id))
+        .orWhere((q2) => {
+          q2.where('zone_id', String(cursor.zone_id))
+            .andWhere('room_id', '>', String(cursor.room_id));
+        })
+        .orWhere((q2) => {
+          q2.where('zone_id', String(cursor.zone_id))
+            .andWhere('room_id', String(cursor.room_id))
+            .andWhere('slot_index', '>', Number(cursor.slot_index));
+        });
+    });
+  }
+  return query;
+}
+
 export async function upsertMobRespawn(realmId, zoneId, roomId, slotIndex, templateId, respawnAt, currentHp = null, status = null) {
   const insertData = {
     realm_id: realmId,

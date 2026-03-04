@@ -22,7 +22,7 @@ import { createRechargeCards, listRechargeCards, countRechargeCards, useRecharge
 import { getSetting, setSetting, getVipSelfClaimEnabled, setVipSelfClaimEnabled, getSvipPrices, setSvipPrices, getLootLogEnabled, setLootLogEnabled, getCrossWorldBossRespawnAt, setCrossWorldBossRespawnAt, getStateThrottleEnabled, setStateThrottleEnabled, getStateThrottleIntervalSec, setStateThrottleIntervalSec, getStateThrottleOverrideServerAllowed, setStateThrottleOverrideServerAllowed, getRoomVariantCount, setRoomVariantCount, getSabakStartHour, setSabakStartHour, getSabakStartMinute, setSabakStartMinute, getSabakDurationMinutes, setSabakDurationMinutes, getSabakSiegeMinutes, setSabakSiegeMinutes, getCrossRankStartHour, setCrossRankStartHour, getCrossRankStartMinute, setCrossRankStartMinute, getCrossRankDurationMinutes, setCrossRankDurationMinutes, canUserClaimVip, incrementCharacterVipClaimCount, getWorldBossKillCount, setWorldBossKillCount, getSpecialBossKillCount, setSpecialBossKillCount, getCultivationBossKillCount, setCultivationBossKillCount, getWorldBossDropBonus, setWorldBossDropBonus, getWorldBossBaseHp, setWorldBossBaseHp, getWorldBossBaseAtk, setWorldBossBaseAtk, getWorldBossBaseDef, setWorldBossBaseDef, getWorldBossBaseMdef, setWorldBossBaseMdef, getWorldBossBaseExp, setWorldBossBaseExp, getWorldBossBaseGold, setWorldBossBaseGold, getWorldBossRespawnMinutes, setWorldBossRespawnMinutes, getWorldBossPlayerBonusConfig, setWorldBossPlayerBonusConfig, getClassLevelBonusConfig, setClassLevelBonusConfig, getSpecialBossDropBonus, setSpecialBossDropBonus, getSpecialBossBaseHp, setSpecialBossBaseHp, getSpecialBossBaseAtk, setSpecialBossBaseAtk, getSpecialBossBaseDef, setSpecialBossBaseDef, getSpecialBossBaseMdef, setSpecialBossBaseMdef, getSpecialBossBaseExp, setSpecialBossBaseExp, getSpecialBossBaseGold, setSpecialBossBaseGold, getSpecialBossRespawnMinutes, setSpecialBossRespawnMinutes, getSpecialBossPlayerBonusConfig, setSpecialBossPlayerBonusConfig, getCultivationBossDropBonus, setCultivationBossDropBonus, getCultivationBossPlayerBonusConfig, setCultivationBossPlayerBonusConfig, getCultivationBossBaseHp, setCultivationBossBaseHp, getCultivationBossBaseAtk, setCultivationBossBaseAtk, getCultivationBossBaseDef, setCultivationBossBaseDef, getCultivationBossBaseMdef, setCultivationBossBaseMdef, getCultivationBossBaseExp, setCultivationBossBaseExp, getCultivationBossBaseGold, setCultivationBossBaseGold, getCultivationBossRespawnMinutes, setCultivationBossRespawnMinutes, getTrainingFruitCoefficient as getTrainingFruitCoefficientDb, setTrainingFruitCoefficient as setTrainingFruitCoefficientDb, getTrainingFruitDropRate as getTrainingFruitDropRateDb, setTrainingFruitDropRate as setTrainingFruitDropRateDb, getPetTrainingFruitDropRate as getPetTrainingFruitDropRateDb, setPetTrainingFruitDropRate as setPetTrainingFruitDropRateDb, getTrainingPerLevelConfig as getTrainingPerLevelConfigDb, setTrainingPerLevelConfig as setTrainingPerLevelConfigDb, getRefineBaseSuccessRate as getRefineBaseSuccessRateDb, setRefineBaseSuccessRate as setRefineBaseSuccessRateDb, getRefineDecayRate as getRefineDecayRateDb, setRefineDecayRate as setRefineDecayRateDb, getRefineMaterialCount as getRefineMaterialCountDb, setRefineMaterialCount as setRefineMaterialCountDb, getRefineBonusPerLevel as getRefineBonusPerLevelDb, setRefineBonusPerLevel as setRefineBonusPerLevelDb, getEffectResetSuccessRate as getEffectResetSuccessRateDb, setEffectResetSuccessRate as setEffectResetSuccessRateDb, getEffectResetDoubleRate as getEffectResetDoubleRateDb, setEffectResetDoubleRate as setEffectResetDoubleRateDb, getEffectResetTripleRate as getEffectResetTripleRateDb, setEffectResetTripleRate as setEffectResetTripleRateDb, getEffectResetQuadrupleRate as getEffectResetQuadrupleRateDb, setEffectResetQuadrupleRate as setEffectResetQuadrupleRateDb, getEffectResetQuintupleRate as getEffectResetQuintupleRateDb, setEffectResetQuintupleRate as setEffectResetQuintupleRateDb, getPetSettings, setPetSettings, getEffectDropSingleChance as getEffectDropSingleChanceDb, setEffectDropSingleChance as setEffectDropSingleChanceDb, getEffectDropDoubleChance as getEffectDropDoubleChanceDb, setEffectDropDoubleChance as setEffectDropDoubleChanceDb, getEquipSkillDropChance as getEquipSkillDropChanceDb, setEquipSkillDropChance as setEquipSkillDropChanceDb, getTreasureSlotCount as getTreasureSlotCountDb, setTreasureSlotCount as setTreasureSlotCountDb, getTreasureMaxLevel as getTreasureMaxLevelDb, setTreasureMaxLevel as setTreasureMaxLevelDb, getTreasureUpgradeConsume as getTreasureUpgradeConsumeDb, setTreasureUpgradeConsume as setTreasureUpgradeConsumeDb, getTreasureAdvanceConsume as getTreasureAdvanceConsumeDb, setTreasureAdvanceConsume as setTreasureAdvanceConsumeDb, getTreasureAdvancePerStage as getTreasureAdvancePerStageDb, setTreasureAdvancePerStage as setTreasureAdvancePerStageDb, getTreasureAdvanceEffectBonusPerStack as getTreasureAdvanceEffectBonusPerStackDb, setTreasureAdvanceEffectBonusPerStack as setTreasureAdvanceEffectBonusPerStackDb, getTreasureWorldBossDropMultiplier as getTreasureWorldBossDropMultiplierDb, setTreasureWorldBossDropMultiplier as setTreasureWorldBossDropMultiplierDb, getTreasureCrossWorldBossDropMultiplier as getTreasureCrossWorldBossDropMultiplierDb, setTreasureCrossWorldBossDropMultiplier as setTreasureCrossWorldBossDropMultiplierDb, getTreasureTowerXuanmingDropChance as getTreasureTowerXuanmingDropChanceDb, setTreasureTowerXuanmingDropChance as setTreasureTowerXuanmingDropChanceDb, getCmdRateLimits, setCmdRateLimits, getCmdCooldowns, setCmdCooldowns, getUltimateGrowthConfig as getUltimateGrowthConfigDb, setUltimateGrowthConfig as setUltimateGrowthConfigDb } from './db/settings.js';
 import { listRealms, getRealmById, updateRealmName, createRealm } from './db/realms.js';
 import {
-  listMobRespawns,
+  listMobRespawnsPage,
   upsertMobRespawn,
   clearMobRespawn,
   saveMobState,
@@ -150,7 +150,7 @@ import {
 import { MOB_TEMPLATES } from './game/mobs.js';
 import { ITEM_TEMPLATES, SHOP_STOCKS } from './game/items.js';
 import { WORLD, expandRoomVariants, shrinkRoomVariants, ensureZhuxianTowerRoom, ensurePersonalBossRoom } from './game/world.js';
-import { getRoomMobs, getAliveMobs, spawnMobs, removeMob, seedRespawnCache, setRespawnStore, getAllAliveMobs, incrementWorldBossKills, setWorldBossKillCount as setWorldBossKillCountState, incrementSpecialBossKills, setSpecialBossKillCount as setSpecialBossKillCountState, incrementCultivationBossKills, setCultivationBossKillCount as setCultivationBossKillCountState } from './game/state.js';
+import { getRoomMobs, getAliveMobs, spawnMobs, removeMob, seedRespawnCache, appendRespawnCache, setRespawnStore, getAllAliveMobs, incrementWorldBossKills, setWorldBossKillCount as setWorldBossKillCountState, incrementSpecialBossKills, setSpecialBossKillCount as setSpecialBossKillCountState, incrementCultivationBossKills, setCultivationBossKillCount as setCultivationBossKillCountState } from './game/state.js';
 import { calcHitChance, calcDamage, applyDamage, applyHealing, applyPoison, tickStatus, getDefenseMultiplier, consumeFirestrikeCrit } from './game/combat.js';
 import { randInt, clamp } from './game/utils.js';
 import { expForLevel, ROOM_VARIANT_COUNT, setRoomVariantCount as applyRoomVariantCount } from './game/constants.js';
@@ -5742,7 +5742,31 @@ function getMobPersistStatus(status) {
   return Object.keys(next).length > 0 ? next : null;
 }
 
+function shouldPersistMobTemplate(mobTemplate) {
+  const templateId = String(mobTemplate?.id || '');
+  return Boolean(
+    mobTemplate
+    && (
+      mobTemplate.worldBoss
+      || mobTemplate.specialBoss
+      || mobTemplate.sabakBoss
+      || (mobTemplate.respawnMs && Number(mobTemplate.respawnMs) > 0)
+      || templateId === 'vip_personal_boss'
+      || templateId === 'svip_personal_boss'
+      || templateId === 'cross_world_boss'
+      || templateId.startsWith('cultivation_boss_')
+      || templateId.includes('boss')
+      || templateId.includes('leader')
+      || templateId.includes('demon')
+      || templateId === 'bug_queen'
+      || templateId === 'huangquan'
+    )
+  );
+}
+
 function shouldPersistMobState(mob) {
+  const mobTemplate = MOB_TEMPLATES[mob?.templateId];
+  if (!shouldPersistMobTemplate(mobTemplate)) return false;
   const currentHp = Math.max(0, Math.floor(Number(mob?.currentHp || 0)));
   if (currentHp <= 0) return false;
   const maxHp = Math.max(0, Math.floor(Number(mob?.maxHp || 0)));
@@ -19760,50 +19784,72 @@ async function start() {
     clear: (realmId, zoneId, roomId, slotIndex) =>
       clearMobRespawn(realmId, zoneId, roomId, slotIndex)
   });
-  const respawnRows = [];
-  const crossRealmRows = await listMobRespawns(CROSS_REALM_REALM_ID);
-  for (const row of crossRealmRows) {
-    respawnRows.push(row);
-  }
-  for (const realm of realmCache) {
-    const rows = await listMobRespawns(realm.id);
-    for (const row of rows) {
-      respawnRows.push(row);
-    }
-  }
+  seedRespawnCache([]);
   const now = Date.now();
-  if (!crossRealmRows.some((row) => row.zone_id === 'crb' && row.room_id === 'arena')) {
+  const MOB_RESPAWN_LOAD_PAGE_SIZE = 2000;
+  const persistedMobTemplateIds = Object.values(MOB_TEMPLATES)
+    .filter((tpl) => tpl && shouldPersistMobTemplate(tpl))
+    .map((tpl) => String(tpl.id || ''))
+    .filter((id) => id.length > 0);
+  let hasCrossWorldBossRespawn = false;
+  const loadRespawnCacheForRealm = async (realmId) => {
+    let cursor = null;
+    while (true) {
+      const rows = await listMobRespawnsPage(realmId, {
+        limit: MOB_RESPAWN_LOAD_PAGE_SIZE,
+        cursor,
+        templateIds: persistedMobTemplateIds
+      });
+      if (!rows || rows.length <= 0) break;
+      const activeRows = [];
+      for (const row of rows) {
+        if (realmId === CROSS_REALM_REALM_ID && row.zone_id === 'crb' && row.room_id === 'arena') {
+          hasCrossWorldBossRespawn = true;
+        }
+        if (row.respawn_at && Number(row.respawn_at) > now) {
+          activeRows.push(row);
+          continue;
+        }
+        if (row.current_hp && row.current_hp > 0) {
+          activeRows.push(row);
+        }
+      }
+      if (activeRows.length > 0) {
+        appendRespawnCache(activeRows);
+      }
+      if (rows.length < MOB_RESPAWN_LOAD_PAGE_SIZE) break;
+      const last = rows[rows.length - 1];
+      cursor = {
+        zone_id: last.zone_id,
+        room_id: last.room_id,
+        slot_index: Number(last.slot_index)
+      };
+    }
+  };
+
+  await loadRespawnCacheForRealm(CROSS_REALM_REALM_ID);
+  for (const realm of realmCache) {
+    await loadRespawnCacheForRealm(realm.id);
+  }
+
+  if (!hasCrossWorldBossRespawn) {
     const fallbackAt = await getCrossWorldBossRespawnAt();
     if (fallbackAt && fallbackAt > now) {
       try {
         await upsertMobRespawn(CROSS_REALM_REALM_ID, 'crb', 'arena', 0, 'cross_world_boss', fallbackAt);
-        respawnRows.push({
+        appendRespawnCache([{
           zone_id: 'crb',
           room_id: 'arena',
           slot_index: 0,
           template_id: 'cross_world_boss',
           respawn_at: fallbackAt,
           realm_id: CROSS_REALM_REALM_ID
-        });
+        }]);
       } catch (err) {
         console.warn('Failed to restore cross world boss respawn fallback:', err);
       }
     }
   }
-  const activeRespawns = [];
-  for (const row of respawnRows) {
-    if (row.respawn_at && Number(row.respawn_at) > now) {
-      activeRespawns.push(row);
-    } else if (row.current_hp && row.current_hp > 0) {
-      // 保留有血量数据的怪物，即使重生时间已过期
-      activeRespawns.push(row);
-    } else {
-      const realmValue = row.realm_id ?? row.realmId;
-      const realmId = (realmValue === undefined || realmValue === null) ? 1 : Number(realmValue);
-      await clearMobRespawn(Number.isNaN(realmId) ? 1 : realmId, row.zone_id, row.room_id, row.slot_index);
-    }
-  }
-  seedRespawnCache(activeRespawns);
   
   // 定期保存怪物血量状态（每60秒）
   setInterval(async () => {
