@@ -93,6 +93,7 @@ node src/index.js
 - `ADMIN_PATH`：后台路径（默认 `admin`）
 - `ADMIN_BOOTSTRAP_SECRET`：初始化 GM 密钥
 - `ADMIN_BOOTSTRAP_USER`：首次自动提升为 GM 的账号名
+- `LOG_COLOR`：是否启用控制台彩色日志（默认启用，设为 `false` 可关闭）
 
 ## 游戏玩法（UI 为主）
 

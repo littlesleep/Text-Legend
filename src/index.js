@@ -7,6 +7,9 @@ import { mkdir, copyFile, unlink, stat } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import crypto from 'node:crypto';
 import cron from 'node-cron';
+import { setupConsoleColors } from './log/console_colors.js';
+
+setupConsoleColors();
 
 import config from './config.js';
 import { validatePlayerName } from './game/validator.js';
