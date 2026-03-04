@@ -5122,6 +5122,9 @@ const players = new Map();
 const realmStates = new Map();
 const mobStatePersistCache = new Map();
 let realmCache = [];
+const RUNTIME_HEALTH_INTERVAL_MS = 60 * 1000;
+let runtimeHealthTimer = null;
+let runtimeHealthExpectedAt = 0;
 
 function createSabakState() {
   return {
@@ -5462,12 +5465,61 @@ function getMobPersistCacheKey(mob) {
   return `${mob.realmId || 1}:${mob.zoneId}:${mob.roomId}:${mob.slotIndex}`;
 }
 
+function getMobPersistStatus(status) {
+  if (!status || typeof status !== 'object') return null;
+  const next = { ...status };
+  delete next.baseStats;
+  delete next.scalingBaseStats;
+  return Object.keys(next).length > 0 ? next : null;
+}
+
+function shouldPersistMobState(mob) {
+  const currentHp = Math.max(0, Math.floor(Number(mob?.currentHp || 0)));
+  if (currentHp <= 0) return false;
+  const maxHp = Math.max(0, Math.floor(Number(mob?.maxHp || 0)));
+  if (maxHp > 0 && currentHp < maxHp) return true;
+  return Boolean(getMobPersistStatus(mob?.status));
+}
+
 function getMobPersistSnapshot(mob) {
   return JSON.stringify([
     mob.templateId,
     Math.max(0, Math.floor(Number(mob.currentHp || 0))),
-    mob.status || {}
+    getMobPersistStatus(mob.status) || null
   ]);
+}
+
+async function logRuntimeHealth(expectedAt = Date.now()) {
+  const now = Date.now();
+  const loopLagMs = Math.max(0, now - expectedAt);
+  const memory = process.memoryUsage();
+  let mobRespawnRows = 'err';
+  try {
+    const countRow = await knex('mob_respawns').count({ total: '*' }).first();
+    mobRespawnRows = Math.max(0, Math.floor(Number(countRow?.total ?? countRow?.['count(*)'] ?? 0)));
+  } catch (err) {
+    console.warn('[health] mob_respawns count failed:', err?.message || err);
+  }
+  const rssMb = (memory.rss / (1024 * 1024)).toFixed(1);
+  const heapUsedMb = (memory.heapUsed / (1024 * 1024)).toFixed(1);
+  const heapTotalMb = (memory.heapTotal / (1024 * 1024)).toFixed(1);
+  const onlineCount = Number(io?.engine?.clientsCount || 0);
+  console.log(
+    `[health] lag=${loopLagMs}ms rss=${rssMb}MB heap=${heapUsedMb}/${heapTotalMb}MB `
+    + `online=${onlineCount} pendingSaves=${pendingPlayerSaves.size} mobCache=${mobStatePersistCache.size} mobRows=${mobRespawnRows}`
+  );
+}
+
+function startRuntimeHealthLogging() {
+  if (runtimeHealthTimer) return;
+  runtimeHealthExpectedAt = Date.now() + RUNTIME_HEALTH_INTERVAL_MS;
+  runtimeHealthTimer = setInterval(() => {
+    const expectedAt = runtimeHealthExpectedAt;
+    runtimeHealthExpectedAt += RUNTIME_HEALTH_INTERVAL_MS;
+    logRuntimeHealth(expectedAt).catch((err) => {
+      console.warn('[health] logger failed:', err?.message || err);
+    });
+  }, RUNTIME_HEALTH_INTERVAL_MS);
 }
 
 function cultivationRewardMultiplier(player) {
@@ -6705,9 +6757,87 @@ function dropLoot(mobTemplate, bonus = 1) {
   return loot;
 }
 
-async function savePlayer(player) {
-  if (!player.userId) return;
+const PLAYER_SAVE_DEBOUNCE_MS = 1500;
+const PLAYER_SAVE_MIN_INTERVAL_MS = 8000;
+const pendingPlayerSaves = new Map();
+let pendingPlayerSaveTimer = null;
+let pendingPlayerSaveDueAt = 0;
+const playerLastPersistAt = new Map();
+
+function getPlayerSaveKey(player) {
+  return `${Number(player?.userId || 0)}:${Number(player?.realmId || 1)}:${String(player?.name || '')}`;
+}
+
+async function savePlayerNow(player) {
+  if (!player?.userId) return;
   await saveCharacter(player.userId, player, player.realmId || 1);
+}
+
+function schedulePendingPlayerSaveFlush(delayMs = PLAYER_SAVE_DEBOUNCE_MS) {
+  const delay = Math.max(0, Math.floor(Number(delayMs || 0)));
+  const dueAt = Date.now() + delay;
+  if (pendingPlayerSaveTimer && pendingPlayerSaveDueAt && pendingPlayerSaveDueAt <= dueAt) {
+    return;
+  }
+  if (pendingPlayerSaveTimer) {
+    clearTimeout(pendingPlayerSaveTimer);
+  }
+  pendingPlayerSaveDueAt = dueAt;
+  pendingPlayerSaveTimer = setTimeout(() => {
+    flushPendingPlayerSaves().catch((err) => {
+      console.warn('[savePlayer] deferred flush error:', err?.message || err);
+    });
+  }, delay);
+}
+
+async function flushPendingPlayerSaves() {
+  if (pendingPlayerSaveTimer) {
+    clearTimeout(pendingPlayerSaveTimer);
+    pendingPlayerSaveTimer = null;
+  }
+  pendingPlayerSaveDueAt = 0;
+  if (pendingPlayerSaves.size <= 0) return;
+  const batch = Array.from(pendingPlayerSaves.entries());
+  pendingPlayerSaves.clear();
+  let nextDelayMs = 0;
+  for (const [saveKey, queuedPlayer] of batch) {
+    const lastPersistAt = playerLastPersistAt.get(saveKey) || 0;
+    const remaining = PLAYER_SAVE_MIN_INTERVAL_MS - (Date.now() - lastPersistAt);
+    if (remaining > 0) {
+      pendingPlayerSaves.set(saveKey, queuedPlayer);
+      nextDelayMs = nextDelayMs > 0 ? Math.min(nextDelayMs, remaining) : remaining;
+      continue;
+    }
+    try {
+      await savePlayerNow(queuedPlayer);
+      playerLastPersistAt.set(saveKey, Date.now());
+    } catch (err) {
+      console.warn('[savePlayer] deferred flush failed:', err?.message || err);
+      pendingPlayerSaves.set(saveKey, queuedPlayer);
+      nextDelayMs = nextDelayMs > 0 ? Math.min(nextDelayMs, PLAYER_SAVE_DEBOUNCE_MS) : PLAYER_SAVE_DEBOUNCE_MS;
+    }
+  }
+  if (pendingPlayerSaves.size > 0) {
+    schedulePendingPlayerSaveFlush(nextDelayMs || PLAYER_SAVE_DEBOUNCE_MS);
+  }
+}
+
+function queuePlayerSave(player) {
+  if (!player?.userId) return;
+  pendingPlayerSaves.set(getPlayerSaveKey(player), player);
+  schedulePendingPlayerSaveFlush(PLAYER_SAVE_DEBOUNCE_MS);
+}
+
+async function savePlayer(player, options = {}) {
+  if (!player?.userId) return;
+  const saveKey = getPlayerSaveKey(player);
+  if (options?.immediate) {
+    pendingPlayerSaves.delete(saveKey);
+    await savePlayerNow(player);
+    playerLastPersistAt.set(saveKey, Date.now());
+    return;
+  }
+  queuePlayerSave(player);
 }
 
 async function recoverManagedHostedPlayersOnStartup() {
@@ -15534,7 +15664,7 @@ io.on('connection', (socket) => {
       player.yuanbao = Math.max(0, Number(player.yuanbao || 0) - CHARACTER_MIGRATE_YUANBAO_COST);
       charged = true;
       player.forceStateRefresh = true;
-      await savePlayer(player);
+      await savePlayer(player, { immediate: true });
 
       await migrateCharacterToUser({
         realmId: player.realmId || 1,
@@ -16325,7 +16455,7 @@ io.on('connection', (socket) => {
     if (trade) {
       clearTrade(trade, `交易已取消（${player.name} 离线）。`, trade.realmId ?? lookup.realmId ?? (player.realmId || 1));
     }
-      await savePlayer(player);
+      await savePlayer(player, { immediate: true });
       if (!shouldKeepManagedAuto && !shouldKeepManagedPending) {
         getRealmState(player.realmId || 1).lastSaveTime.delete(player.name); // 清理保存时间记录
       }
@@ -19102,7 +19232,7 @@ async function start() {
   }
   seedRespawnCache(activeRespawns);
   
-  // 定期保存怪物血量状态（每30秒）
+  // 定期保存怪物血量状态（每60秒）
   setInterval(async () => {
     try {
       const realmIds = getRealmIds();
@@ -19112,6 +19242,13 @@ async function start() {
         for (const mob of aliveMobs) {
           const cacheKey = getMobPersistCacheKey(mob);
           activeMobKeys.add(cacheKey);
+          if (!shouldPersistMobState(mob)) {
+            if (mobStatePersistCache.has(cacheKey)) {
+              await clearMobRespawn(realmId, mob.zoneId, mob.roomId, mob.slotIndex);
+              mobStatePersistCache.delete(cacheKey);
+            }
+            continue;
+          }
           const nextSnapshot = getMobPersistSnapshot(mob);
           if (mobStatePersistCache.get(cacheKey) === nextSnapshot) continue;
           await saveMobState(
@@ -19134,7 +19271,7 @@ async function start() {
     } catch (err) {
       console.warn('Failed to save mob states:', err);
     }
-  }, 30000);
+  }, 60000);
 
   // 定期清理 mob_respawns 中已过期且无血量快照的无效记录（每1小时）
   setInterval(async () => {
@@ -19332,14 +19469,80 @@ async function start() {
       }
     }
   }
+  startRuntimeHealthLogging();
   server.listen(config.port, () => {
     console.log(`Server on http://localhost:${config.port}`);
   });
 }
 
+let shuttingDown = false;
+
+async function gracefulShutdown(reason, exitCode = 0) {
+  if (shuttingDown) {
+    if (typeof exitCode === 'number' && exitCode > 0) {
+      process.exitCode = exitCode;
+    }
+    return;
+  }
+  shuttingDown = true;
+  process.exitCode = exitCode;
+  console.log(`[shutdown] ${reason}`);
+
+  if (runtimeHealthTimer) {
+    clearInterval(runtimeHealthTimer);
+    runtimeHealthTimer = null;
+  }
+
+  try {
+    await flushPendingPlayerSaves();
+  } catch (err) {
+    console.warn('[shutdown] flushPendingPlayerSaves failed:', err?.message || err);
+  }
+
+  try {
+    await new Promise((resolve) => {
+      if (!server.listening) {
+        resolve();
+        return;
+      }
+      server.close(() => {
+        resolve();
+      });
+    });
+  } catch (err) {
+    console.warn('[shutdown] server.close failed:', err?.message || err);
+  }
+
+  try {
+    await knex.destroy();
+  } catch (err) {
+    console.warn('[shutdown] knex.destroy failed:', err?.message || err);
+  }
+
+  process.exit(process.exitCode || 0);
+}
+
+process.on('SIGINT', () => {
+  void gracefulShutdown('SIGINT', 0);
+});
+
+process.on('SIGTERM', () => {
+  void gracefulShutdown('SIGTERM', 0);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error(err);
+  void gracefulShutdown('uncaughtException', 1);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error(err);
+  void gracefulShutdown('unhandledRejection', 1);
+});
+
 start().catch((err) => {
   console.error(err);
-  process.exit(1);
+  void gracefulShutdown('start-failed', 1);
 });
 
 

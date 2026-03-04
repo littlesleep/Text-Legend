@@ -484,6 +484,7 @@ export function getAllAliveMobs(realmId = 1) {
           slotIndex: mob.slotIndex,
           templateId: mob.templateId,
           currentHp: mob.hp,
+          maxHp: mob.max_hp,
           status: mob.status || {}
         });
       }

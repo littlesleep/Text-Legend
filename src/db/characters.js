@@ -9,6 +9,45 @@ function parseJson(value, fallback) {
   }
 }
 
+function buildCharacterPersistData(userId, player, realmId) {
+  return {
+    user_id: userId,
+    realm_id: realmId,
+    name: player.name,
+    class: player.classId,
+    level: player.level,
+    exp: player.exp,
+    gold: player.gold,
+    yuanbao: Math.max(0, Math.floor(Number(player.yuanbao || 0))),
+    hp: player.hp,
+    mp: player.mp,
+    max_hp: player.max_hp,
+    max_mp: player.max_mp,
+    stats_json: JSON.stringify(player.stats || {}),
+    position_json: JSON.stringify(player.position || {}),
+    inventory_json: JSON.stringify(player.inventory || []),
+    warehouse_json: JSON.stringify(player.warehouse || []),
+    equipment_json: JSON.stringify(player.equipment || {}),
+    quests_json: JSON.stringify(player.quests || {}),
+    skills_json: JSON.stringify(player.skills || []),
+    flags_json: JSON.stringify(player.flags || {})
+  };
+}
+
+function buildCharacterPersistSignature(data) {
+  return JSON.stringify(data);
+}
+
+function setCharacterPersistSignature(player, signature) {
+  if (!player || typeof player !== 'object') return;
+  Object.defineProperty(player, '__persistSignature', {
+    value: signature,
+    writable: true,
+    configurable: true,
+    enumerable: false
+  });
+}
+
 export async function listCharacters(userId, realmId = 1) {
   return knex('characters')
     .where({ user_id: userId, realm_id: realmId })
@@ -72,6 +111,8 @@ export async function loadCharacter(userId, name, realmId = 1) {
   normalizeInventory(player);
   normalizeWarehouse(player);
   normalizeEquipment(player);
+  const persistedData = buildCharacterPersistData(row.user_id, player, row.realm_id || realmId);
+  setCharacterPersistSignature(player, buildCharacterPersistSignature(persistedData));
   return player;
 }
 
@@ -106,38 +147,39 @@ export async function saveCharacter(userId, player, realmId = 1) {
     delete player.flags.savedSummons;
     delete player.flags.savedSummon;
   }
-  const data = {
-    user_id: userId,
-    realm_id: resolvedRealmId,
-    name: player.name,
-    class: player.classId,
-    level: player.level,
-    exp: player.exp,
-    gold: player.gold,
-    yuanbao: Math.max(0, Math.floor(Number(player.yuanbao || 0))),
-    hp: player.hp,
-    mp: player.mp,
-    max_hp: player.max_hp,
-    max_mp: player.max_mp,
-    stats_json: JSON.stringify(player.stats || {}),
-    position_json: JSON.stringify(player.position || {}),
-    inventory_json: JSON.stringify(player.inventory || []),
-    warehouse_json: JSON.stringify(player.warehouse || []),
-    equipment_json: JSON.stringify(player.equipment || {}),
-    quests_json: JSON.stringify(player.quests || {}),
-    skills_json: JSON.stringify(player.skills || []),
-    flags_json: JSON.stringify(player.flags || {})
-  };
-
-  const exists = await knex('characters').where({ user_id: userId, name: player.name, realm_id: resolvedRealmId }).first();
-  if (exists) {
-    await knex('characters')
-      .where({ user_id: userId, name: player.name, realm_id: resolvedRealmId })
-      .update({ ...data, updated_at: knex.fn.now() });
-    return exists.id;
+  const data = buildCharacterPersistData(userId, player, resolvedRealmId);
+  const persistSignature = buildCharacterPersistSignature(data);
+  if (player.__persistSignature === persistSignature) {
+    return null;
   }
-  const [id] = await knex('characters').insert(data);
-  return id;
+
+  const where = { user_id: userId, name: player.name, realm_id: resolvedRealmId };
+  const updated = await knex('characters')
+    .where(where)
+    .update({ ...data, updated_at: knex.fn.now() });
+  if (Number(updated || 0) > 0) {
+    setCharacterPersistSignature(player, persistSignature);
+    return null;
+  }
+
+  try {
+    const [id] = await knex('characters').insert(data);
+    setCharacterPersistSignature(player, persistSignature);
+    return id;
+  } catch (err) {
+    const message = String(err?.sqlMessage || err?.message || '');
+    const isDuplicate = message.includes('Duplicate')
+      || message.includes('UNIQUE constraint failed')
+      || message.includes('duplicate key value');
+    if (!isDuplicate) {
+      throw err;
+    }
+    await knex('characters')
+      .where(where)
+      .update({ ...data, updated_at: knex.fn.now() });
+    setCharacterPersistSignature(player, persistSignature);
+    return null;
+  }
 }
 
 export async function deleteCharacter(userId, name, realmId = 1) {
