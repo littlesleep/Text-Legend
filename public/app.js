@@ -7596,19 +7596,37 @@ function renderGuildModal() {
     const upgradeTimeText = upgradeSec > 0
       ? `${Math.floor(upgradeSec / 3600)}时${Math.floor((upgradeSec % 3600) / 60)}分${upgradeSec % 60}秒`
       : '未在升级';
+    const currentThreshold = Number(guildBuildingState.currentThreshold || 0);
+    const nextThreshold = guildBuildingState.nextThreshold == null ? null : Number(guildBuildingState.nextThreshold || 0);
+    const overallProgress = nextThreshold && nextThreshold > currentThreshold
+      ? Math.max(0, Math.min(100, ((Number(guildBuildingState.exp || 0) - currentThreshold) / (nextThreshold - currentThreshold)) * 100))
+      : 100;
     const branches = Array.isArray(guildBuildingState.branches) ? guildBuildingState.branches : [];
     const buildCard = document.createElement('div');
     buildCard.className = 'guild-build-card';
     buildCard.innerHTML = `
-      <div class="guild-build-title">行会建设</div>
+      <div class="guild-build-header">
+        <div class="guild-build-title-wrap">
+          <div class="guild-build-title">行会建设</div>
+          <div class="guild-build-status">${guildBuildingState.upgrading ? `${guildBuildingState.activeUpgradeBranchLabel || '建筑'}升级中` : (guildBuildingState.readyToUpgrade ? '已有可升级建筑' : '稳步建设中')}</div>
+        </div>
+        <div class="guild-build-badge">战斗 +${Number(guildBuildingState.battleBonusPct || 0)}%</div>
+      </div>
       <div class="guild-build-stats">
         <span>主殿 Lv${Number(guildBuildingState.level || 0)}</span>
         <span>建设值 ${Number(guildBuildingState.exp || 0)}</span>
         <span>成员上限 ${Number(guildBuildingState.memberLimit || 20)}</span>
+        <span>个人贡献 ${contribution}</span>
         <span>经验+${Number(guildBuildingState.expBonusPct || 0)}%</span>
         <span>金币+${Number(guildBuildingState.goldBonusPct || 0)}%</span>
       </div>
-      <div class="guild-build-next">个人行会贡献：${contribution}</div>
+      <div class="guild-build-progress-wrap">
+        <div class="guild-build-progress-label">
+          <span>${nextThreshold ? `当前阶段 ${currentThreshold} -> ${nextThreshold}` : '当前已满级'}</span>
+          <span>${Math.round(overallProgress)}%</span>
+        </div>
+        <div class="guild-build-progress"><span style="width:${overallProgress}%;"></span></div>
+      </div>
       <div class="guild-build-next">当前升级：${guildBuildingState.upgrading ? `${guildBuildingState.activeUpgradeBranchLabel || '建筑'}（剩余 ${upgradeTimeText}）` : '当前无升级中的建筑'}</div>
       <div class="guild-build-next">今日捐献剩余：金币 ${Number(goldDonate.remaining || 0)}/${Number(goldDonate.limit || 0)} 次，活动积分 ${Number(pointDonate.remaining || 0)}/${Number(pointDonate.limit || 0)} 次</div>
       <div class="guild-build-next">战斗建筑：攻击+${Number(guildBuildingState.atkBonusPct || 0)}% / 魔法+${Number(guildBuildingState.magBonusPct || 0)}% / 道术+${Number(guildBuildingState.spiritBonusPct || 0)}% / 防御+${Number(guildBuildingState.defBonusPct || 0)}% / 魔御+${Number(guildBuildingState.mdefBonusPct || 0)}%</div>
@@ -7618,6 +7636,11 @@ function renderGuildModal() {
     branches.forEach((branch) => {
       const branchCard = document.createElement('div');
       branchCard.className = `guild-build-branch${branch.upgrading ? ' is-upgrading' : ''}${branch.readyToUpgrade ? ' is-ready' : ''}`;
+      const branchCurrentThreshold = Number(branch.currentThreshold || 0);
+      const branchNextThreshold = branch.nextThreshold == null ? null : Number(branch.nextThreshold || 0);
+      const branchProgress = branchNextThreshold && branchNextThreshold > branchCurrentThreshold
+        ? Math.max(0, Math.min(100, ((Number(guildBuildingState.exp || 0) - branchCurrentThreshold) / (branchNextThreshold - branchCurrentThreshold)) * 100))
+        : 100;
       const branchRemainSec = Number(branch.upgradeRemainingSec || 0);
       const branchTimeText = branchRemainSec > 0
         ? `${Math.floor(branchRemainSec / 3600)}时${Math.floor((branchRemainSec % 3600) / 60)}分${branchRemainSec % 60}秒`
@@ -7628,6 +7651,7 @@ function renderGuildModal() {
           <span class="guild-build-branch-level">Lv${Number(branch.level || 0)}</span>
         </div>
         <div class="guild-build-branch-bonus">${branch.bonusText || '无加成'}</div>
+        <div class="guild-build-branch-progress"><span style="width:${branchProgress}%;"></span></div>
         <div class="guild-build-branch-meta">${branch.nextThreshold ? `下级需建设值 ${Number(branch.nextThreshold || 0)}（还差 ${Number(branch.nextNeed || 0)}）` : '已达该分支上限'}</div>
         <div class="guild-build-branch-meta">${branch.upgrading ? `升级中：剩余 ${branchTimeText}` : (branch.readyToUpgrade ? `可升级：耗时 ${branchTimeText}` : '尚未满足升级条件')}</div>
       `;
@@ -7647,6 +7671,7 @@ function renderGuildModal() {
     actionRow.className = 'guild-build-actions';
     const goldBtn = document.createElement('button');
     goldBtn.type = 'button';
+    goldBtn.className = 'guild-build-action-gold';
     goldBtn.textContent = `捐献${goldDonateCost}金币（+${goldContributionGain}贡献，剩余${Number(goldDonate.remaining || 0)}次）`;
     goldBtn.disabled = Number(goldDonate.remaining || 0) <= 0;
     goldBtn.addEventListener('click', () => {
@@ -7655,6 +7680,7 @@ function renderGuildModal() {
     });
     const pointBtn = document.createElement('button');
     pointBtn.type = 'button';
+    pointBtn.className = 'guild-build-action-points';
     pointBtn.textContent = `捐献${pointDonateCost}活动积分（+${pointContributionGain}贡献，剩余${Number(pointDonate.remaining || 0)}次）`;
     pointBtn.disabled = Number(pointDonate.remaining || 0) <= 0;
     pointBtn.addEventListener('click', () => {
@@ -7663,6 +7689,7 @@ function renderGuildModal() {
     });
     const shopBtn = document.createElement('button');
     shopBtn.type = 'button';
+    shopBtn.className = 'guild-build-action-shop';
     shopBtn.textContent = '行会商城';
     shopBtn.addEventListener('click', () => {
       void showGuildShopModal();

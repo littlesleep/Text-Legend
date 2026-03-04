@@ -5835,74 +5835,168 @@ body.dark .rank-tab.active {
 .guild-build-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(201, 142, 70, 0.28);
-  background: rgba(255, 241, 220, 0.08);
-  padding: 12px;
-  margin-bottom: 6px;
+  gap: 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(214, 151, 75, 0.26);
+  background:
+    radial-gradient(circle at top right, rgba(255, 185, 94, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(70, 46, 30, 0.96), rgba(41, 28, 20, 0.96));
+  padding: 14px;
+  margin-bottom: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 204, 0.06),
+    0 14px 28px rgba(0, 0, 0, 0.18);
+}
+
+.guild-build-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.guild-build-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .guild-build-title {
-  font-size: 0.95rem;
+  font-size: 1.02rem;
   font-weight: 700;
-  color: #f4d4aa;
+  letter-spacing: 0.02em;
+  color: #ffe0b3;
+}
+
+.guild-build-status {
+  font-size: 0.74rem;
+  color: rgba(247, 215, 170, 0.78);
+}
+
+.guild-build-badge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 190, 108, 0.3);
+  background: rgba(255, 190, 108, 0.1);
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffd39e;
 }
 
 .guild-build-stats {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
+}
+
+.guild-build-stats span {
+  border-radius: 14px;
+  border: 1px solid rgba(228, 171, 95, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 10px;
   font-size: 0.78rem;
   color: rgba(245, 226, 198, 0.92);
 }
 
-.guild-build-stats span {
+.guild-build-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.guild-build-progress-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: rgba(245, 226, 198, 0.74);
+}
+
+.guild-build-progress {
+  position: relative;
+  overflow: hidden;
+  height: 8px;
   border-radius: 999px;
-  border: 1px solid rgba(210, 129, 42, 0.24);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.guild-build-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c98a46, #ffb95e);
+  box-shadow: 0 0 16px rgba(255, 185, 94, 0.3);
 }
 
 .guild-build-next {
   font-size: 0.75rem;
-  color: rgba(245, 226, 198, 0.7);
+  line-height: 1.5;
+  color: rgba(245, 226, 198, 0.72);
 }
 
 .guild-build-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
 }
 
 .guild-build-actions button {
-  min-width: 120px;
+  min-width: 0;
+  min-height: 40px;
+  border-radius: 14px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.guild-build-actions .guild-build-action-gold {
+  background: linear-gradient(180deg, #5c4431, #493526);
+  border-color: rgba(233, 176, 101, 0.26);
+}
+
+.guild-build-actions .guild-build-action-points {
+  background: linear-gradient(180deg, #533849, #412b39);
+  border-color: rgba(215, 149, 203, 0.2);
+}
+
+.guild-build-actions .guild-build-action-shop {
+  background: linear-gradient(180deg, #355047, #293c36);
+  border-color: rgba(126, 215, 175, 0.18);
 }
 
 .guild-build-branches {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
 }
 
 .guild-build-branch {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border-radius: 12px;
-  border: 1px solid rgba(201, 142, 70, 0.22);
-  background: rgba(255, 255, 255, 0.03);
-  padding: 10px;
+  gap: 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(201, 142, 70, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.025));
+  padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .guild-build-branch.is-ready {
-  border-color: rgba(225, 175, 84, 0.45);
-  box-shadow: 0 0 0 1px rgba(225, 175, 84, 0.12) inset;
+  border-color: rgba(225, 175, 84, 0.4);
+  background:
+    radial-gradient(circle at top right, rgba(255, 185, 94, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+  box-shadow: 0 0 0 1px rgba(225, 175, 84, 0.08) inset;
 }
 
 .guild-build-branch.is-upgrading {
-  border-color: rgba(111, 181, 255, 0.4);
-  box-shadow: 0 0 0 1px rgba(111, 181, 255, 0.1) inset;
+  border-color: rgba(118, 212, 162, 0.34);
+  background:
+    radial-gradient(circle at top right, rgba(104, 201, 138, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+  box-shadow: 0 0 0 1px rgba(104, 201, 138, 0.08) inset;
 }
 
 .guild-build-branch-head {
@@ -5919,20 +6013,69 @@ body.dark .rank-tab.active {
 }
 
 .guild-build-branch-level {
-  font-size: 0.74rem;
-  color: rgba(245, 226, 198, 0.8);
+  font-size: 0.72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 206, 153, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 3px 8px;
+  color: rgba(255, 226, 184, 0.9);
 }
 
 .guild-build-branch-bonus,
 .guild-build-branch-meta {
   font-size: 0.74rem;
+  line-height: 1.45;
   color: rgba(245, 226, 198, 0.72);
 }
 
+.guild-build-branch-progress {
+  position: relative;
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.guild-build-branch-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(201, 138, 70, 0.85), rgba(255, 185, 94, 0.95));
+}
+
 .guild-build-branch button {
-  align-self: flex-start;
-  min-width: 96px;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 38px;
   margin-top: 2px;
+  border-radius: 12px;
+  font-size: 0.74rem;
+}
+
+#guild-modal .modal-card {
+  width: min(880px, calc(100vw - 18px));
+  max-height: min(88vh, 980px);
+  border-radius: 22px;
+  border: 1px solid rgba(214, 151, 75, 0.2);
+  background:
+    radial-gradient(circle at top right, rgba(255, 185, 94, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(42, 29, 20, 0.98), rgba(28, 20, 15, 0.98));
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.38);
+}
+
+#guild-modal .modal-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: 8px;
+}
+
+#guild-modal .modal-actions button {
+  min-width: 0;
+  border-radius: 12px;
+}
+
+#guild-modal .guild-list {
+  gap: 10px;
 }
 
 .guild-member {
