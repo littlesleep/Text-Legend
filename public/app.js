@@ -5169,25 +5169,26 @@ function ensureRouteLinesLoaded() {
 }
 
 async function reconnectByRouteSwitch(lineName) {
-  if (!activeChar || !token) return false;
+  if (!activeChar || !token) return { ok: false, reason: '角色未登录' };
   const target = String(activeChar || '').trim();
-  if (!target) return false;
+  if (!target) return { ok: false, reason: '角色名为空' };
   return new Promise((resolve) => {
     let settled = false;
-    const done = (ok) => {
+    const done = (ok, reason = '') => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(Boolean(ok));
+      resolve({ ok: Boolean(ok), reason: String(reason || '') });
     };
-    const timer = setTimeout(() => done(false), 20000);
+    const timer = setTimeout(() => done(false, '重连超时'), 22000);
     enterGame(target, {
       reconnect: true,
       preserveLog: true,
       reconnectMessage: `正在切换线路到 ${lineName}，请稍候...`,
       suppressAuthFailActions: true,
+      reconnectAuthDelayMs: 500,
       onReady: () => done(true),
-      onFail: () => done(false)
+      onFail: (reason) => done(false, reason)
     });
   });
 }
@@ -5268,7 +5269,7 @@ async function switchRouteLineManually(nextLine) {
   const switched = await reconnectByRouteSwitch(normalizedNext.name);
   routeSwitching = false;
   refreshRealmLineDisplay();
-  if (switched) {
+  if (switched?.ok) {
     showToast(`线路已切换：${normalizedNext.name}`);
     return;
   }
@@ -5281,9 +5282,9 @@ async function switchRouteLineManually(nextLine) {
   refreshRealmLineDisplay();
   noticeModal({
     title: '切换线路',
-    text: rolledBack
-      ? `切换到 ${normalizedNext.name} 失败，已自动回退到 ${prevLine.name || '原线路'}。`
-      : `切换到 ${normalizedNext.name} 失败，且回退重连失败，请手动重进游戏。`
+    text: rolledBack?.ok
+      ? `切换到 ${normalizedNext.name} 失败（${switched?.reason || '未知原因'}），已自动回退到 ${prevLine.name || '原线路'}。`
+      : `切换到 ${normalizedNext.name} 失败（${switched?.reason || '未知原因'}），且回退重连失败，请手动重进游戏。`
   });
 }
 
@@ -10444,6 +10445,9 @@ function enterGame(name, options = {}) {
   const preserveLog = options?.preserveLog === true || reconnect;
   const reconnectMessage = String(options?.reconnectMessage || '正在重连...').trim() || '正在重连...';
   const suppressAuthFailActions = options?.suppressAuthFailActions === true;
+  const reconnectAuthDelayMs = reconnect
+    ? Math.max(0, Math.floor(Number(options?.reconnectAuthDelayMs ?? 500)))
+    : 0;
   const onReady = typeof options?.onReady === 'function' ? options.onReady : null;
   const onFail = typeof options?.onFail === 'function' ? options.onFail : null;
   let connectionSettled = false;
@@ -10496,7 +10500,13 @@ function enterGame(name, options = {}) {
   antiSeq = 0;
   pendingCmds = [];
   const socketBaseUrl = getSocketBaseUrl();
-  socket = socketBaseUrl ? io(socketBaseUrl) : io();
+  const socketOpts = {
+    forceNew: reconnect,
+    reconnection: true,
+    reconnectionAttempts: reconnect ? 5 : Infinity,
+    timeout: reconnect ? 12000 : 20000
+  };
+  socket = socketBaseUrl ? io(socketBaseUrl, socketOpts) : io(undefined, socketOpts);
   const rawEmit = socket.emit.bind(socket);
   socket.emit = (event, payload) => {
     if (event === 'cmd' && payload && typeof payload === 'object' && !payload.source) {
@@ -10505,6 +10515,9 @@ function enterGame(name, options = {}) {
     return rawEmit(event, payload);
   };
   socket.on('connect', async () => {
+    if (reconnectAuthDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, reconnectAuthDelayMs));
+    }
     // 登录时已经确保realmList是最新的，这里不需要重新加载
     // await ensureRealmsLoaded();
     socket.emit('auth', {
