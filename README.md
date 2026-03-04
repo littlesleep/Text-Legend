@@ -340,6 +340,26 @@ npm run db:cleanup-mob-respawns -- --execute --realm-id=1
 npm run db:cleanup-mob-respawns -- --execute --realm-id=1 --realm-id=2
 ```
 
+一次性清理“历史普通怪”记录（保留 BOSS 相关模板）：
+
+先预览：
+
+```bash
+npm run db:purge-normal-mob-respawns
+```
+
+执行删除（示例）：
+
+```bash
+npm run db:purge-normal-mob-respawns -- --execute --batch-size=2000 --max-rounds=400 --sleep-ms=60
+```
+
+按区服执行：
+
+```bash
+npm run db:purge-normal-mob-respawns -- --execute --realm-id=1
+```
+
 ## 安卓客户端（原生）
 
 项目包含 `android/` 目录（Kotlin + Jetpack Compose），通过 HTTP / Socket API 连接游戏服务器。
