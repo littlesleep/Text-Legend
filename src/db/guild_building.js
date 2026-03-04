@@ -333,8 +333,9 @@ export function buildGuildBuildingPayload(guild) {
   const branchLevels = normalizeBranchLevels(guild?.build_branch_levels, legacyLevel);
   const upgradeStartedAt = parseGuildBuildTimeMs(guild?.build_upgrade_started_at);
   const upgradeEndsAt = parseGuildBuildTimeMs(guild?.build_upgrade_ends_at);
-  const activeUpgradeBranch = GUILD_BUILD_BRANCH_DEFS.some((def) => def.id === guild?.build_upgrade_branch)
-    ? String(guild.build_upgrade_branch)
+  const rawUpgradeBranch = String(guild?.build_upgrade_branch || '').trim().toLowerCase();
+  const activeUpgradeBranch = GUILD_BUILD_BRANCH_DEFS.some((def) => def.id === rawUpgradeBranch)
+    ? rawUpgradeBranch
     : null;
   const upgrading = Boolean(upgradeEndsAt && upgradeEndsAt > Date.now() && activeUpgradeBranch);
   const maxLevel = Math.max(0, ...Object.values(branchLevels).map((v) => Math.floor(Number(v || 0))));

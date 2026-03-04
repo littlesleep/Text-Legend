@@ -2712,7 +2712,7 @@ private fun SettingsScreen(vm: GameViewModel, onDismiss: () -> Unit) {
           val memberList = members?.members.orEmpty()
           val onlineCount = memberList.count { it.online }
           val myRole = memberList.firstOrNull { it.name == myName }?.role ?: ""
-          val building = state?.guild_building ?: members?.building
+          val building = members?.building ?: state?.guild_building
           val contribution = state?.guild_contribution ?: 0
           val guildSystem = state?.guild_system
           val donateCost = guildSystem?.donateCost

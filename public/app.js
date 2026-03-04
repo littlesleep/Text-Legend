@@ -8680,11 +8680,24 @@ function isBossRoomState(state) {
   return false;
 }
 
+function shouldApplyGuildBuildingFromState(nextBuilding) {
+  if (!nextBuilding) return true;
+  if (!guildBuildingState) return true;
+  const now = Date.now();
+  const currentUpgrading = Boolean(guildBuildingState.upgrading && Number(guildBuildingState.upgradeEndsAt || 0) > now);
+  const nextUpgrading = Boolean(nextBuilding.upgrading && Number(nextBuilding.upgradeEndsAt || 0) > now);
+  if (currentUpgrading && !nextUpgrading) return false;
+  return true;
+}
+
 function renderState(state) {
   const prevState = lastState;
   lastState = state;
   if (Object.prototype.hasOwnProperty.call(state || {}, 'guild_building')) {
-    guildBuildingState = state.guild_building || null;
+    const nextGuildBuilding = state.guild_building || null;
+    if (shouldApplyGuildBuildingFromState(nextGuildBuilding)) {
+      guildBuildingState = nextGuildBuilding;
+    }
     if (guildUi?.modal && !guildUi.modal.classList.contains('hidden')) {
       renderGuildModal();
     }

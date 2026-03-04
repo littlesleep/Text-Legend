@@ -271,6 +271,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             onSimpleResult = { res ->
                 val msg = res.msg ?: ""
                 if (
+                    msg.contains("行会建筑") ||
+                    msg.contains("行会建设") ||
+                    msg.contains("行会贡献") ||
+                    msg.contains("成员殿") ||
+                    msg.contains("历练阁") ||
+                    msg.contains("财库阁") ||
+                    msg.contains("生命殿") ||
+                    msg.contains("武殿") ||
+                    msg.contains("法殿") ||
+                    msg.contains("道殿") ||
+                    msg.contains("甲殿") ||
+                    msg.contains("灵盾阁")
+                ) {
+                    guildMembers()
+                }
+                if (
                     msg.contains("宠物") ||
                     msg.contains("打书") ||
                     msg.contains("合成") ||
