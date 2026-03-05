@@ -1074,84 +1074,96 @@
 
         <div class="block" data-collapsible>
           <div class="block-title">
-            <h2>SMTP邮件配置</h2>
+            <h2>📧 SMTP邮件配置</h2>
             <button class="btn-small block-toggle">折叠</button>
           </div>
           <div class="block-body">
-            <p class="muted" style="margin-bottom: 12px;">
-              配置SMTP服务器用于发送密码重置邮件。支持Gmail、QQ邮箱、163邮箱等。
+            <p class="muted" style="margin-bottom: 16px;">
+              配置SMTP服务器用于发送密码重置邮件，支持 Gmail、QQ邮箱、163邮箱等。
             </p>
 
-            <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ddd;">
-              <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #333;">基本设置</h4>
-              <div style="margin-bottom: 8px;">
-                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input id="smtp-enabled" type="checkbox"> 启用SMTP
-                </label>
-              </div>
+            <!-- 启用开关 -->
+            <div class="form-section">
+              <label class="toggle-switch">
+                <input id="smtp-enabled" type="checkbox">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">启用SMTP邮件服务</span>
+              </label>
             </div>
 
-            <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ddd;">
-              <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #333;">服务器设置</h4>
-              <div class="cmd-rate-grid">
-                <div class="cmd-rate-field">
-                  <label>SMTP服务器</label>
-                  <input id="smtp-host" type="text" placeholder="smtp.gmail.com" value="smtp.gmail.com" style="width: 100%;">
+            <!-- 服务器设置 -->
+            <div class="form-section">
+              <div class="section-title">🌐 服务器设置</div>
+              <div class="form-grid" style="grid-template-columns: 2fr 1fr;">
+                <div class="form-group">
+                  <label class="form-label">SMTP服务器地址</label>
+                  <input id="smtp-host" type="text" placeholder="如: smtp.gmail.com">
                 </div>
-                <div class="cmd-rate-field">
-                  <label>端口</label>
-                  <input id="smtp-port" type="number" min="1" max="65535" value="587" style="width: 100%;">
+                <div class="form-group">
+                  <label class="form-label">端口</label>
+                  <input id="smtp-port" type="number" min="1" max="65535" value="587">
                 </div>
               </div>
-              <div style="margin-top: 8px;">
-                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input id="smtp-secure" type="checkbox"> 使用SSL/TLS加密
-                </label>
-              </div>
+              <label class="checkbox-inline" style="margin-top: 10px;">
+                <input id="smtp-secure" type="checkbox">
+                <span>使用SSL/TLS加密连接</span>
+              </label>
             </div>
 
-            <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ddd;">
-              <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #333;">认证信息</h4>
-              <div class="cmd-rate-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-                <div class="cmd-rate-field">
-                  <label>用户名</label>
-                  <input id="smtp-user" type="text" placeholder="your@email.com" style="width: 100%;">
+            <!-- 认证信息 -->
+            <div class="form-section">
+              <div class="section-title">🔐 认证信息</div>
+              <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="form-group">
+                  <label class="form-label">用户名 / 邮箱</label>
+                  <input id="smtp-user" type="text" placeholder="your@email.com">
                 </div>
-                <div class="cmd-rate-field">
-                  <label>密码</label>
-                  <input id="smtp-password" type="password" placeholder="邮箱密码或应用专用密码" style="width: 100%;">
-                </div>
-                <div class="cmd-rate-field">
-                  <label>发件人</label>
-                  <input id="smtp-from" type="text" placeholder="发件人邮箱" style="width: 100%;">
+                <div class="form-group">
+                  <label class="form-label">密码 / 授权码</label>
+                  <input id="smtp-password" type="password" placeholder="应用专用密码或授权码">
                 </div>
               </div>
-            </div>
-
-            <div style="margin-bottom: 16px;">
-              <div class="cmd-rate-grid">
-                <div class="cmd-rate-action">
-                  <button id="smtp-load-btn" class="btn-small" style="min-width: 120px;">加载配置</button>
-                </div>
-                <div class="cmd-rate-action">
-                  <button id="smtp-save-btn" class="btn-small" style="min-width: 120px;">保存配置</button>
-                </div>
-                <div class="cmd-rate-action">
-                  <button id="smtp-test-btn" class="btn-small" style="background: #ff9800; min-width: 120px;">测试连接</button>
+              <div class="form-grid" style="grid-template-columns: 1fr; margin-top: 10px;">
+                <div class="form-group">
+                  <label class="form-label">发件人显示名称（可选）</label>
+                  <input id="smtp-from" type="text" placeholder="如: 游戏管理员 <admin@game.com>">
                 </div>
               </div>
             </div>
 
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 12px; border-radius: 4px;">
-              <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.5;">
-                <strong>配置提示：</strong><br>
-                • Gmail：需要开启"两步验证"并生成应用专用密码<br>
-                • QQ邮箱：需要开启SMTP服务并获取授权码<br>
-                • 163邮箱：需要在邮箱设置中开启SMTP服务并获取授权码
-              </p>
+            <!-- 操作按钮 -->
+            <div class="form-actions">
+              <button id="smtp-load-btn" class="btn btn-secondary">
+                <span class="btn-icon">↻</span> 加载配置
+              </button>
+              <button id="smtp-save-btn" class="btn btn-primary">
+                <span class="btn-icon">✓</span> 保存配置
+              </button>
+              <button id="smtp-test-btn" class="btn btn-warning">
+                <span class="btn-icon">⚡</span> 测试连接
+              </button>
             </div>
 
-            <div id="smtp-msg" class="msg"></div>
+            <!-- 配置提示 -->
+            <div class="smtp-tips">
+              <div class="tips-title">💡 配置指南</div>
+              <div class="tips-grid">
+                <div class="tip-item">
+                  <div class="tip-provider">Gmail</div>
+                  <div class="tip-desc">开启两步验证，生成16位应用专用密码</div>
+                </div>
+                <div class="tip-item">
+                  <div class="tip-provider">QQ邮箱</div>
+                  <div class="tip-desc">设置 → 账户 → 开启SMTP，获取授权码</div>
+                </div>
+                <div class="tip-item">
+                  <div class="tip-provider">163邮箱</div>
+                  <div class="tip-desc">设置 → POP3/SMTP，开启服务获取授权码</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="smtp-msg" class="msg smtp-msg"></div>
           </div>
         </div>
 

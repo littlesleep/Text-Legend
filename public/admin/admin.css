@@ -658,6 +658,290 @@ body.theme-dark .admin-switch input:checked + .admin-switch-slider {
   text-align: center;
 }
 
+/* ==================== SMTP 邮件配置表单样式 ==================== */
+
+/* 表单分区 */
+.form-section {
+  background: #fffdf7;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.form-section:last-of-type {
+  margin-bottom: 0;
+}
+
+/* 分区标题 */
+.section-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 网格布局 */
+.form-grid {
+  display: grid;
+  gap: 14px;
+  align-items: end;
+}
+
+.form-grid[style*="2fr 1fr"] {
+  grid-template-columns: 2fr 1fr;
+}
+
+.form-grid[style*="1fr 1fr"] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.form-grid[style*="1fr;"] {
+  grid-template-columns: 1fr;
+}
+
+/* 表单组 */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 表单标签 */
+.form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b5a45;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.form-group input {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #d9b894;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(185, 84, 18, 0.1);
+}
+
+/* Toggle Switch 开关样式 */
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  background: #ccc;
+  border-radius: 28px;
+  transition: background 0.3s;
+  flex-shrink: 0;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(24px);
+}
+
+.toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* Checkbox inline */
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #5a4a35;
+}
+
+.checkbox-inline input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* 按钮样式 */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-icon {
+  font-size: 15px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(185, 84, 18, 0.35);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(185, 84, 18, 0.45);
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4);
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.35);
+}
+
+.btn-warning:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.45);
+}
+
+/* SMTP 配置提示 */
+.smtp-tips {
+  background: linear-gradient(135deg, #fff8e1, #ffecb3);
+  border: 1px solid #ffd54f;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: 16px;
+}
+
+.tips-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: #f57f17;
+  margin-bottom: 12px;
+}
+
+.tips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.tip-item {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+}
+
+.tip-provider {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent-strong);
+  margin-bottom: 4px;
+}
+
+.tip-desc {
+  font-size: 12px;
+  color: #6b5a45;
+  line-height: 1.4;
+}
+
+/* 消息提示 */
+.smtp-msg {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.smtp-msg:empty {
+  display: none;
+}
+
+/* 响应式 */
+@media (max-width: 900px) {
+  .form-grid[style*="2fr 1fr"],
+  .form-grid[style*="1fr 1fr"] {
+    grid-template-columns: 1fr;
+  }
+
+  .tips-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+
 .harvest-reward-config-container {
   overflow-x: auto;
 }
