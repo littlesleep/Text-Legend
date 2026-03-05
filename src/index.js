@@ -124,7 +124,8 @@ import {
   formatPrevDateKey,
   formatPrevWeekKey,
   getActivityLeaderboardsByPeriod,
-  buildActivitySettlementRewards
+  buildActivitySettlementRewards,
+  getHarvestBlessingMultipliers
 } from './game/activity.js';
 import {
   validateNumber,
