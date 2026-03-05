@@ -3720,7 +3720,19 @@ app.post('/admin/smtp-settings/test', async (req, res) => {
   const admin = await requireAdmin(req);
   if (!admin) return res.status(401).json({ error: '无管理员权限。' });
   try {
-    await testSmtpConnection();
+    const settings = req.body?.settings || {};
+    const { host, port, secure, user, password } = settings;
+    if (!host || !user || !password) {
+      return res.status(400).json({ error: 'SMTP配置不完整，请填写服务器地址、用户名和密码' });
+    }
+    const nodemailer = await import('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host,
+      port: port || 587,
+      secure: secure === true,
+      auth: { user, pass: password }
+    });
+    await transporter.verify();
     res.json({ ok: true, message: 'SMTP连接测试成功' });
   } catch (err) {
     res.status(400).json({ error: err.message || 'SMTP连接测试失败' });

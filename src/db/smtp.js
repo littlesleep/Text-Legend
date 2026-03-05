@@ -17,7 +17,7 @@ export async function getSmtpSettings() {
     port: parseInt(port, 10),
     secure,
     user,
-    pass: '', // 不返回密码
+    password: '', // 不返回密码
     from
   };
 }

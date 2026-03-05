@@ -4170,7 +4170,28 @@ async function testSmtpConnection() {
   if (!smtpMsg) return;
   setSmtpMsg('正在测试连接...');
   try {
-    const data = await api('/admin/smtp-settings/test', 'POST', {});
+    const config = {
+      enabled: !!smtpEnabledInput?.checked,
+      host: String(smtpHostInput?.value || '').trim(),
+      port: Math.max(1, Math.min(65535, Number(smtpPortInput?.value || 587) || 587)),
+      secure: !!smtpSecureInput?.checked,
+      user: String(smtpUserInput?.value || '').trim(),
+      password: String(smtpPasswordInput?.value || '').trim(),
+      from: String(smtpFromInput?.value || '').trim()
+    };
+    if (!config.host) {
+      setSmtpMsg('SMTP服务器地址不能为空', 'red');
+      return;
+    }
+    if (!config.user) {
+      setSmtpMsg('用户名不能为空', 'red');
+      return;
+    }
+    if (!config.password) {
+      setSmtpMsg('密码不能为空', 'red');
+      return;
+    }
+    const data = await api('/admin/smtp-settings/test', 'POST', { settings: config });
     setSmtpMsg(data.message || '连接测试成功！邮件发送功能正常', 'green');
     setTimeout(() => setSmtpMsg(''), 1500);
   } catch (err) {
