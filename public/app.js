@@ -859,6 +859,7 @@ let tradeData = {
 };
 let guildMembers = [];
 let guildBuildingState = null;
+let guildBuildingUpgradeTimer = null;
 let lastGuildApplyId = null;
 const guildApplyButtons = new Map();
 const guildApplyPending = new Set();
@@ -8076,6 +8077,12 @@ function renderGuildModal() {
       : `成员列表 ${guildMembers.length}`;
   }
 
+  // 清除旧的行会建筑升级倒计时定时器
+  if (guildBuildingUpgradeTimer) {
+    clearInterval(guildBuildingUpgradeTimer);
+    guildBuildingUpgradeTimer = null;
+  }
+
   if (guildBuildingState) {
     const canManageBuild = lastState?.guild_role === 'leader' || lastState?.guild_role === 'vice_leader';
     const contribution = Math.max(0, Math.floor(Number(lastState?.guild_contribution || 0)));
@@ -8126,7 +8133,7 @@ function renderGuildModal() {
         </div>
         <div class="guild-build-progress"><span style="width:${overallProgress}%;"></span></div>
       </div>
-      <div class="guild-build-next">当前升级：${guildBuildingState.upgrading ? `${guildBuildingState.activeUpgradeBranchLabel || '建筑'}（剩余 ${upgradeTimeText}）` : '当前无升级中的建筑'}</div>
+      <div class="guild-build-next" id="guild-build-main-timer">当前升级：${guildBuildingState.upgrading ? `${guildBuildingState.activeUpgradeBranchLabel || '建筑'}（剩余 <span class="countdown" data-ends-at="${upgradeEndsAt}">${upgradeTimeText}</span>）` : '当前无升级中的建筑'}</div>
       <div class="guild-build-next">今日捐献剩余：金币 ${Number(goldDonate.remaining || 0)}/${Number(goldDonate.limit || 0)} 次，活动积分 ${Number(pointDonate.remaining || 0)}/${Number(pointDonate.limit || 0)} 次</div>
       <div class="guild-build-next">战斗建筑：生命+${Number(guildBuildingState.hpBonusPct || 0)}% / 攻击+${Number(guildBuildingState.atkBonusPct || 0)}% / 魔法+${Number(guildBuildingState.magBonusPct || 0)}% / 道术+${Number(guildBuildingState.spiritBonusPct || 0)}% / 防御+${Number(guildBuildingState.defBonusPct || 0)}% / 魔御+${Number(guildBuildingState.mdefBonusPct || 0)}%</div>
     `;
@@ -8152,7 +8159,7 @@ function renderGuildModal() {
         <div class="guild-build-branch-bonus">${branch.bonusText || '无加成'}</div>
         <div class="guild-build-branch-progress"><span style="width:${branchProgress}%;"></span></div>
         <div class="guild-build-branch-meta">${branch.nextThreshold ? `下级需建设值 ${Number(branch.nextThreshold || 0)}（还差 ${Number(branch.nextNeed || 0)}）` : '已达该分支上限'}</div>
-        <div class="guild-build-branch-meta">${branch.upgrading ? `升级中：剩余 ${branchTimeText}` : (branch.readyToUpgrade ? `可升级：耗时 ${branchTimeText}` : '尚未满足升级条件')}</div>
+        <div class="guild-build-branch-meta">${branch.upgrading ? `升级中：剩余 <span class="branch-countdown" data-ends-at="${branch.upgradeEndsAt || 0}">${branchTimeText}</span>` : (branch.readyToUpgrade ? `可升级：耗时 ${branchTimeText}` : '尚未满足升级条件')}</div>
       `;
       const branchBtn = document.createElement('button');
       branchBtn.type = 'button';
@@ -8198,6 +8205,34 @@ function renderGuildModal() {
     actionRow.appendChild(shopBtn);
     buildCard.appendChild(actionRow);
     guildUi.list.appendChild(buildCard);
+
+    // 启动升级倒计时定时器
+    if (guildBuildingState.upgrading && upgradeEndsAt > Date.now()) {
+      guildBuildingUpgradeTimer = setInterval(() => {
+        const now = Date.now();
+        const mainTimerEl = document.querySelector('#guild-build-main-timer .countdown');
+        if (mainTimerEl) {
+          const endsAt = Number(mainTimerEl.dataset.endsAt || 0);
+          const remainSec = Math.max(0, Math.ceil((endsAt - now) / 1000));
+          if (remainSec <= 0) {
+            mainTimerEl.textContent = '0时0分0秒';
+            clearInterval(guildBuildingUpgradeTimer);
+            guildBuildingUpgradeTimer = null;
+          } else {
+            mainTimerEl.textContent = `${Math.floor(remainSec / 3600)}时${Math.floor((remainSec % 3600) / 60)}分${remainSec % 60}秒`;
+          }
+        }
+        document.querySelectorAll('.branch-countdown').forEach((el) => {
+          const endsAt = Number(el.dataset.endsAt || 0);
+          const remainSec = Math.max(0, Math.ceil((endsAt - now) / 1000));
+          if (remainSec <= 0) {
+            el.textContent = '0时0分0秒';
+          } else {
+            el.textContent = `${Math.floor(remainSec / 3600)}时${Math.floor((remainSec % 3600) / 60)}分${remainSec % 60}秒`;
+          }
+        });
+      }, 1000);
+    }
   }
 
   guildUi.modal.classList.remove('hidden');
@@ -12647,6 +12682,10 @@ if (guildUi.close) {
   guildUi.close.addEventListener('click', () => {
     if (guildUi.modal) guildUi.modal.classList.add('hidden');
     if (guildMembersUi.modal) guildMembersUi.modal.classList.add('hidden');
+    if (guildBuildingUpgradeTimer) {
+      clearInterval(guildBuildingUpgradeTimer);
+      guildBuildingUpgradeTimer = null;
+    }
   });
 }
 if (guildMembersUi.close) {
@@ -12690,6 +12729,10 @@ if (guildUi.modal) {
   guildUi.modal.addEventListener('click', (e) => {
     if (e.target === guildUi.modal) {
       guildUi.modal.classList.add('hidden');
+      if (guildBuildingUpgradeTimer) {
+        clearInterval(guildBuildingUpgradeTimer);
+        guildBuildingUpgradeTimer = null;
+      }
     }
   });
 }
