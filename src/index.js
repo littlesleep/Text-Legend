@@ -30,7 +30,9 @@ import {
   clearMobRespawn,
   saveMobState,
   clearInvalidCrossWorldBossRespawns,
-  cleanupExpiredMobRespawnsBatch
+  cleanupExpiredMobRespawnsBatch,
+  batchUpsertMobRespawns,
+  batchClearMobRespawns
 } from './db/mobs.js';
 import {
   listConsignments,
@@ -17933,20 +17935,14 @@ async function processMobDeath(player, mob, online) {
     Boolean(target && target.position && target.position.zone === mobZoneId && target.position.room === mobRoomId);
   const removedMob = removeMob(mobZoneId, mobRoomId, mob.id, roomRealmId);
   if (removedMob && removedMob.respawnAt) {
-    try {
-      await upsertMobRespawn(
-        roomRealmId,
-        mobZoneId,
-        mobRoomId,
-        removedMob.slotIndex,
-        removedMob.templateId,
-        removedMob.respawnAt
-      );
-      if (roomRealmId === CROSS_REALM_REALM_ID && removedMob.templateId === 'cross_world_boss') {
+    // removeMob 内部已通过 respawnStore.set 将数据加入批量队列
+    // 只需处理跨服世界BOSS的特殊设置
+    if (roomRealmId === CROSS_REALM_REALM_ID && removedMob.templateId === 'cross_world_boss') {
+      try {
         await setCrossWorldBossRespawnAt(removedMob.respawnAt);
+      } catch (err) {
+        console.warn('Failed to persist cross world boss respawn:', err);
       }
-    } catch (err) {
-      console.warn('Failed to persist mob respawn state:', err);
     }
   }
   removeSummonedMobsByOwner(mob, roomRealmId, mobZoneId, mobRoomId);
@@ -20025,12 +20021,128 @@ async function start() {
   }, 60 * 1000);
   await runActivityRankingSettlements();
 
+  // 批量持久化队列配置
+  const RESPAWN_PERSIST_BATCH_SIZE = 100; // 每批写入数量
+  const RESPAWN_PERSIST_INTERVAL_MS = 5000; // 每5秒刷新一次
+  const respawnUpsertQueue = new Map(); // 待写入队列 set操作
+  const respawnDeleteQueue = new Map(); // 待删除队列 clear操作
+  let respawnPersistTimer = null;
+  let isPersisting = false;
+
+  // 生成队列键
+  function respawnQueueKey(realmId, zoneId, roomId, slotIndex) {
+    return `${realmId}:${zoneId}:${roomId}:${slotIndex}`;
+  }
+
+  // 执行批量持久化
+  async function flushRespawnPersistQueue() {
+    if (isPersisting) return; // 防止并发执行
+    if (respawnUpsertQueue.size === 0 && respawnDeleteQueue.size === 0) return;
+
+    isPersisting = true;
+    const upsertBatch = [];
+    const deleteBatch = [];
+
+    // 提取待写入记录（优先处理 upsert，同一 key 在 delete 队列中则移除 delete）
+    for (const [key, record] of respawnUpsertQueue) {
+      if (respawnDeleteQueue.has(key)) {
+        // 如果同时有 set 和 clear，以 set 为准，移除 clear
+        respawnDeleteQueue.delete(key);
+      }
+      upsertBatch.push(record);
+      if (upsertBatch.length >= RESPAWN_PERSIST_BATCH_SIZE) break;
+    }
+
+    // 提取待删除记录
+    for (const [key, delKey] of respawnDeleteQueue) {
+      deleteBatch.push(delKey);
+      if (deleteBatch.length >= RESPAWN_PERSIST_BATCH_SIZE) break;
+    }
+
+    // 从队列中移除已提取的记录
+    for (const record of upsertBatch) {
+      respawnUpsertQueue.delete(respawnQueueKey(record.realm_id, record.zone_id, record.room_id, record.slot_index));
+    }
+    for (const delKey of deleteBatch) {
+      respawnDeleteQueue.delete(respawnQueueKey(delKey.realm_id, delKey.zone_id, delKey.room_id, delKey.slot_index));
+    }
+
+    // 执行数据库操作
+    try {
+      if (upsertBatch.length > 0) {
+        await batchUpsertMobRespawns(upsertBatch);
+      }
+      if (deleteBatch.length > 0) {
+        await batchClearMobRespawns(deleteBatch);
+      }
+    } catch (err) {
+      console.error('[respawn-persist] Batch persist failed:', err);
+      // 失败的记录重新放回队列（避免数据丢失）
+      for (const record of upsertBatch) {
+        const key = respawnQueueKey(record.realm_id, record.zone_id, record.room_id, record.slot_index);
+        if (!respawnUpsertQueue.has(key)) {
+          respawnUpsertQueue.set(key, record);
+        }
+      }
+      for (const delKey of deleteBatch) {
+        const key = respawnQueueKey(delKey.realm_id, delKey.zone_id, delKey.room_id, delKey.slot_index);
+        if (!respawnDeleteQueue.has(key)) {
+          respawnDeleteQueue.set(key, delKey);
+        }
+      }
+    } finally {
+      isPersisting = false;
+    }
+  }
+
+  // 启动定时刷新
+  respawnPersistTimer = setInterval(flushRespawnPersistQueue, RESPAWN_PERSIST_INTERVAL_MS);
+
+  // 立即刷新函数（用于服务器关闭时）
+  async function immediateFlushRespawnQueue() {
+    if (respawnPersistTimer) {
+      clearInterval(respawnPersistTimer);
+      respawnPersistTimer = null;
+    }
+    // 循环直到队列为空
+    while (respawnUpsertQueue.size > 0 || respawnDeleteQueue.size > 0) {
+      await flushRespawnPersistQueue();
+      if (isPersisting) await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  // 导出立即刷新函数供进程退出时使用
+  global.immediateFlushRespawnQueue = immediateFlushRespawnQueue;
+
   setRespawnStore({
     set: (realmId, zoneId, roomId, slotIndex, templateId, respawnAt) => {
-      return upsertMobRespawn(realmId, zoneId, roomId, slotIndex, templateId, respawnAt);
+      // 写入内存队列，不立即操作数据库
+      const key = respawnQueueKey(realmId, zoneId, roomId, slotIndex);
+      respawnUpsertQueue.set(key, {
+        realm_id: realmId,
+        zone_id: zoneId,
+        room_id: roomId,
+        slot_index: slotIndex,
+        template_id: templateId,
+        respawn_at: respawnAt
+      });
+      // 同时从删除队列中移除（如果有）
+      respawnDeleteQueue.delete(key);
+      return Promise.resolve(); // 立即返回，不等待数据库
     },
-    clear: (realmId, zoneId, roomId, slotIndex) =>
-      clearMobRespawn(realmId, zoneId, roomId, slotIndex)
+    clear: (realmId, zoneId, roomId, slotIndex) => {
+      // 写入删除队列，不立即操作数据库
+      const key = respawnQueueKey(realmId, zoneId, roomId, slotIndex);
+      respawnDeleteQueue.set(key, {
+        realm_id: realmId,
+        zone_id: zoneId,
+        room_id: roomId,
+        slot_index: slotIndex
+      });
+      // 同时从写入队列中移除（如果有）
+      respawnUpsertQueue.delete(key);
+      return Promise.resolve(); // 立即返回，不等待数据库
+    }
   });
   seedRespawnCache([]);
   const now = Date.now();
@@ -20378,6 +20490,17 @@ async function gracefulShutdown(reason, exitCode = 0) {
     await flushPendingPlayerSaves();
   } catch (err) {
     console.warn('[shutdown] flushPendingPlayerSaves failed:', err?.message || err);
+  }
+
+  // 立即刷新怪物刷新队列到数据库
+  try {
+    if (typeof global.immediateFlushRespawnQueue === 'function') {
+      console.log('[shutdown] Flushing mob respawn queue...');
+      await global.immediateFlushRespawnQueue();
+      console.log('[shutdown] Mob respawn queue flushed.');
+    }
+  } catch (err) {
+    console.warn('[shutdown] flushRespawnQueue failed:', err?.message || err);
   }
 
   try {

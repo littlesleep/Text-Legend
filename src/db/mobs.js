@@ -158,3 +158,54 @@ export async function cleanupExpiredMobRespawnsBatch(nowMs = Date.now(), limit =
       .del()
   );
 }
+
+/**
+ * 批量 upsert 怪物刷新记录
+ * @param {Array} records - 记录数组，每项包含 {realm_id, zone_id, room_id, slot_index, template_id, respawn_at, current_hp?, status?}
+ */
+export async function batchUpsertMobRespawns(records) {
+  if (!Array.isArray(records) || records.length === 0) return 0;
+  // 使用事务批量写入，MySQL 支持 ON DUPLICATE KEY UPDATE 批量语法
+  return withWriteRetry(async () => {
+    const insertData = records.map((r) => ({
+      realm_id: r.realm_id,
+      zone_id: r.zone_id,
+      room_id: r.room_id,
+      slot_index: r.slot_index,
+      template_id: r.template_id,
+      respawn_at: r.respawn_at,
+      current_hp: r.current_hp ?? null,
+      status: r.status ?? null
+    }));
+    await knex('mob_respawns')
+      .insert(insertData)
+      .onConflict(['realm_id', 'zone_id', 'room_id', 'slot_index'])
+      .merge(['template_id', 'respawn_at', 'current_hp', 'status']);
+    return records.length;
+  });
+}
+
+/**
+ * 批量删除怪物刷新记录
+ * @param {Array} keys - 键数组，每项包含 {realm_id, zone_id, room_id, slot_index}
+ */
+export async function batchClearMobRespawns(keys) {
+  if (!Array.isArray(keys) || keys.length === 0) return 0;
+  return withWriteRetry(async () => {
+    const deleted = await knex('mob_respawns')
+      .where((q) => {
+        keys.forEach((k, index) => {
+          const clause = {
+            realm_id: k.realm_id,
+            zone_id: k.zone_id,
+            room_id: k.room_id,
+            slot_index: k.slot_index
+          };
+          if (index === 0) q.where(clause);
+          else q.orWhere(clause);
+        });
+      })
+      .del();
+    return deleted;
+  });
+}
