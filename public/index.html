@@ -85,7 +85,10 @@
               <button id="login-captcha-refresh" class="captcha-refresh" type="button">换一张</button>
             </div>
             <button id="login-btn">进入世界</button>
-            <button id="open-register-btn" class="auth-secondary-btn" type="button">注册新账号</button>
+            <div class="auth-actions">
+              <button id="open-register-btn" class="auth-secondary-btn" type="button">注册新账号</button>
+              <button id="open-reset-password-btn" class="auth-link-btn" type="button">忘记密码？</button>
+            </div>
           </div>
         </div>
       </div>
@@ -102,6 +105,10 @@
             <input id="register-username" type="text" placeholder="设置账号">
           </div>
           <div class="auth-field">
+            <label for="register-email">邮箱（可选，用于找回密码）</label>
+            <input id="register-email" type="email" placeholder="example@email.com">
+          </div>
+          <div class="auth-field">
             <label for="register-password">密码</label>
             <input id="register-password" type="password" placeholder="设置密码">
           </div>
@@ -116,6 +123,54 @@
           <div class="auth-overlay-actions">
             <button id="register-btn">创建账号</button>
             <button id="close-register-btn" class="auth-secondary-btn" type="button">取消</button>
+          </div>
+        </div>
+      </div>
+      <div id="reset-password-overlay" class="auth-overlay hidden">
+        <div class="auth-overlay-backdrop" id="reset-password-overlay-backdrop"></div>
+        <div class="auth-overlay-card auth-card">
+          <div class="auth-card-head">
+            <span class="auth-kicker">找回密码</span>
+            <h3>重置密码</h3>
+            <p class="auth-sub">输入邮箱或账号，通过邮箱链接重置密码。</p>
+          </div>
+          <div class="auth-field">
+            <label for="reset-email-or-username">邮箱或账号</label>
+            <input id="reset-email-or-username" type="text" placeholder="输入邮箱或账号">
+          </div>
+          <div class="captcha-row">
+            <div class="auth-field auth-field-inline">
+              <label for="reset-captcha">验证码</label>
+              <input id="reset-captcha" type="text" placeholder="输入验证码">
+            </div>
+            <img id="reset-captcha-img" class="captcha-img" alt="验证码">
+            <button id="reset-captcha-refresh" class="captcha-refresh" type="button">换一张</button>
+          </div>
+          <div class="auth-overlay-actions">
+            <button id="request-reset-btn">发送重置链接</button>
+            <button id="close-reset-password-btn" class="auth-secondary-btn" type="button">取消</button>
+          </div>
+        </div>
+      </div>
+      <div id="new-password-overlay" class="auth-overlay hidden">
+        <div class="auth-overlay-backdrop" id="new-password-overlay-backdrop"></div>
+        <div class="auth-overlay-card auth-card">
+          <div class="auth-card-head">
+            <span class="auth-kicker">设置新密码</span>
+            <h3>重置密码</h3>
+            <p class="auth-sub">请输入新密码完成重置。</p>
+          </div>
+          <div class="auth-field">
+            <label for="new-password-input">新密码</label>
+            <input id="new-password-input" type="password" placeholder="输入新密码（至少4位）">
+          </div>
+          <div class="auth-field">
+            <label for="confirm-new-password">确认新密码</label>
+            <input id="confirm-new-password" type="password" placeholder="再次输入新密码">
+          </div>
+          <div class="auth-overlay-actions">
+            <button id="reset-password-confirm-btn">确认重置</button>
+            <button id="close-new-password-btn" class="auth-secondary-btn" type="button">取消</button>
           </div>
         </div>
       </div>

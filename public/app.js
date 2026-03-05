@@ -993,8 +993,19 @@ const captchaUi = {
   loginRefresh: document.getElementById('login-captcha-refresh'),
   registerInput: document.getElementById('register-captcha'),
   registerImg: document.getElementById('register-captcha-img'),
-  registerRefresh: document.getElementById('register-captcha-refresh')
+  registerRefresh: document.getElementById('register-captcha-refresh'),
+  resetInput: document.getElementById('reset-captcha'),
+  resetImg: document.getElementById('reset-captcha-img'),
+  resetRefresh: document.getElementById('reset-captcha-refresh')
 };
+
+const resetPasswordOverlay = document.getElementById('reset-password-overlay');
+const newPasswordOverlay = document.getElementById('new-password-overlay');
+const openResetPasswordBtn = document.getElementById('open-reset-password-btn');
+const closeResetPasswordBtn = document.getElementById('close-reset-password-btn');
+const closeNewPasswordBtn = document.getElementById('close-new-password-btn');
+const resetPasswordBackdrop = document.getElementById('reset-password-overlay-backdrop');
+const newPasswordBackdrop = document.getElementById('new-password-overlay-backdrop');
 let lastSavedLevel = null;
 const CHAT_CACHE_LIMIT = 200;
 let realmList = [];
@@ -1145,6 +1156,97 @@ function closeRegisterOverlay() {
     registerOverlay.style.display = 'none';
   }
   registerOverlay?.classList.add('hidden');
+}
+
+function openResetPasswordOverlay() {
+  if (!resetPasswordOverlay) return;
+  resetPasswordOverlay.style.display = 'flex';
+  resetPasswordOverlay.classList.remove('hidden');
+  setTimeout(() => {
+    const input = document.getElementById('reset-email-or-username');
+    input?.focus();
+  }, 0);
+}
+
+function closeResetPasswordOverlay() {
+  if (resetPasswordOverlay) {
+    resetPasswordOverlay.style.display = 'none';
+  }
+  resetPasswordOverlay?.classList.add('hidden');
+}
+
+function closeNewPasswordOverlay() {
+  if (newPasswordOverlay) {
+    newPasswordOverlay.style.display = 'none';
+  }
+  newPasswordOverlay?.classList.add('hidden');
+}
+
+async function requestPasswordReset() {
+  const emailOrUsername = document.getElementById('reset-email-or-username').value.trim();
+  const captchaCode = captchaUi.resetInput ? captchaUi.resetInput.value.trim() : '';
+  const captchaToken = captchaUi.resetImg ? captchaUi.resetImg.dataset.token : '';
+  authMsg.textContent = '';
+  const btn = document.getElementById('request-reset-btn');
+  btn.classList.add('btn-loading');
+  try {
+    await apiPost('/api/password-reset/request', { 
+      email: emailOrUsername.includes('@') ? emailOrUsername : undefined,
+      username: emailOrUsername.includes('@') ? undefined : emailOrUsername,
+      captchaToken, 
+      captchaCode 
+    });
+    authMsg.textContent = '重置链接已发送至邮箱，请查收。';
+    showToast('重置链接已发送');
+    closeResetPasswordOverlay();
+    refreshCaptcha('reset');
+  } catch (err) {
+    authMsg.textContent = err.message;
+    showToast('发送失败');
+    btn.classList.add('shake');
+    setTimeout(() => btn.classList.remove('shake'), 500);
+    refreshCaptcha('reset');
+  } finally {
+    btn.classList.remove('btn-loading');
+  }
+}
+
+async function resetPasswordWithToken() {
+  const newPassword = document.getElementById('new-password-input').value.trim();
+  const confirmPassword = document.getElementById('confirm-new-password').value.trim();
+  const btn = document.getElementById('reset-password-confirm-btn');
+  
+  if (!newPassword || newPassword.length < 4) {
+    showToast('密码至少4位');
+    return;
+  }
+  
+  if (newPassword !== confirmPassword) {
+    showToast('两次输入的密码不一致');
+    return;
+  }
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
+  
+  if (!token) {
+    showToast('无效的重置链接');
+    return;
+  }
+  
+  btn.classList.add('btn-loading');
+  try {
+    await apiPost('/api/password-reset/reset', { token, newPassword });
+    showToast('密码重置成功，请登录');
+    closeNewPasswordOverlay();
+    window.location.href = window.location.pathname;
+  } catch (err) {
+    showToast(err.message || '密码重置失败');
+    btn.classList.add('shake');
+    setTimeout(() => btn.classList.remove('shake'), 500);
+  } finally {
+    btn.classList.remove('btn-loading');
+  }
 }
 
 function exitGame() {
@@ -9884,6 +9986,14 @@ if (remembered) {
 }
 closeRegisterOverlay();
 (async () => {
+  // 检查是否从密码重置链接进入
+  const urlParams = new URLSearchParams(window.location.search);
+  const resetToken = urlParams.get('token');
+  if (resetToken && newPasswordOverlay) {
+    newPasswordOverlay.style.display = 'flex';
+    newPasswordOverlay.classList.remove('hidden');
+  }
+  
   await ensureRouteLinesLoaded();
   // 加载赞助者名单，确保刷新页面后特效依然有效
   await loadSponsors();
@@ -10090,6 +10200,7 @@ async function login() {
 
 async function register() {
   const username = document.getElementById('register-username').value.trim();
+  const email = document.getElementById('register-email').value.trim();
   const password = document.getElementById('register-password').value.trim();
   const captchaCode = captchaUi.registerInput ? captchaUi.registerInput.value.trim() : '';
   const captchaToken = captchaUi.registerImg ? captchaUi.registerImg.dataset.token : '';
@@ -10097,7 +10208,7 @@ async function register() {
   const registerBtn = document.getElementById('register-btn');
   registerBtn.classList.add('btn-loading');
   try {
-    await apiPost('/api/register', { username, password, captchaToken, captchaCode, inviteCode: registerInviteCode || undefined });
+    await apiPost('/api/register', { username, email, password, captchaToken, captchaCode, inviteCode: registerInviteCode || undefined });
     authMsg.textContent = '注册成功，请登录。';
     if (registerInviteCode) authMsg.textContent += '（已绑定邀请码）';
     showToast('注册成功');
@@ -11015,6 +11126,32 @@ if (openRegisterBtn) {
     openRegisterOverlay();
     await refreshCaptcha('register');
   });
+}
+if (openResetPasswordBtn) {
+  openResetPasswordBtn.addEventListener('click', async () => {
+    openResetPasswordOverlay();
+    await refreshCaptcha('reset');
+  });
+}
+if (closeResetPasswordBtn) {
+  closeResetPasswordBtn.addEventListener('click', closeResetPasswordOverlay);
+}
+if (closeNewPasswordBtn) {
+  closeNewPasswordBtn.addEventListener('click', closeNewPasswordOverlay);
+}
+if (resetPasswordBackdrop) {
+  resetPasswordBackdrop.addEventListener('click', closeResetPasswordOverlay);
+}
+if (newPasswordBackdrop) {
+  newPasswordBackdrop.addEventListener('click', closeNewPasswordOverlay);
+}
+const requestResetBtn = document.getElementById('request-reset-btn');
+if (requestResetBtn) {
+  requestResetBtn.addEventListener('click', requestPasswordReset);
+}
+const resetPasswordConfirmBtn = document.getElementById('reset-password-confirm-btn');
+if (resetPasswordConfirmBtn) {
+  resetPasswordConfirmBtn.addEventListener('click', resetPasswordWithToken);
 }
 if (closeRegisterBtn) {
   closeRegisterBtn.addEventListener('click', closeRegisterOverlay);

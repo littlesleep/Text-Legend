@@ -1169,6 +1169,29 @@ input, select {
   gap: 12px;
 }
 
+.auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.auth-link-btn {
+  min-height: 48px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  color: #c78b51;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.auth-link-btn:hover {
+  color: #dfa670;
+  text-decoration: underline;
+}
+}
+
 button {
   font-family: inherit;
   font-size: 1rem;

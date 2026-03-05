@@ -89,6 +89,17 @@ const cmdRateGlobalWindowInput = document.getElementById('cmd-rate-global-window
 const cmdRateBurstLimitInput = document.getElementById('cmd-rate-burst-limit');
 const cmdRateBurstWindowInput = document.getElementById('cmd-rate-burst-window');
 const cmdCooldownConsignInput = document.getElementById('cmd-cooldown-consign');
+const smtpEnabledInput = document.getElementById('smtp-enabled');
+const smtpHostInput = document.getElementById('smtp-host');
+const smtpPortInput = document.getElementById('smtp-port');
+const smtpSecureInput = document.getElementById('smtp-secure');
+const smtpUserInput = document.getElementById('smtp-user');
+const smtpPasswordInput = document.getElementById('smtp-password');
+const smtpFromInput = document.getElementById('smtp-from');
+const smtpLoadBtn = document.getElementById('smtp-load-btn');
+const smtpSaveBtn = document.getElementById('smtp-save-btn');
+const smtpTestBtn = document.getElementById('smtp-test-btn');
+const smtpMsg = document.getElementById('smtp-msg');
 
 const VIP_CODES_PAGE_SIZE = 50;
 const RECHARGE_CODES_PAGE_SIZE = 50;
@@ -2914,7 +2925,6 @@ async function login() {
       await loadSvipSettings();
       await loadFirstRechargeSettings();
       await loadInviteRewardSettings();
-      await refreshLootLogStatus();
       await refreshStateThrottleStatus();
     await refreshRoomVariantStatus();
     await refreshRealms();
@@ -4098,6 +4108,74 @@ async function saveInviteRewardSettings() {
   }
 }
 
+// SMTP邮件配置
+function setSmtpMsg(text, color = '') {
+  if (!smtpMsg) return;
+  smtpMsg.textContent = text || '';
+  if (color) smtpMsg.style.color = color;
+}
+
+async function loadSmtpSettings() {
+  if (!smtpMsg) return;
+  setSmtpMsg('');
+  try {
+    const data = await api('/admin/smtp', 'GET');
+    const config = data?.settings || {};
+    if (smtpEnabledInput) smtpEnabledInput.checked = config.enabled !== false;
+    if (smtpHostInput) smtpHostInput.value = config.host || '';
+    if (smtpPortInput) smtpPortInput.value = config.port || '587';
+    if (smtpSecureInput) smtpSecureInput.checked = config.secure === true;
+    if (smtpUserInput) smtpUserInput.value = config.user || '';
+    if (smtpPasswordInput) smtpPasswordInput.value = config.password || '';
+    if (smtpFromInput) smtpFromInput.value = config.from || '';
+    setSmtpMsg('SMTP配置加载成功', 'green');
+    setTimeout(() => setSmtpMsg(''), 1500);
+  } catch (err) {
+    setSmtpMsg(`加载失败: ${err.message}`, 'red');
+  }
+}
+
+async function saveSmtpSettings() {
+  if (!smtpMsg) return;
+  const config = {
+    enabled: !!smtpEnabledInput?.checked,
+    host: String(smtpHostInput?.value || '').trim(),
+    port: Math.max(1, Math.min(65535, Number(smtpPortInput?.value || 587) || 587)),
+    secure: !!smtpSecureInput?.checked,
+    user: String(smtpUserInput?.value || '').trim(),
+    password: String(smtpPasswordInput?.value || '').trim(),
+    from: String(smtpFromInput?.value || '').trim()
+  };
+  if (!config.host) {
+    setSmtpMsg('SMTP服务器地址不能为空', 'red');
+    return;
+  }
+  if (!config.user) {
+    setSmtpMsg('用户名不能为空', 'red');
+    return;
+  }
+  setSmtpMsg('');
+  try {
+    const data = await api('/admin/smtp', 'POST', config);
+    setSmtpMsg('SMTP配置保存成功', 'green');
+    setTimeout(() => setSmtpMsg(''), 1500);
+  } catch (err) {
+    setSmtpMsg(`保存失败: ${err.message}`, 'red');
+  }
+}
+
+async function testSmtpConnection() {
+  if (!smtpMsg) return;
+  setSmtpMsg('正在测试连接...');
+  try {
+    const data = await api('/admin/smtp/test', 'POST', {});
+    setSmtpMsg('连接测试成功！邮件发送功能正常', 'green');
+    setTimeout(() => setSmtpMsg(''), 1500);
+  } catch (err) {
+    setSmtpMsg(`测试失败: ${err.message}`, 'red');
+  }
+}
+
 // 修炼系统配置
 async function loadTrainingSettings() {
   if (!trainingMsg) return;
@@ -4344,18 +4422,6 @@ async function saveTrainingSettings() {
   }
 }
 
-async function refreshLootLogStatus() {
-  if (!lootLogStatus) return;
-  try {
-    const data = await api('/admin/loot-log-status', 'GET');
-    lootLogStatus.textContent = data.enabled ? '已开启' : '已关闭';
-    lootLogStatus.style.color = data.enabled ? 'green' : 'red';
-    if (lootLogToggle) lootLogToggle.checked = data.enabled === true;
-  } catch (err) {
-    lootLogStatus.textContent = '加载失败';
-  }
-}
-
 // 修炼系统配置
 async function loadTrainingSettings() {
   if (!trainingMsg) return;
@@ -4411,18 +4477,6 @@ async function saveTrainingSettings() {
   } catch (err) {
     trainingMsg.textContent = `保存失败: ${err.message}`;
     trainingMsg.style.color = 'red';
-  }
-}
-
-async function toggleLootLog(enabled) {
-  if (!lootLogMsg) return;
-  lootLogMsg.textContent = '';
-  try {
-    await api('/admin/loot-log-toggle', 'POST', { enabled });
-    lootLogMsg.textContent = enabled ? '掉落日志已开启' : '掉落日志已关闭';
-    await refreshLootLogStatus();
-  } catch (err) {
-    lootLogMsg.textContent = err.message;
   }
 }
 
@@ -8002,6 +8056,9 @@ if (firstRechargeReissueDivineBeastAllBtn) firstRechargeReissueDivineBeastAllBtn
 if (firstRechargeReissueAllBtn) firstRechargeReissueAllBtn.addEventListener('click', reissueAllRechargeUsersFirstRechargeWelfare);
 if (inviteRewardLoadBtn) inviteRewardLoadBtn.addEventListener('click', loadInviteRewardSettings);
 if (inviteRewardSaveBtn) inviteRewardSaveBtn.addEventListener('click', saveInviteRewardSettings);
+if (smtpLoadBtn) smtpLoadBtn.addEventListener('click', loadSmtpSettings);
+if (smtpSaveBtn) smtpSaveBtn.addEventListener('click', saveSmtpSettings);
+if (smtpTestBtn) smtpTestBtn.addEventListener('click', testSmtpConnection);
 if (charMigrateBtn) charMigrateBtn.addEventListener('click', migrateCharacterToAnotherAccount);
 if (charRestoreBtn) charRestoreBtn.addEventListener('click', restoreDeletedCharacterByAdmin);
 if (vipCodesPrev) {
@@ -8033,9 +8090,6 @@ if (vipSelfClaimToggle) {
 }
 if (svipSaveBtn) {
   svipSaveBtn.addEventListener('click', saveSvipSettings);
-}
-if (lootLogToggle) {
-  lootLogToggle.addEventListener('change', () => toggleLootLog(lootLogToggle.checked));
 }
 if (stateThrottleToggle) {
   stateThrottleToggle.addEventListener('change', () => toggleStateThrottle(stateThrottleToggle.checked));

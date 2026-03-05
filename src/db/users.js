@@ -3,9 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 import knex from './index.js';
 import config from '../config.js';
 
-export async function createUser(username, password) {
+export async function createUser(username, password, email = null) {
   const hash = await bcrypt.hash(password, 10);
-  const [id] = await knex('users').insert({ username, password_hash: hash });
+  const [id] = await knex('users').insert({ username, password_hash: hash, email });
   return id;
 }
 
@@ -77,4 +77,38 @@ export async function clearRealmSessions(realmIds = []) {
     .whereIn('user_id', userIds)
     .whereNot('token', 'like', 'adm_%')
     .del();
+}
+
+export async function getUserByEmail(email) {
+  return knex('users').where({ email }).first();
+}
+
+export async function updateUserEmail(userId, email) {
+  await knex('users').where({ id: userId }).update({ email });
+}
+
+export async function createPasswordResetToken(userId, expiresMinutes = 30) {
+  const token = require('crypto').randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000);
+  await knex('password_reset_tokens').insert({ user_id: userId, token, expires_at: expiresAt });
+  return token;
+}
+
+export async function getPasswordResetToken(token) {
+  const resetToken = await knex('password_reset_tokens').where({ token, used_at: null }).first();
+  if (!resetToken) return null;
+  const now = new Date();
+  if (new Date(resetToken.expires_at) < now) {
+    await knex('password_reset_tokens').where({ token }).del();
+    return null;
+  }
+  return resetToken;
+}
+
+export async function markPasswordResetTokenUsed(token) {
+  await knex('password_reset_tokens').where({ token }).update({ used_at: knex.fn.now() });
+}
+
+export async function cleanupExpiredPasswordResetTokens() {
+  await knex('password_reset_tokens').where('expires_at', '<', new Date()).del();
 }

@@ -14,7 +14,7 @@ setupConsoleColors();
 import config from './config.js';
 import { validatePlayerName } from './game/validator.js';
 import knex from './db/index.js';
-import { createUser, verifyUser, createSession, getSession, getUserByName, setAdminFlag, verifyUserPassword, updateUserPassword, clearUserSessions, clearRealmSessions } from './db/users.js';
+import { createUser, verifyUser, createSession, getSession, getUserByName, setAdminFlag, verifyUserPassword, updateUserPassword, clearUserSessions, clearRealmSessions, getUserByEmail, createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed } from './db/users.js';
 import { listCharacters, loadCharacter, saveCharacter, findCharacterByName, findCharacterByNameInRealm, listAllCharacters, deleteCharacter, restoreDeletedCharacter } from './db/characters.js';
 import { addGuildMember, createGuild, getGuildByName, getGuildByNameInRealm, getGuildById, getGuildMember, getSabakOwner, isGuildLeader, isGuildLeaderOrVice, setGuildMemberRole, listGuildMembers, listSabakRegistrations, registerSabak, hasSabakRegistrationToday, hasAnySabakRegistrationToday, removeGuildMember, leaveGuild, setSabakOwner, clearSabakRegistrations, transferGuildLeader, ensureSabakState, applyToGuild, listGuildApplications, removeGuildApplication, approveGuildApplication, getApplicationByUser, listAllGuilds } from './db/guilds.js';
 import { getGuildBuildingInfo, addGuildBuildingContribution, buildGuildBuildingPayload, startGuildBuildingUpgrade, getGuildBuildingConfigSnapshot, loadGuildBuildingConfig, setGuildBuildingConfig } from './db/guild_building.js';
@@ -93,6 +93,7 @@ import {
   syncMobDropsToTemplates
 } from './db/items_admin.js';
 import { runMigrations } from './db/migrate.js';
+import { getSmtpSettings, saveSmtpSettings, testSmtpConnection, sendPasswordResetEmail } from './db/smtp.js';
 import { newCharacter, computeDerived, gainExp, addItem, removeItem, getItemKey, normalizeInventory, normalizeEquipment, getDurabilityMax, getRepairCost, buildSpecializationPayload, SPECIALIZATION_DEFS } from './game/player.js';
 import {
   handleCommand,
@@ -1124,13 +1125,17 @@ app.get('/api/invite/stats', async (req, res) => {
 });
 
 app.post('/api/register', async (req, res) => {
-  const { username, password, captchaToken, captchaCode, inviteCode } = req.body || {};
+  const { username, password, email, captchaToken, captchaCode, inviteCode } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: '账号或密码缺失。' });
   if (!verifyCaptcha(captchaToken, captchaCode)) {
     return res.status(400).json({ error: '验证码错误。' });
   }
   const exists = await knex('users').where({ username }).first();
   if (exists) return res.status(400).json({ error: '账号已存在。' });
+  if (email && email.trim()) {
+    const emailExists = await knex('users').where({ email: email.trim() }).first();
+    if (emailExists) return res.status(400).json({ error: '该邮箱已被使用。' });
+  }
   let inviterUser = null;
   const parsedInviteUserId = parseInviteCode(inviteCode);
   if (String(inviteCode || '').trim()) {
@@ -1138,7 +1143,7 @@ app.post('/api/register', async (req, res) => {
     inviterUser = await knex('users').where({ id: parsedInviteUserId }).first();
     if (!inviterUser) return res.status(400).json({ error: '邀请人不存在。' });
   }
-  const newUserId = await createUser(username, password);
+  const newUserId = await createUser(username, password, email || null);
   if (inviterUser && inviterUser.id !== newUserId) {
     await bindInviteForUser(newUserId, inviterUser.id, {
       inviterUsername: inviterUser.username || '',
@@ -1184,6 +1189,74 @@ app.post('/api/password', async (req, res) => {
   await updateUserPassword(session.user_id, String(newPassword));
   await clearUserSessions(session.user_id);
   res.json({ ok: true });
+});
+
+// 密码重置功能
+app.post('/api/password-reset/request', async (req, res) => {
+  const { email, username, captchaToken, captchaCode } = req.body || {};
+  if (!email && !username) {
+    return res.status(400).json({ error: '邮箱或账号必须提供一个。' });
+  }
+  if (!verifyCaptcha(captchaToken, captchaCode)) {
+    return res.status(400).json({ error: '验证码错误。' });
+  }
+  
+  let user = null;
+  if (email) {
+    user = await getUserByEmail(email.trim());
+  } else {
+    user = await getUserByName(username.trim());
+  }
+  
+  if (!user) {
+    // 不暴露用户是否存在，统一返回成功
+    return res.json({ ok: true, message: '如果邮箱/账号存在，重置链接已发送至邮箱。' });
+  }
+  
+  if (!user.email) {
+    return res.status(400).json({ error: '该账号未绑定邮箱，请联系管理员重置密码。' });
+  }
+  
+  const resetToken = await createPasswordResetToken(user.id);
+  
+  // 构建重置URL
+  const protocol = req.protocol;
+  const host = req.get('host');
+  const resetUrl = `${protocol}://${host}/reset-password?token=${resetToken}`;
+  
+  try {
+    await sendPasswordResetEmail(user.email, resetUrl);
+    res.json({ ok: true, message: '重置链接已发送至邮箱，请注意查收。' });
+  } catch (err) {
+    console.error('发送密码重置邮件失败:', err);
+    res.status(500).json({ error: '邮件发送失败，请稍后重试或联系管理员。' });
+  }
+});
+
+app.post('/api/password-reset/reset', async (req, res) => {
+  const { token, newPassword } = req.body || {};
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: '重置令牌或新密码缺失。' });
+  }
+  if (String(newPassword).length < 4) {
+    return res.status(400).json({ error: '密码至少4位。' });
+  }
+  
+  const resetToken = await getPasswordResetToken(token);
+  if (!resetToken) {
+    return res.status(400).json({ error: '重置令牌无效或已过期。' });
+  }
+  
+  try {
+    await updateUserPassword(resetToken.user_id, String(newPassword));
+    await markPasswordResetTokenUsed(token);
+    // 清除该用户的所有session，强制重新登录
+    await clearUserSessions(resetToken.user_id);
+    res.json({ ok: true, message: '密码重置成功，请重新登录。' });
+  } catch (err) {
+    console.error('密码重置失败:', err);
+    res.status(500).json({ error: '密码重置失败，请稍后重试。' });
+  }
 });
 
 app.post('/api/character', async (req, res) => {
@@ -3617,6 +3690,41 @@ app.post('/admin/pet-settings/reset-skill-effects', async (req, res) => {
     res.json({ ok: true, settings: normalized });
   } catch (err) {
     res.status(400).json({ error: err.message || '重置宠物技能说明失败' });
+  }
+});
+
+// SMTP配置
+app.get('/admin/smtp-settings', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    const settings = await getSmtpSettings();
+    res.json({ ok: true, settings });
+  } catch (err) {
+    res.status(500).json({ error: err.message || '加载SMTP配置失败' });
+  }
+});
+
+app.post('/admin/smtp-settings/update', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    const settings = req.body?.settings || {};
+    await saveSmtpSettings(settings);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'SMTP配置更新失败' });
+  }
+});
+
+app.post('/admin/smtp-settings/test', async (req, res) => {
+  const admin = await requireAdmin(req);
+  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
+  try {
+    await testSmtpConnection();
+    res.json({ ok: true, message: 'SMTP连接测试成功' });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'SMTP连接测试失败' });
   }
 });
 
