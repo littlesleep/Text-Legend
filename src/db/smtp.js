@@ -64,10 +64,12 @@ export async function testSmtpConnection() {
   }
   
   const nodemailer = await import('nodemailer');
+  // 根据端口自动设置 secure：465 端口使用 SSL，其他端口使用 STARTTLS
+  const useSecure = settings.secure || settings.port === 465;
   const transporter = nodemailer.createTransport({
     host: settings.host,
     port: settings.port,
-    secure: settings.secure,
+    secure: useSecure,
     auth: {
       user: settings.user,
       pass: password
@@ -78,7 +80,11 @@ export async function testSmtpConnection() {
     await transporter.verify();
     return true;
   } catch (error) {
-    throw new Error(`SMTP连接失败: ${error.message}`);
+    let errorMsg = error.message;
+    if (errorMsg.includes('wrong version number') || errorMsg.includes('SSL')) {
+      errorMsg = `SSL/TLS 配置错误。端口 ${settings.port} 与 secure 设置不匹配。建议：端口 587/25 使用 secure=false (STARTTLS)，端口 465 使用 secure=true (SSL)`;
+    }
+    throw new Error(`SMTP连接失败: ${errorMsg}`);
   }
 }
 
@@ -94,10 +100,12 @@ export async function sendPasswordResetEmail(email, resetUrl) {
   }
   
   const nodemailer = await import('nodemailer');
+  // 根据端口自动设置 secure：465 端口使用 SSL，其他端口使用 STARTTLS
+  const useSecure = settings.secure || settings.port === 465;
   const transporter = nodemailer.createTransport({
     host: settings.host,
     port: settings.port,
-    secure: settings.secure,
+    secure: useSecure,
     auth: {
       user: settings.user,
       pass: password
