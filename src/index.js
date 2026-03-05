@@ -5992,23 +5992,25 @@ function cultivationRewardMultiplier(player) {
   return 1 + (level + 1) * 0.1;
 }
 
-function totalRewardMultiplier({ vipActive, svipActive = false, guildActive, guildBuildRewardPct = 0, cultivationMult = 1, partyMult = 1, treasureExpPct = 0 }) {
+function totalRewardMultiplier({ vipActive, svipActive = false, guildActive, guildBuildRewardPct = 0, cultivationMult = 1, partyMult = 1, treasureExpPct = 0, blessingExpMult = 1 }) {
   const vipBonus = (vipActive ? 1 : 0) + (svipActive ? 1 : 0);
   const guildBonus = guildActive ? 1 : 0;
   const guildBuildBonus = Math.max(0, Number(guildBuildRewardPct || 0) / 100);
   const cultivationBonus = Math.max(0, (Number(cultivationMult) || 1) - 1);
   const partyBonus = Math.max(0, (Number(partyMult) || 1) - 1);
   const treasureBonus = Math.max(0, Number(treasureExpPct || 0) / 100);
-  return 1 + vipBonus + guildBonus + guildBuildBonus + cultivationBonus + partyBonus + treasureBonus;
+  const blessingExpBonus = Math.max(0, (Number(blessingExpMult) || 1) - 1);
+  return 1 + vipBonus + guildBonus + guildBuildBonus + cultivationBonus + partyBonus + treasureBonus + blessingExpBonus;
 }
 
-function totalGoldRewardMultiplier({ vipActive, svipActive = false, guildActive, guildBuildGoldPct = 0, cultivationMult = 1, partyMult = 1 }) {
+function totalGoldRewardMultiplier({ vipActive, svipActive = false, guildActive, guildBuildGoldPct = 0, cultivationMult = 1, partyMult = 1, blessingGoldMult = 1 }) {
   const vipBonus = (vipActive ? 1 : 0) + (svipActive ? 1 : 0);
   const guildBonus = 0;
   const guildBuildBonus = Math.max(0, Number(guildBuildGoldPct || 0) / 100);
   const cultivationBonus = 0;
   const partyBonus = Math.max(0, (Number(partyMult) || 1) - 1);
-  return 1 + vipBonus + guildBonus + guildBuildBonus + cultivationBonus + partyBonus;
+  const blessingGoldBonus = Math.max(0, (Number(blessingGoldMult) || 1) - 1);
+  return 1 + vipBonus + guildBonus + guildBuildBonus + cultivationBonus + partyBonus + blessingGoldBonus;
 }
 
 function buildRewardBonusBreakdown(player, party) {
