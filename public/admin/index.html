@@ -1078,48 +1078,79 @@
             <button class="btn-small block-toggle">折叠</button>
           </div>
           <div class="block-body">
-            <p class="muted" style="margin-bottom: 8px;">
+            <p class="muted" style="margin-bottom: 12px;">
               配置SMTP服务器用于发送密码重置邮件。支持Gmail、QQ邮箱、163邮箱等。
             </p>
-            <div class="row" style="margin-bottom: 8px; gap: 8px;">
-              <label>
-                <input id="smtp-enabled" type="checkbox"> 启用SMTP
-              </label>
+
+            <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ddd;">
+              <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #333;">基本设置</h4>
+              <div style="margin-bottom: 8px;">
+                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input id="smtp-enabled" type="checkbox"> 启用SMTP
+                </label>
+              </div>
             </div>
-            <div class="row" style="margin-bottom: 4px;">
-              <input id="smtp-host" type="text" placeholder="smtp.gmail.com" value="smtp.gmail.com">
-              <span class="unit">SMTP服务器</span>
+
+            <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ddd;">
+              <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #333;">服务器设置</h4>
+              <div class="cmd-rate-grid">
+                <div class="cmd-rate-field">
+                  <label>SMTP服务器</label>
+                  <input id="smtp-host" type="text" placeholder="smtp.gmail.com" value="smtp.gmail.com" style="width: 100%;">
+                </div>
+                <div class="cmd-rate-field">
+                  <label>端口</label>
+                  <input id="smtp-port" type="number" min="1" max="65535" value="587" style="width: 100%;">
+                </div>
+              </div>
+              <div style="margin-top: 8px;">
+                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input id="smtp-secure" type="checkbox"> 使用SSL/TLS加密
+                </label>
+              </div>
             </div>
-            <div class="row" style="margin-bottom: 4px;">
-              <input id="smtp-port" type="number" min="1" max="65535" value="587">
-              <span class="unit">端口</span>
+
+            <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ddd;">
+              <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #333;">认证信息</h4>
+              <div class="cmd-rate-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div class="cmd-rate-field">
+                  <label>用户名</label>
+                  <input id="smtp-user" type="text" placeholder="your@email.com" style="width: 100%;">
+                </div>
+                <div class="cmd-rate-field">
+                  <label>密码</label>
+                  <input id="smtp-password" type="password" placeholder="邮箱密码或应用专用密码" style="width: 100%;">
+                </div>
+                <div class="cmd-rate-field">
+                  <label>发件人</label>
+                  <input id="smtp-from" type="text" placeholder="发件人邮箱" style="width: 100%;">
+                </div>
+              </div>
             </div>
-            <div class="row" style="margin-bottom: 8px; gap: 8px;">
-              <label>
-                <input id="smtp-secure" type="checkbox"> 使用SSL/TLS
-              </label>
+
+            <div style="margin-bottom: 16px;">
+              <div class="cmd-rate-grid">
+                <div class="cmd-rate-action">
+                  <button id="smtp-load-btn" class="btn-small" style="min-width: 120px;">加载配置</button>
+                </div>
+                <div class="cmd-rate-action">
+                  <button id="smtp-save-btn" class="btn-small" style="min-width: 120px;">保存配置</button>
+                </div>
+                <div class="cmd-rate-action">
+                  <button id="smtp-test-btn" class="btn-small" style="background: #ff9800; min-width: 120px;">测试连接</button>
+                </div>
+              </div>
             </div>
-            <div class="row" style="margin-bottom: 4px;">
-              <input id="smtp-user" type="text" placeholder="your@email.com">
-              <span class="unit">用户名</span>
+
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 12px; border-radius: 4px;">
+              <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.5;">
+                <strong>配置提示：</strong><br>
+                • Gmail：需要开启"两步验证"并生成应用专用密码<br>
+                • QQ邮箱：需要开启SMTP服务并获取授权码<br>
+                • 163邮箱：需要在邮箱设置中开启SMTP服务并获取授权码
+              </p>
             </div>
-            <div class="row" style="margin-bottom: 4px;">
-              <input id="smtp-password" type="password" placeholder="邮箱密码或应用专用密码">
-              <span class="unit">密码</span>
-            </div>
-            <div class="row" style="margin-bottom: 4px;">
-              <input id="smtp-from" type="text" placeholder="发件人邮箱">
-              <span class="unit">发件人</span>
-            </div>
-            <div class="row" style="margin-bottom: 8px; gap: 8px;">
-              <button id="smtp-load-btn" class="btn-small">加载配置</button>
-              <button id="smtp-save-btn" class="btn-small">保存配置</button>
-              <button id="smtp-test-btn" class="btn-small" style="background: #ff9800;">测试连接</button>
-            </div>
-            <p class="muted" style="font-size: 12px;">
-              注意：Gmail需要开启"两步验证"并生成应用专用密码；<br>
-              QQ邮箱需要开启SMTP服务并获取授权码
-            </p>
+
             <div id="smtp-msg" class="msg"></div>
           </div>
         </div>
