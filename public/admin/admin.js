@@ -71,9 +71,7 @@ const backupMsg = document.getElementById('backup-msg');
 const importFileInput = document.getElementById('import-file');
 const themeToggleBtn = document.getElementById('theme-toggle');
 const collapseAllBtn = document.getElementById('collapse-all');
-const lootLogStatus = document.getElementById('loot-log-status');
-const lootLogMsg = document.getElementById('loot-log-msg');
-const lootLogToggle = document.getElementById('loot-log-toggle');
+
 const stateThrottleToggle = document.getElementById('state-throttle-toggle');
 const stateThrottleOverrideAllowedToggle = document.getElementById('state-throttle-override-allowed');
 const stateThrottleIntervalInput = document.getElementById('state-throttle-interval');
@@ -7549,7 +7547,6 @@ async function initDashboard() {
       refreshUsers();
       refreshVipSelfClaimStatus();
       loadSvipSettings();
-      refreshLootLogStatus();
       refreshStateThrottleStatus();
     refreshRoomVariantStatus();
       loadCmdRateSettings();

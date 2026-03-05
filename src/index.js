@@ -2754,23 +2754,6 @@ app.post('/admin/svip-settings/update', async (req, res) => {
   res.json({ ok: true, prices: next });
 });
 
-app.get('/admin/loot-log-status', async (req, res) => {
-  const admin = await requireAdmin(req);
-  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
-  const enabled = await getLootLogEnabled();
-  res.json({ ok: true, enabled });
-});
-
-app.post('/admin/loot-log-toggle', async (req, res) => {
-  const admin = await requireAdmin(req);
-  if (!admin) return res.status(401).json({ error: '无管理员权限。' });
-  const { enabled } = req.body || {};
-  const nextEnabled = enabled === true;
-  await setLootLogEnabled(nextEnabled);
-  lootLogEnabled = nextEnabled;
-  res.json({ ok: true, enabled: nextEnabled });
-});
-
 app.get('/admin/state-throttle-status', async (req, res) => {
   const admin = await requireAdmin(req);
   if (!admin) return res.status(401).json({ error: '无管理员权限。' });
