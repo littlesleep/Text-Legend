@@ -2924,6 +2924,7 @@ async function login() {
       await refreshUsers();
       await refreshVipSelfClaimStatus();
       await refreshVipClaimLimitStatus();
+      await loadSmtpSettings();
       await loadSvipSettings();
       await loadFirstRechargeSettings();
       await loadInviteRewardSettings();
@@ -7595,6 +7596,7 @@ async function initDashboard() {
       refreshUsers();
       refreshVipSelfClaimStatus();
       refreshVipClaimLimitStatus();
+      loadSmtpSettings();
       loadSvipSettings();
       refreshStateThrottleStatus();
     refreshRoomVariantStatus();

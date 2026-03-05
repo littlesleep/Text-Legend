@@ -33,6 +33,7 @@ export async function saveSmtpSettings(settings) {
     secure = false,
     user = '',
     pass = '',
+    password = '',
     from = ''
   } = settings;
   
@@ -41,7 +42,7 @@ export async function saveSmtpSettings(settings) {
   await setSetting('smtp_port', String(port));
   await setSetting('smtp_secure', secure ? 'true' : 'false');
   await setSetting('smtp_user', user);
-  await setSetting('smtp_password', pass);
+  await setSetting('smtp_password', pass || password);
   await setSetting('smtp_from', from);
 }
 
