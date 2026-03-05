@@ -5346,6 +5346,12 @@ const players = new Map();
 const realmStates = new Map();
 const mobStatePersistCache = new Map();
 let realmCache = [];
+// 房间玩家列表缓存
+const roomPlayersCache = new Map();
+const ROOM_PLAYERS_CACHE_TTL = 500; // 500ms缓存
+// 玩家状态缓存（用于减少buildState计算量）
+const playerStateCache = new WeakMap();
+const PLAYER_STATE_CACHE_TTL = 100; // 100ms缓存
 const RUNTIME_HEALTH_INTERVAL_MS = 60 * 1000;
 const RUNTIME_CACHE_CLEANUP_COOLDOWN_MS = 15 * 1000;
 const RUNTIME_HEAP_WARN_RATIO = 0.92;
@@ -5373,6 +5379,31 @@ function getRuntimeGuardMode(now = Date.now()) {
     return runtimeGuardMode;
   }
   return 'off';
+}
+
+// 获取缓存的房间玩家列表
+function getCachedRoomPlayers(realmId, zoneId, roomId) {
+  const cacheKey = `${realmId}:${zoneId}:${roomId}`;
+  const now = Date.now();
+  const cached = roomPlayersCache.get(cacheKey);
+  if (cached && now - cached.at < ROOM_PLAYERS_CACHE_TTL) {
+    return cached.data;
+  }
+  const players = listConnectedPlayers(realmId)
+    .filter((p) => p.position.zone === zoneId && p.position.room === roomId)
+    .map((p) => ({
+      name: p.name,
+      classId: p.classId,
+      level: p.level,
+      hp: Math.floor(p.hp || 0),
+      max_hp: Math.floor(p.max_hp || 0),
+      guild: p.guild?.name || null,
+      guildId: p.guild?.id || null,
+      realmId: p.realmId || 1,
+      pk: p.pk || 0
+    }));
+  roomPlayersCache.set(cacheKey, { at: now, data: players });
+  return players;
 }
 let runtimeMobRowsCacheAt = 0;
 let runtimeMobRowsCachedValue = 'n/a';
@@ -5801,6 +5832,8 @@ function cleanupRuntimeCaches(options = {}) {
     roomMetaMaxAge,
     (entry) => Math.max(Number(entry?.lastPlayersAt || 0), Number(entry?.lastMobsAt || 0), Number(entry?.lastRankAt || 0), Number(entry?.lastServerTimeAt || 0))
   );
+  // 清理房间玩家缓存
+  cleanupMapByAge(roomPlayersCache, now, aggressive ? 1000 : 5000, (entry) => entry?.at);
   result.removed.roomStateTick = cleanupMapByAge(roomStateCache, now, roomTickMaxAge, (ts) => ts);
   result.removed.autoFullRoom = cleanupMapByAge(autoFullRoomCache, now, autoFullMaxAge, (entry) => entry?.at);
   result.removed.allCharacters = cleanupMapByAge(allCharactersCache, now, allCharsMaxAge, (entry) => entry?.at);
@@ -13348,35 +13381,53 @@ function gainActivePetExp(player, expGain) {
   return { leveled, gained: totalGain, pet, autoLearned };
 }
 
+// 宠物状态缓存
+const petStateCache = new WeakMap();
+const PET_STATE_CACHE_TTL = 200; // 200ms缓存
+
 function buildPetStatePayload(player) {
+  // 检查缓存
+  const now = Date.now();
+  const cached = petStateCache.get(player);
+  if (cached && now - cached.at < PET_STATE_CACHE_TTL) {
+    return cached.data;
+  }
+  
   const state = normalizePetState(player);
-  const pets = (state?.pets || []).map((pet) => ({
-    training: normalizePetTrainingRecord(pet.training),
-    id: pet.id,
-    rarity: pet.rarity || 'normal',
-    rarityLabel: PET_RARITY_LABELS[pet.rarity] || PET_RARITY_LABELS.normal,
-    level: Math.max(1, Math.floor(Number(pet.level || 1))),
-    levelCap: getPetLevelCap(player),
-    exp: Math.max(0, Math.floor(Number(pet.exp || 0))),
-    expNeed: getPetLevelExpNeed(Math.max(1, Math.floor(Number(pet.level || 1)))),
-    name: pet.name,
-    role: pet.role,
-    battleType: pet.battleType || normalizePetBattleType(pet, pet.aptitude),
-    growth: pet.growth,
-    aptitude: pet.aptitude,
-    skillSlots: pet.skillSlots,
-    divineAdvanceCount: Math.max(0, Math.floor(Number(pet.divineAdvanceCount || 0))),
-    isDivineBeast: isDivineBeastSpecies(pet.role),
-    skills: pet.skills,
-    skillTiers: (pet.skills || []).map((skillId) => getPetSkillTier(skillId)),
-    skillNames: (pet.skills || []).map((skillId) => getPetSkillDef(skillId)?.name || skillId),
-    skillEffects: (pet.skills || []).map((skillId) => PET_SKILL_EFFECTS[skillId] || ''),
-    combatMp: Math.max(0, Math.floor(Number(pet.combatMp || 0))),
-    equippedItems: PET_EQUIP_SLOT_KEYS
-      .map((slotKey) => buildPetEquippedItemPayload(pet, slotKey))
-      .filter(Boolean),
-    power: calcPetPower(pet)
-  }));
+  const levelCap = getPetLevelCap(player); // 只计算一次
+  
+  const pets = (state?.pets || []).map((pet) => {
+    const petLevel = Math.max(1, Math.floor(Number(pet.level || 1)));
+    const petSkills = pet.skills || [];
+    return {
+      training: normalizePetTrainingRecord(pet.training),
+      id: pet.id,
+      rarity: pet.rarity || 'normal',
+      rarityLabel: PET_RARITY_LABELS[pet.rarity] || PET_RARITY_LABELS.normal,
+      level: petLevel,
+      levelCap,
+      exp: Math.max(0, Math.floor(Number(pet.exp || 0))),
+      expNeed: getPetLevelExpNeed(petLevel),
+      name: pet.name,
+      role: pet.role,
+      battleType: pet.battleType || normalizePetBattleType(pet, pet.aptitude),
+      growth: pet.growth,
+      aptitude: pet.aptitude,
+      skillSlots: pet.skillSlots,
+      divineAdvanceCount: Math.max(0, Math.floor(Number(pet.divineAdvanceCount || 0))),
+      isDivineBeast: isDivineBeastSpecies(pet.role),
+      skills: petSkills,
+      skillTiers: petSkills.map((skillId) => getPetSkillTier(skillId)),
+      skillNames: petSkills.map((skillId) => getPetSkillDef(skillId)?.name || skillId),
+      skillEffects: petSkills.map((skillId) => PET_SKILL_EFFECTS[skillId] || ''),
+      combatMp: Math.max(0, Math.floor(Number(pet.combatMp || 0))),
+      equippedItems: PET_EQUIP_SLOT_KEYS
+        .map((slotKey) => buildPetEquippedItemPayload(pet, slotKey))
+        .filter(Boolean),
+      power: calcPetPower(pet)
+    };
+  });
+  
   const books = PET_BOOK_LIBRARY
     .map((book) => ({
       id: book.id,
@@ -13389,7 +13440,8 @@ function buildPetStatePayload(player) {
       priceGold: book.priceGold
     }))
     .filter((book) => book.qty > 0);
-  return {
+    
+  const result = {
     maxOwned: PET_MAX_OWNED,
     captureCostGold: 0,
     comprehendCostGold: PET_COMPREHEND_COST_GOLD,
@@ -13398,6 +13450,10 @@ function buildPetStatePayload(player) {
     pets,
     books
   };
+  
+  // 存入缓存
+  petStateCache.set(player, { at: now, data: result });
+  return result;
 }
 
 function attachGuildMeta(player, guild, role = 'member') {
@@ -13509,9 +13565,17 @@ function normalizeGuildContribution(player) {
 async function buildState(player) {
   normalizeVipStatus(player);
   normalizeSvipStatus(player);
+  // 优化：行会建筑升级检查改为异步后台处理，不阻塞状态构建
   if (player.guild?.id && player.guild.buildUpgradeEndsAt && Number(player.guild.buildUpgradeEndsAt) <= Date.now()) {
-    const refreshedGuildBuilding = await getGuildBuildingInfo(player.guild.id);
-    if (refreshedGuildBuilding) syncGuildMetaToOnlineMembers(player.guild.id, refreshedGuildBuilding);
+    // 使用 setImmediate 让检查在下一个事件循环执行，不阻塞当前状态构建
+    setImmediate(async () => {
+      try {
+        const refreshedGuildBuilding = await getGuildBuildingInfo(player.guild.id);
+        if (refreshedGuildBuilding) syncGuildMetaToOnlineMembers(player.guild.id, refreshedGuildBuilding);
+      } catch (err) {
+        // 静默处理错误，不影响主流程
+      }
+    });
   }
   computeDerived(player);
   const realmId = player.realmId || 1;
@@ -13556,19 +13620,7 @@ async function buildState(player) {
       ? deadBosses.sort((a, b) => (a.respawnAt || Infinity) - (b.respawnAt || Infinity))[0]?.respawnAt
       : null;
     exits = buildRoomExits(player.position.zone, player.position.room, player);
-    roomPlayers = listConnectedPlayers(roomRealmId)
-      .filter((p) => p.position.zone === player.position.zone && p.position.room === player.position.room)
-      .map((p) => ({
-        name: p.name,
-        classId: p.classId,
-        level: p.level,
-        hp: Math.floor(p.hp || 0),
-        max_hp: Math.floor(p.max_hp || 0),
-        guild: p.guild?.name || null,
-        guildId: p.guild?.id || null,
-        realmId: p.realmId || 1,
-        pk: p.pk || 0
-      }));
+    roomPlayers = getCachedRoomPlayers(roomRealmId, player.position.zone, player.position.room);
   }
     crossRank = getCrossRankSnapshot(10);
   const summonList = getAliveSummons(player);
@@ -13587,21 +13639,48 @@ async function buildState(player) {
   }));
 
   // 检查房间是否有BOSS，获取下次刷新时间
-  const skills = getLearnedSkills(player).map((s) => ({
-    id: s.id,
-    name: s.name,
-    mp: s.mp,
-    type: s.type,
-    effect: s.effect || '',
-    level: getSkillLevel(player, s.id),
-    exp: player.flags?.skillMastery?.[s.id]?.exp || 0,
-    expNext: player.flags?.skillMastery?.[s.id]?.level ? SKILL_MASTERY_LEVELS[player.flags.skillMastery[s.id].level] : SKILL_MASTERY_LEVELS[1]
-  }));
-  const items = player.inventory.map((i) => buildInventoryItemPayload(i));
-  const warehouse = (player.warehouse || []).map((i) => buildInventoryItemPayload(i));
-  const equipment = Object.entries(player.equipment || {})
-    .filter(([, equipped]) => equipped && equipped.id)
-    .map(([slot, equipped]) => ({
+  // 技能列表缓存
+  const skillsCacheKey = 'skills';
+  let skills = player._stateCache?.[skillsCacheKey];
+  if (!skills || !player._stateCache?._at || Date.now() - player._stateCache._at > 500) {
+    player._stateCache = { _at: Date.now() };
+    skills = getLearnedSkills(player).map((s) => {
+      const mastery = player.flags?.skillMastery?.[s.id];
+      return {
+        id: s.id,
+        name: s.name,
+        mp: s.mp,
+        type: s.type,
+        effect: s.effect || '',
+        level: getSkillLevel(player, s.id),
+        exp: mastery?.exp || 0,
+        expNext: mastery?.level ? SKILL_MASTERY_LEVELS[mastery.level] : SKILL_MASTERY_LEVELS[1]
+      };
+    });
+    player._stateCache[skillsCacheKey] = skills;
+  }
+  // 物品列表缓存（使用inventory的引用作为缓存键）
+  const itemsCacheKey = `items_${player.inventory?.length || 0}`;
+  let items = player._stateCache?.[itemsCacheKey];
+  if (!items) {
+    items = player.inventory.map((i) => buildInventoryItemPayload(i));
+    player._stateCache[itemsCacheKey] = items;
+  }
+  
+  // 仓库列表缓存
+  const warehouseCacheKey = `warehouse_${player.warehouse?.length || 0}`;
+  let warehouse = player._stateCache?.[warehouseCacheKey];
+  if (!warehouse) {
+    warehouse = (player.warehouse || []).map((i) => buildInventoryItemPayload(i));
+    player._stateCache[warehouseCacheKey] = warehouse;
+  }
+  
+  // 装备列表缓存
+  const equipmentEntries = Object.entries(player.equipment || {}).filter(([, equipped]) => equipped && equipped.id);
+  const equipmentCacheKey = `equip_${equipmentEntries.map(([, e]) => `${e.id}_${e.durability}_${e.refine_level}`).join('_')}`;
+  let equipment = player._stateCache?.[equipmentCacheKey];
+  if (!equipment) {
+    equipment = equipmentEntries.map(([slot, equipped]) => ({
       slot,
       durability: equipped.durability ?? null,
       max_durability: equipped.max_durability ?? null,
@@ -13620,6 +13699,8 @@ async function buildState(player) {
         equipped.growth_fail_stack ?? 0
       )
     }));
+    player._stateCache[equipmentCacheKey] = equipment;
+  }
   const party = getPartyByMember(player.name, realmId);
   const partyMembers = party
     ? party.members.map((name) => ({
@@ -13633,29 +13714,40 @@ async function buildState(player) {
   const dailyLuckyInfo = await getDailyLuckyInfoCached(realmId);
   const zhuxianTowerProgress = normalizeZhuxianTowerProgress(player);
   const zhuxianTowerRankTop10 = await getZhuxianTowerRankTop10Cached(realmId);
-  const treasureState = normalizeTreasureState(player);
-  const treasureEquipped = (treasureState.equipped || []).map((id, index) => {
-    const def = getTreasureDef(id);
-    const advanceCount = getTreasureAdvanceCount(player, id);
-    const randomAttr = getTreasureRandomAttrById(player, id);
-    return {
-      slot: index + 1,
-      id,
-      name: def?.name || id,
-      level: getTreasureLevel(player, id),
-      advanceCount,
-      stage: getTreasureStageByAdvanceCount(advanceCount),
-      effectBonusPct: Math.max(0, Number((advanceCount * TREASURE_ADVANCE_EFFECT_BONUS_PER_STACK * 100).toFixed(1))),
-      randomAttr
-    };
-  });
-  const treasureRandomAttrTotal = { hp: 0, mp: 0, atk: 0, def: 0, mag: 0, mdef: 0, spirit: 0, dex: 0 };
-  treasureEquipped.forEach((entry) => {
-    const attrs = entry.randomAttr || {};
-    Object.keys(treasureRandomAttrTotal).forEach((key) => {
-      treasureRandomAttrTotal[key] += Math.max(0, Math.floor(Number(attrs[key] || 0)));
+  // 法宝状态缓存
+  const treasureCacheKey = `treasure_${(player.flags?.treasure?.equipped || []).join('_')}`;
+  let treasureState, treasureEquipped, treasureRandomAttrTotal;
+  const cachedTreasure = player._stateCache?.[treasureCacheKey];
+  if (cachedTreasure) {
+    treasureState = cachedTreasure.state;
+    treasureEquipped = cachedTreasure.equipped;
+    treasureRandomAttrTotal = cachedTreasure.randomAttrTotal;
+  } else {
+    treasureState = normalizeTreasureState(player);
+    treasureEquipped = (treasureState.equipped || []).map((id, index) => {
+      const def = getTreasureDef(id);
+      const advanceCount = getTreasureAdvanceCount(player, id);
+      const randomAttr = getTreasureRandomAttrById(player, id);
+      return {
+        slot: index + 1,
+        id,
+        name: def?.name || id,
+        level: getTreasureLevel(player, id),
+        advanceCount,
+        stage: getTreasureStageByAdvanceCount(advanceCount),
+        effectBonusPct: Math.max(0, Number((advanceCount * TREASURE_ADVANCE_EFFECT_BONUS_PER_STACK * 100).toFixed(1))),
+        randomAttr
+      };
     });
-  });
+    treasureRandomAttrTotal = { hp: 0, mp: 0, atk: 0, def: 0, mag: 0, mdef: 0, spirit: 0, dex: 0 };
+    treasureEquipped.forEach((entry) => {
+      const attrs = entry.randomAttr || {};
+      Object.keys(treasureRandomAttrTotal).forEach((key) => {
+        treasureRandomAttrTotal[key] += Math.max(0, Math.floor(Number(attrs[key] || 0)));
+      });
+    });
+    player._stateCache[treasureCacheKey] = { state: treasureState, equipped: treasureEquipped, randomAttrTotal: treasureRandomAttrTotal };
+  }
   const treasureExpMaterial = Math.floor((player.inventory || []).find((slot) => slot.id === TREASURE_EXP_ITEM_ID)?.qty || 0);
   
   // VIP自领状态缓存
@@ -13806,13 +13898,24 @@ async function buildState(player) {
       randomAttr: treasureRandomAttrTotal
     },
     pet: buildPetStatePayload(player),
-    specialization: buildSpecializationPayload(player),
+    specialization: (() => {
+      // 专精状态缓存
+      const specCacheKey = `spec_${player.classId}_${player.level}_${player.flags?.specialization?.trackId || ''}`;
+      let spec = player._stateCache?.[specCacheKey];
+      if (!spec) {
+        spec = buildSpecializationPayload(player);
+        player._stateCache[specCacheKey] = spec;
+      }
+      return spec;
+    })(),
     anti: {
       key: player.socket?.data?.antiKey || null,
       seq: player.socket?.data?.antiSeq || 0
     },
-    trade: getTradeByPlayerAny(player.name, realmId).trade ? (() => {
-      const trade = getTradeByPlayerAny(player.name, realmId).trade;
+    trade: (() => {
+      const tradeResult = getTradeByPlayerAny(player.name, realmId);
+      if (!tradeResult.trade) return null;
+      const trade = tradeResult.trade;
       const myOffer = trade.offers[player.name];
       const partnerName = trade.a.name === player.name ? trade.b.name : trade.a.name;
       const partnerOffer = trade.offers[partnerName];
@@ -13827,16 +13930,20 @@ async function buildState(player) {
         locked: trade.locked,
         confirmed: trade.confirmed
       };
-    })() : null,
-    sabak: {
-      inZone: isSabakZone(player.position.zone),
-      active: getSabakState(realmId).active,
-      ownerGuildId: getSabakState(realmId).ownerGuildId,
-      ownerGuildName: getSabakState(realmId).ownerGuildName,
-      inPalace: isSabakPalace(player.position.zone, player.position.room),
-      palaceKillStats: isSabakPalace(player.position.zone, player.position.room) ? getSabakPalaceKillStats(realmId) : null,
-      siegeEndsAt: getSabakState(realmId).siegeEndsAt || null
-    },
+    })(),
+    sabak: (() => {
+      const sabakState = getSabakState(realmId);
+      const inPalace = isSabakPalace(player.position.zone, player.position.room);
+      return {
+        inZone: isSabakZone(player.position.zone),
+        active: sabakState.active,
+        ownerGuildId: sabakState.ownerGuildId,
+        ownerGuildName: sabakState.ownerGuildName,
+        inPalace,
+        palaceKillStats: inPalace ? getSabakPalaceKillStats(realmId) : null,
+        siegeEndsAt: sabakState.siegeEndsAt || null
+      };
+    })(),
     worldBossRank: bossRank,
     worldBossClassRank: bossClassRank,
     worldBossNextRespawn: bossNextRespawn,
