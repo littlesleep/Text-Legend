@@ -6058,7 +6058,8 @@ function buildRewardBonusBreakdown(player, party) {
     guildBuildRewardPct: guildBuildExpPct,
     cultivationMult,
     partyMult,
-    treasureExpPct
+    treasureExpPct,
+    blessingExpMult: blessingMults.expMult
   });
   const goldMult = totalGoldRewardMultiplier({
     vipActive,
@@ -6066,7 +6067,8 @@ function buildRewardBonusBreakdown(player, party) {
     guildActive,
     guildBuildGoldPct,
     cultivationMult,
-    partyMult
+    partyMult,
+    blessingGoldMult: blessingMults.goldMult
   });
   return {
     expMult,
