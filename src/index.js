@@ -5848,9 +5848,23 @@ function cleanupRuntimeCaches(options = {}) {
       dailyLucky: 0,
       towerRank: 0,
       playerLastPersistAt: 0,
-      stateThrottle: 0
+      stateThrottle: 0,
+      bossBloodStatus: 0
     }
   };
+
+  // 清理BOSS血量公告状态：激进模式下清空，防止内存泄漏
+  if (aggressive && bossBloodAnnouncementStatus.size > 100) {
+    const keepSize = Math.floor(bossBloodAnnouncementStatus.size * 0.5); // 保留一半
+    let count = 0;
+    for (const key of bossBloodAnnouncementStatus.keys()) {
+      if (count >= keepSize) {
+        bossBloodAnnouncementStatus.delete(key);
+        result.removed.bossBloodStatus += 1;
+      }
+      count += 1;
+    }
+  }
 
   const roomDataMaxAge = aggressive ? 1000 : 10000;
   const roomMetaMaxAge = aggressive ? 2500 : 20000;
@@ -20120,10 +20134,8 @@ async function start() {
 
   // 立即刷新函数（用于服务器关闭时）
   async function immediateFlushRespawnQueue() {
-    if (respawnPersistTimer) {
-      clearInterval(respawnPersistTimer);
-      respawnPersistTimer = null;
-    }
+    // 停止循环（设置标记让 while 循环退出）
+    respawnPersistTimer = null;
     // 循环直到队列为空
     while (respawnUpsertQueue.size > 0 || respawnDeleteQueue.size > 0) {
       await flushRespawnPersistQueue();
@@ -20321,6 +20333,11 @@ async function start() {
   setInterval(() => {
     cleanupStaleCommandState(Date.now());
   }, 10 * 60 * 1000);
+
+  // 定期清理过期验证码缓存
+  setInterval(() => {
+    cleanupCaptchas();
+  }, 5 * 60 * 1000);
   
   try {
     const result = await cleanupInvalidItems();
