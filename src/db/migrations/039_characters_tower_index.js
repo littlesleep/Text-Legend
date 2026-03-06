@@ -5,7 +5,8 @@ export async function up(knex) {
       // 检查是否已有该列
       const hasColumn = await knex.schema.hasColumn('characters', 'has_tower_data');
       if (!hasColumn) {
-        // 添加生成列：标记是否有诛仙塔数据（基于 flags_json.zxft 是否存在）
+        // 添加生成列：标记是否有诛仙塔数据（基于 flags_json 是否包含 zxft）
+        // 使用 LIKE 匹配更可靠，兼容各种 JSON 存储格式
         await knex.raw(`
           ALTER TABLE characters 
           ADD COLUMN has_tower_data TINYINT(1) AS (
@@ -13,8 +14,7 @@ export async function up(knex) {
               WHEN flags_json IS NULL THEN 0
               WHEN flags_json = '{}' THEN 0
               WHEN flags_json = 'null' THEN 0
-              WHEN JSON_EXTRACT(flags_json, '$.zxft.bestFloor') IS NOT NULL THEN 1
-              WHEN JSON_EXTRACT(flags_json, '$.zxft.highestClearedFloor') IS NOT NULL THEN 1
+              WHEN flags_json LIKE '%"zxft"%' THEN 1
               ELSE 0
             END
           ) STORED
