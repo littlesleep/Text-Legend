@@ -9,6 +9,40 @@ function parseJson(value, fallback) {
   }
 }
 
+// 深拷贝 JSON 字段（snapshot 隔离）
+function cloneJsonSafe(value, fallback) {
+  try {
+    return JSON.parse(JSON.stringify(value ?? fallback));
+  } catch {
+    return fallback;
+  }
+}
+
+function cloneRawData(rawData) {
+  return {
+    user_id: rawData.user_id,
+    realm_id: rawData.realm_id,
+    name: rawData.name,
+    class: rawData.class,
+    level: rawData.level,
+    exp: rawData.exp,
+    gold: rawData.gold,
+    yuanbao: rawData.yuanbao,
+    hp: rawData.hp,
+    mp: rawData.mp,
+    max_hp: rawData.max_hp,
+    max_mp: rawData.max_mp,
+    stats: cloneJsonSafe(rawData.stats, {}),
+    position: cloneJsonSafe(rawData.position, {}),
+    inventory: cloneJsonSafe(rawData.inventory, []),
+    warehouse: cloneJsonSafe(rawData.warehouse, []),
+    equipment: cloneJsonSafe(rawData.equipment, {}),
+    quests: cloneJsonSafe(rawData.quests, {}),
+    skills: cloneJsonSafe(rawData.skills, []),
+    flags: cloneJsonSafe(rawData.flags, {})
+  };
+}
+
 // JSON 大字段映射：raw字段名 -> DB字段名
 const JSON_FIELD_MAP = {
   stats: 'stats_json',
@@ -89,20 +123,28 @@ function getCharacterPersistSnapshot(player) {
   return player?.__persistSnapshot || null;
 }
 
+// 需要 JSON 内容比较的字段
+const JSON_RAW_FIELDS = Object.keys(JSON_FIELD_MAP);
+
 // 比较原始数据，返回变化的字段名列表
-function diffRawData(prev, next) {
+function diffRawData(prev, next, allowHeavy) {
   const changed = [];
-  const allKeys = new Set([...Object.keys(prev || {}), ...Object.keys(next)]);
+  const allKeys = new Set([...Object.keys(prev || {}), ...Object.keys(next || {})]);
+
   for (const key of allKeys) {
-    if (key === 'flags' && prev?.flags !== next.flags) {
-      // flags 特殊处理：总是深比较（因为内部会修改召唤兽信息）
-      if (JSON.stringify(prev?.flags) !== JSON.stringify(next.flags)) {
-        changed.push(key);
+    if (JSON_RAW_FIELDS.includes(key)) {
+      // JSON 字段：内容比较（只有允许保存时才比较）
+      if (allowHeavy) {
+        if (JSON.stringify(prev?.[key] ?? null) !== JSON.stringify(next?.[key] ?? null)) {
+          changed.push(key);
+        }
       }
     } else if (prev?.[key] !== next[key]) {
+      // 标量字段：引用比较
       changed.push(key);
     }
   }
+
   return changed;
 }
 
@@ -170,9 +212,9 @@ export async function loadCharacter(userId, name, realmId = 1) {
   normalizeWarehouse(player);
   normalizeEquipment(player);
 
-  // 初始化原始数据快照（无序列化）
+  // 初始化原始数据快照（深拷贝隔离）
   const rawData = buildCharacterRawData(row.user_id, player, row.realm_id || realmId);
-  setCharacterPersistSnapshot(player, rawData);
+  setCharacterPersistSnapshot(player, cloneRawData(rawData));
 
   return player;
 }
@@ -247,7 +289,7 @@ export async function saveCharacter(userId, player, realmId = 1, options = {}) {
       : [...LIGHT_FIELDS];  // 仅标量
   } else {
     // diff 模式：只保存变化的字段
-    const changed = diffRawData(prev, rawData);
+    const changed = diffRawData(prev, rawData, allowHeavy);
     const heavyKeys = Object.keys(JSON_FIELD_MAP);
 
     if (allowHeavy) {
@@ -291,7 +333,7 @@ export async function saveCharacter(userId, player, realmId = 1, options = {}) {
         const insertData = serializeAll(rawData);
         const [id] = await knex('characters').insert(insertData);
         player.id = id;
-        setCharacterPersistSnapshot(player, rawData);
+        setCharacterPersistSnapshot(player, cloneRawData(rawData));
         return id;
       } catch (err) {
         const message = String(err?.sqlMessage || err?.message || '');
@@ -305,14 +347,14 @@ export async function saveCharacter(userId, player, realmId = 1, options = {}) {
         await knex('characters')
           .where(where)
           .update({ ...updateData, updated_at: knex.fn.now() });
-        setCharacterPersistSnapshot(player, rawData);
+        setCharacterPersistSnapshot(player, cloneRawData(rawData));
         return null;
       }
     }
   }
 
-  // 更新快照
-  setCharacterPersistSnapshot(player, rawData);
+  // 更新快照（深拷贝隔离）
+  setCharacterPersistSnapshot(player, cloneRawData(rawData));
   return null;
 }
 
