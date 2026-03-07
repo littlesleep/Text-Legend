@@ -9,7 +9,23 @@ function parseJson(value, fallback) {
   }
 }
 
-function buildCharacterPersistData(userId, player, realmId) {
+// JSON 大字段映射：raw字段名 -> DB字段名
+const JSON_FIELD_MAP = {
+  stats: 'stats_json',
+  position: 'position_json',
+  inventory: 'inventory_json',
+  warehouse: 'warehouse_json',
+  equipment: 'equipment_json',
+  quests: 'quests_json',
+  skills: 'skills_json',
+  flags: 'flags_json'
+};
+
+// 轻量字段（标量，无需序列化）
+const LIGHT_FIELDS = ['user_id', 'realm_id', 'name', 'class', 'level', 'exp', 'gold', 'yuanbao', 'hp', 'mp', 'max_hp', 'max_mp'];
+
+// 构建原始数据对象（不进行JSON序列化）
+function buildCharacterRawData(userId, player, realmId) {
   return {
     user_id: userId,
     realm_id: realmId,
@@ -23,27 +39,41 @@ function buildCharacterPersistData(userId, player, realmId) {
     mp: player.mp,
     max_hp: player.max_hp,
     max_mp: player.max_mp,
-    stats_json: JSON.stringify(player.stats || {}),
-    position_json: JSON.stringify(player.position || {}),
-    inventory_json: JSON.stringify(player.inventory || []),
-    warehouse_json: JSON.stringify(player.warehouse || []),
-    equipment_json: JSON.stringify(player.equipment || {}),
-    quests_json: JSON.stringify(player.quests || {}),
-    skills_json: JSON.stringify(player.skills || []),
-    flags_json: JSON.stringify(player.flags || {})
+    stats: player.stats || {},
+    position: player.position || {},
+    inventory: player.inventory || [],
+    warehouse: player.warehouse || [],
+    equipment: player.equipment || {},
+    quests: player.quests || {},
+    skills: player.skills || [],
+    flags: player.flags || {}
   };
 }
 
-// 重量字段：JSON 大字段，序列化开销大
-const HEAVY_FIELDS = new Set([
-  'inventory_json',
-  'warehouse_json',
-  'equipment_json',
-  'quests_json',
-  'skills_json',
-  'flags_json',
-  'stats_json'
-]);
+// 序列化指定字段（按需序列化）
+function serializeFields(rawData, fields) {
+  const result = {};
+  for (const key of fields) {
+    if (LIGHT_FIELDS.includes(key)) {
+      result[key] = rawData[key];
+    } else if (JSON_FIELD_MAP[key]) {
+      result[JSON_FIELD_MAP[key]] = JSON.stringify(rawData[key]);
+    }
+  }
+  return result;
+}
+
+// 全量序列化（用于insert/force全量）
+function serializeAll(rawData) {
+  const result = {};
+  for (const key of LIGHT_FIELDS) {
+    result[key] = rawData[key];
+  }
+  for (const [rawKey, dbKey] of Object.entries(JSON_FIELD_MAP)) {
+    result[dbKey] = JSON.stringify(rawData[rawKey]);
+  }
+  return result;
+}
 
 function setCharacterPersistSnapshot(player, snapshot) {
   if (!player || typeof player !== 'object') return;
@@ -59,27 +89,21 @@ function getCharacterPersistSnapshot(player) {
   return player?.__persistSnapshot || null;
 }
 
-function diffPersistData(prev, next) {
-  const patch = {};
-  for (const key of Object.keys(next)) {
-    if (prev?.[key] !== next[key]) {
-      patch[key] = next[key];
+// 比较原始数据，返回变化的字段名列表
+function diffRawData(prev, next) {
+  const changed = [];
+  const allKeys = new Set([...Object.keys(prev || {}), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    if (key === 'flags' && prev?.flags !== next.flags) {
+      // flags 特殊处理：总是深比较（因为内部会修改召唤兽信息）
+      if (JSON.stringify(prev?.flags) !== JSON.stringify(next.flags)) {
+        changed.push(key);
+      }
+    } else if (prev?.[key] !== next[key]) {
+      changed.push(key);
     }
   }
-  return patch;
-}
-
-function splitPersistPatch(patch) {
-  const light = {};
-  const heavy = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (HEAVY_FIELDS.has(key)) {
-      heavy[key] = value;
-    } else {
-      light[key] = value;
-    }
-  }
-  return { light, heavy };
+  return changed;
 }
 
 export async function listCharacters(userId, realmId = 1) {
@@ -146,9 +170,9 @@ export async function loadCharacter(userId, name, realmId = 1) {
   normalizeWarehouse(player);
   normalizeEquipment(player);
 
-  // 初始化快照
-  const persistedData = buildCharacterPersistData(row.user_id, player, row.realm_id || realmId);
-  setCharacterPersistSnapshot(player, persistedData);
+  // 初始化原始数据快照（无序列化）
+  const rawData = buildCharacterRawData(row.user_id, player, row.realm_id || realmId);
+  setCharacterPersistSnapshot(player, rawData);
 
   return player;
 }
@@ -162,20 +186,23 @@ export async function findCharacterByNameInRealm(name, realmId = 1) {
 }
 
 /**
- * 保存角色数据
+ * 保存角色数据（延迟序列化优化版）
  * @param {string|number} userId - 用户ID
  * @param {object} player - 玩家对象
  * @param {number} realmId - 区服ID
  * @param {object} options - 选项
- * @param {boolean} options.allowHeavy - 是否允许保存重量字段（JSON大字段）
+ * @param {boolean} options.allowHeavy - 是否允许保存JSON大字段
  * @param {boolean} options.force - 是否强制保存（即使没有变化）
  * @param {boolean} options.upsert - 是否允许插入新记录（默认true）
  * @returns {Promise<number|null>} - 新插入的ID或null
  *
  * 使用策略：
  * 1. 高频轻存（战斗/移动中）：saveCharacter(uid, player, realm, { allowHeavy: false })
+ *    - 只序列化标量字段，避免JSON.stringify大数组
  * 2. 低频重存（定时30-60秒）：saveCharacter(uid, player, realm, { allowHeavy: true })
+ *    - 序列化所有变化的字段
  * 3. 强制落盘（下线/切服）：saveCharacter(uid, player, realm, { allowHeavy: true, force: true })
+ *    - 全量保存，无视diff
  */
 export async function saveCharacter(userId, player, realmId = 1, options = {}) {
   const resolvedRealmId = Number(player?.realmId ?? realmId ?? 1) || 1;
@@ -206,25 +233,40 @@ export async function saveCharacter(userId, player, realmId = 1, options = {}) {
     delete player.flags.savedSummon;
   }
 
-  const data = buildCharacterPersistData(userId, player, resolvedRealmId);
+  // 构建当前原始数据（无序列化）
+  const rawData = buildCharacterRawData(userId, player, resolvedRealmId);
   const prev = getCharacterPersistSnapshot(player);
-  const patch = diffPersistData(prev, data);
 
-  // 无变化且非强制，直接返回
-  if (Object.keys(patch).length === 0 && !force) {
+  // 确定要保存的字段
+  let fieldsToSave = [];
+
+  if (force) {
+    // 强制模式：根据 allowHeavy 决定保存范围
+    fieldsToSave = allowHeavy
+      ? [...LIGHT_FIELDS, ...Object.keys(JSON_FIELD_MAP)]  // 全量
+      : [...LIGHT_FIELDS];  // 仅标量
+  } else {
+    // diff 模式：只保存变化的字段
+    const changed = diffRawData(prev, rawData);
+    const heavyKeys = Object.keys(JSON_FIELD_MAP);
+
+    if (allowHeavy) {
+      fieldsToSave = changed;
+    } else {
+      // 排除 heavy 字段
+      fieldsToSave = changed.filter(k => !heavyKeys.includes(k));
+    }
+  }
+
+  // 无字段需要保存
+  if (fieldsToSave.length === 0) {
     return null;
   }
 
-  const { light, heavy } = splitPersistPatch(patch);
-  const updateData = {
-    ...light,
-    ...(allowHeavy ? heavy : {})
-  };
-
-  // 本次无可更新字段且非强制，直接返回
-  if (Object.keys(updateData).length === 0 && !force) {
-    return null;
-  }
+  // 按需序列化（只在此时做 JSON.stringify）
+  const updateData = force && allowHeavy
+    ? serializeAll(rawData)  // force全量：全部序列化
+    : serializeFields(rawData, fieldsToSave);  // 增量：只序列化变化的字段
 
   // 执行更新
   const characterId = player.id;
@@ -246,10 +288,10 @@ export async function saveCharacter(userId, player, realmId = 1, options = {}) {
     // 无记录更新且允许插入，执行upsert
     if (Number(updated || 0) === 0 && allowUpsert) {
       try {
-        const [id] = await knex('characters').insert(data);
+        const insertData = serializeAll(rawData);
+        const [id] = await knex('characters').insert(insertData);
         player.id = id;
-        // 全量保存后，更新全量快照
-        setCharacterPersistSnapshot(player, data);
+        setCharacterPersistSnapshot(player, rawData);
         return id;
       } catch (err) {
         const message = String(err?.sqlMessage || err?.message || '');
@@ -263,17 +305,14 @@ export async function saveCharacter(userId, player, realmId = 1, options = {}) {
         await knex('characters')
           .where(where)
           .update({ ...updateData, updated_at: knex.fn.now() });
+        setCharacterPersistSnapshot(player, rawData);
+        return null;
       }
     }
   }
 
-  // 更新快照：合并旧快照 + 本次实际更新的字段
-  const nextSnapshot = {
-    ...(prev || {}),
-    ...updateData
-  };
-  setCharacterPersistSnapshot(player, nextSnapshot);
-
+  // 更新快照
+  setCharacterPersistSnapshot(player, rawData);
   return null;
 }
 
