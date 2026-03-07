@@ -34,18 +34,52 @@ function buildCharacterPersistData(userId, player, realmId) {
   };
 }
 
-function buildCharacterPersistSignature(data) {
-  return JSON.stringify(data);
-}
+// 重量字段：JSON 大字段，序列化开销大
+const HEAVY_FIELDS = new Set([
+  'inventory_json',
+  'warehouse_json',
+  'equipment_json',
+  'quests_json',
+  'skills_json',
+  'flags_json',
+  'stats_json'
+]);
 
-function setCharacterPersistSignature(player, signature) {
+function setCharacterPersistSnapshot(player, snapshot) {
   if (!player || typeof player !== 'object') return;
-  Object.defineProperty(player, '__persistSignature', {
-    value: signature,
+  Object.defineProperty(player, '__persistSnapshot', {
+    value: snapshot,
     writable: true,
     configurable: true,
     enumerable: false
   });
+}
+
+function getCharacterPersistSnapshot(player) {
+  return player?.__persistSnapshot || null;
+}
+
+function diffPersistData(prev, next) {
+  const patch = {};
+  for (const key of Object.keys(next)) {
+    if (prev?.[key] !== next[key]) {
+      patch[key] = next[key];
+    }
+  }
+  return patch;
+}
+
+function splitPersistPatch(patch) {
+  const light = {};
+  const heavy = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (HEAVY_FIELDS.has(key)) {
+      heavy[key] = value;
+    } else {
+      light[key] = value;
+    }
+  }
+  return { light, heavy };
 }
 
 export async function listCharacters(userId, realmId = 1) {
@@ -111,8 +145,11 @@ export async function loadCharacter(userId, name, realmId = 1) {
   normalizeInventory(player);
   normalizeWarehouse(player);
   normalizeEquipment(player);
+
+  // 初始化快照
   const persistedData = buildCharacterPersistData(row.user_id, player, row.realm_id || realmId);
-  setCharacterPersistSignature(player, buildCharacterPersistSignature(persistedData));
+  setCharacterPersistSnapshot(player, persistedData);
+
   return player;
 }
 
@@ -124,11 +161,32 @@ export async function findCharacterByNameInRealm(name, realmId = 1) {
   return knex('characters').where({ name, realm_id: realmId }).first();
 }
 
-export async function saveCharacter(userId, player, realmId = 1) {
+/**
+ * 保存角色数据
+ * @param {string|number} userId - 用户ID
+ * @param {object} player - 玩家对象
+ * @param {number} realmId - 区服ID
+ * @param {object} options - 选项
+ * @param {boolean} options.allowHeavy - 是否允许保存重量字段（JSON大字段）
+ * @param {boolean} options.force - 是否强制保存（即使没有变化）
+ * @param {boolean} options.upsert - 是否允许插入新记录（默认true）
+ * @returns {Promise<number|null>} - 新插入的ID或null
+ *
+ * 使用策略：
+ * 1. 高频轻存（战斗/移动中）：saveCharacter(uid, player, realm, { allowHeavy: false })
+ * 2. 低频重存（定时30-60秒）：saveCharacter(uid, player, realm, { allowHeavy: true })
+ * 3. 强制落盘（下线/切服）：saveCharacter(uid, player, realm, { allowHeavy: true, force: true })
+ */
+export async function saveCharacter(userId, player, realmId = 1, options = {}) {
   const resolvedRealmId = Number(player?.realmId ?? realmId ?? 1) || 1;
+  const allowHeavy = Boolean(options.allowHeavy);
+  const force = Boolean(options.force);
+  const allowUpsert = options.upsert !== false;
+
   normalizeInventory(player);
   normalizeWarehouse(player);
-  // 保存召唤兽信息到flags中（只有在召唤兽存在且活着时保存）
+
+  // 保存召唤兽信息到flags中
   if (!player.flags) player.flags = {};
   const summons = Array.isArray(player.summons)
     ? player.summons
@@ -147,54 +205,76 @@ export async function saveCharacter(userId, player, realmId = 1) {
     delete player.flags.savedSummons;
     delete player.flags.savedSummon;
   }
+
   const data = buildCharacterPersistData(userId, player, resolvedRealmId);
-  const persistSignature = buildCharacterPersistSignature(data);
-  if (player.__persistSignature === persistSignature) {
+  const prev = getCharacterPersistSnapshot(player);
+  const patch = diffPersistData(prev, data);
+
+  // 无变化且非强制，直接返回
+  if (Object.keys(patch).length === 0 && !force) {
     return null;
   }
 
-  // 优先使用主键 ID 更新，性能更好（避免复合 WHERE 条件）
+  const { light, heavy } = splitPersistPatch(patch);
+  const updateData = {
+    ...light,
+    ...(allowHeavy ? heavy : {})
+  };
+
+  // 本次无可更新字段且非强制，直接返回
+  if (Object.keys(updateData).length === 0 && !force) {
+    return null;
+  }
+
+  // 执行更新
   const characterId = player.id;
+  let updated = 0;
+
   if (characterId && typeof characterId === 'number') {
-    const updated = await knex('characters')
+    updated = await knex('characters')
       .where({ id: characterId })
-      .update({ ...data, updated_at: knex.fn.now() });
-    if (Number(updated || 0) > 0) {
-      setCharacterPersistSignature(player, persistSignature);
-      return null;
-    }
+      .update({ ...updateData, updated_at: knex.fn.now() });
   }
 
-  // 回退到复合条件更新（兼容旧数据）
-  const where = { user_id: userId, name: player.name, realm_id: resolvedRealmId };
-  const updated = await knex('characters')
-    .where(where)
-    .update({ ...data, updated_at: knex.fn.now() });
-  if (Number(updated || 0) > 0) {
-    setCharacterPersistSignature(player, persistSignature);
-    return null;
-  }
-
-  try {
-    const [id] = await knex('characters').insert(data);
-    setCharacterPersistSignature(player, persistSignature);
-    // 保存新创建的角色 ID 到 player 对象
-    player.id = id;
-    return id;
-  } catch (err) {
-    const message = String(err?.sqlMessage || err?.message || '');
-    const isDuplicate = message.includes('Duplicate')
-      || message.includes('UNIQUE constraint failed')
-      || message.includes('duplicate key value');
-    if (!isDuplicate) {
-      throw err;
-    }
-    await knex('characters')
+  // 回退到复合条件更新
+  if (Number(updated || 0) === 0) {
+    const where = { user_id: userId, name: player.name, realm_id: resolvedRealmId };
+    updated = await knex('characters')
       .where(where)
-      .update({ ...data, updated_at: knex.fn.now() });
-    setCharacterPersistSignature(player, persistSignature);
-    return null;
+      .update({ ...updateData, updated_at: knex.fn.now() });
+
+    // 无记录更新且允许插入，执行upsert
+    if (Number(updated || 0) === 0 && allowUpsert) {
+      try {
+        const [id] = await knex('characters').insert(data);
+        player.id = id;
+        // 全量保存后，更新全量快照
+        setCharacterPersistSnapshot(player, data);
+        return id;
+      } catch (err) {
+        const message = String(err?.sqlMessage || err?.message || '');
+        const isDuplicate = message.includes('Duplicate')
+          || message.includes('UNIQUE constraint failed')
+          || message.includes('duplicate key value');
+        if (!isDuplicate) {
+          throw err;
+        }
+        // 冲突时重试更新
+        await knex('characters')
+          .where(where)
+          .update({ ...updateData, updated_at: knex.fn.now() });
+      }
+    }
   }
+
+  // 更新快照：合并旧快照 + 本次实际更新的字段
+  const nextSnapshot = {
+    ...(prev || {}),
+    ...updateData
+  };
+  setCharacterPersistSnapshot(player, nextSnapshot);
+
+  return null;
 }
 
 export async function deleteCharacter(userId, name, realmId = 1) {
