@@ -18601,7 +18601,7 @@ function updateSpecialBossStatsBasedOnPlayers() {
     const roomMobs = getAliveMobs(zoneId, roomId, effectiveRealmId);
     const specialBoss = roomMobs.find((m) => {
       const tpl = MOB_TEMPLATES[m.templateId];
-      return tpl && (tpl.specialBoss || isCultivationBoss(tpl));
+      return tpl && (tpl.specialBoss || tpl.worldBoss || isCultivationBoss(tpl));
     });
 
     if (!specialBoss) continue;
