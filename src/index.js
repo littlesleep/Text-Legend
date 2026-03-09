@@ -13730,6 +13730,10 @@ function normalizeGuildContribution(player) {
 
 async function buildState(player) {
   const t0 = Date.now();
+  const tMarks = {};
+
+  // ==== 第1段：玩家基础/属性 ====
+  const t1Start = Date.now();
   normalizeVipStatus(player);
   normalizeSvipStatus(player);
   // 行会建筑升级检查：如果升级时间已到，触发完成升级并同步状态
@@ -13747,6 +13751,10 @@ async function buildState(player) {
   }
   computeDerived(player);
   const realmId = player.realmId || 1;
+  tMarks.p1_base = Date.now() - t1Start;
+
+  // ==== 第2段：房间/怪物/房间玩家 ====
+  const t2Start = Date.now();
   const roomRealmId = getRoomRealmId(player.position.zone, player.position.room, realmId);
   const zone = WORLD[player.position.zone];
   const room = zone?.rooms[player.position.room];
@@ -13790,7 +13798,12 @@ async function buildState(player) {
     exits = buildRoomExits(player.position.zone, player.position.room, player);
     roomPlayers = getCachedRoomPlayers(roomRealmId, player.position.zone, player.position.room);
   }
-    crossRank = getCrossRankSnapshot(10);
+  crossRank = getCrossRankSnapshot(10);
+  tMarks.p2_room = Date.now() - t2Start;
+
+  // ==== 第3段：背包/仓库/装备/技能 ====
+  const t3Start = Date.now();
+
   const summonList = getAliveSummons(player);
   const summonPayloads = summonList.map((summon) => ({
     id: summon.id,
@@ -13869,6 +13882,11 @@ async function buildState(player) {
     }));
     player._stateCache[equipmentCacheKey] = equipment;
   }
+  tMarks.p3_bag = Date.now() - t3Start;
+
+  // ==== 第4段：活动/排行/额外配置 ====
+  const t4Start = Date.now();
+
   const party = getPartyByMember(player.name, realmId);
   const partyMembers = party
     ? party.members.map((name) => ({
@@ -13960,10 +13978,18 @@ async function buildState(player) {
   const guildDonateDaily = player.guild ? getGuildDonateDailyInfo(player) : null;
   const guildSystemConfig = getGuildSystemConfigSnapshot();
   const bonusBreakdown = buildRewardBonusBreakdown(player, party);
+  tMarks.p4_extra = Date.now() - t4Start;
 
   const elapsed = Date.now() - t0;
   if (elapsed > 50) {
-    console.log(`[perf] buildState ${elapsed}ms ${player?.name || 'unknown'}`);
+    console.log(
+      `[perf] buildState ${elapsed}ms ` +
+      `p1_base=${tMarks.p1_base}ms ` +
+      `p2_room=${tMarks.p2_room}ms ` +
+      `p3_bag=${tMarks.p3_bag}ms ` +
+      `p4_extra=${tMarks.p4_extra}ms ` +
+      `${player?.name || 'unknown'}`
+    );
   }
 
   return {
