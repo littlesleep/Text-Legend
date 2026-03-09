@@ -14611,11 +14611,15 @@ async function sendState(player) {
   const includeStaticAux = shouldSendAux('static_aux', STATE_STATIC_AUX_TTL);
 
   // 按需构建 state
+  CURRENT_PHASE = 'buildState';
+  const tBuild0 = Date.now();
   const state = await buildState(player, {
     includeDynamicAux,
     includeStaticAux,
     forceSend
   });
+  const tBuildElapsed = Date.now() - tBuild0;
+  
   if (!forceSend) {
     // 房间动态数据优先走 room_state，避免与 state 重复下发
     delete state.players;
@@ -14670,6 +14674,8 @@ async function sendState(player) {
     'online',
     'sabak'
   ];
+  CURRENT_PHASE = 'state_hash';
+  const tHash0 = Date.now();
   if (!player._stateFieldHashes) player._stateFieldHashes = {};
   const fieldHashes = player._stateFieldHashes;
   dedupeFields.forEach((field) => {
@@ -14681,6 +14687,7 @@ async function sendState(player) {
     }
     fieldHashes[field] = nextHash;
   });
+  const tHashElapsed = Date.now() - tHash0;
   if (!player?.socket) {
     player.forceStateRefresh = false;
     return;
@@ -14697,9 +14704,10 @@ async function sendState(player) {
       stateThrottleLastRoom.set(key, `${player.position.zone}:${player.position.room}`);
     }
   }
+  CURRENT_PHASE = 'state_emit';
   const elapsed = Date.now() - t0;
   if (elapsed > 50) {
-    console.log(`[perf] sendState ${elapsed}ms ${player?.name || 'unknown'}`);
+    console.log(`[perf] sendState ${elapsed}ms build=${tBuildElapsed}ms hash=${tHashElapsed}ms ${player?.name || 'unknown'}`);
   }
 }
 
@@ -19168,14 +19176,20 @@ function shouldProcessManagedPlayerThisTick(player, shardIndex, shardCount = COM
   return (hashCombatShardKey(key) % size) === (Math.max(0, shardIndex) % size);
 }
 
+let CURRENT_PHASE = 'idle';
+
 async function combatTick() {
   const tickStart = Date.now();
-  const perfLog = (label, startTime) => {
+  CURRENT_PHASE = 'combatTick_start';
+  
+  const perfLog = (label, startTime, extra = {}) => {
     const elapsed = Date.now() - startTime;
     if (elapsed > 50) {
-      console.log(`[perf] ${label} ${elapsed}ms`);
+      console.log(`[perf] ${label} ${elapsed}ms`, extra.phase ? `[phase:${extra.phase}]` : '', extra.managed ? `[managed:${extra.managed}]` : '');
     }
   };
+  
+
 
   const markStateDirty = (player) => {
     if (!player) return;
@@ -19200,18 +19214,24 @@ async function combatTick() {
 
   // 特殊BOSS人数缩放改为低频执行，避免每秒全图扫描
   if (tickNow - combatLastBossScaleAt >= bossScaleIntervalMs) {
+    CURRENT_PHASE = 'boss_scale';
     const t0 = Date.now();
     updateSpecialBossStatsBasedOnPlayers();
     perfLog('updateSpecialBossStatsBasedOnPlayers', t0);
     combatLastBossScaleAt = tickNow;
   }
 
+  CURRENT_PHASE = 'player_loop';
+  const managedTickStats = { total: 0, count: 0 };
+  const normalTickStats = { total: 0, count: 0 };
+  
   for (const player of online) {
     const now = Date.now();
     const isManagedPlayer = Boolean(!player?.socket && (player?.flags?.offlineManagedAuto || player?.flags?.offlineManagedPending));
     if (isManagedPlayer && !shouldProcessManagedPlayerThisTick(player, managedShardIndex, managedShardCount)) {
       continue;
     }
+    const tickPlayerStart = Date.now();
     if (!player?.socket && player?.flags?.offlineManagedPending) {
       const startAt = Number(player.flags.offlineManagedStartAt || 0);
       if (!isSvipActive(player)) {
@@ -20476,23 +20496,58 @@ async function combatTick() {
       }
       getRealmState(player.realmId || 1).lastSaveTime.set(player.name, now);
     }
+    
+    // 统计玩家处理耗时
+    const playerElapsed = Date.now() - tickPlayerStart;
+    if (isManagedPlayer) {
+      managedTickStats.total += playerElapsed;
+      managedTickStats.count++;
+    } else {
+      normalTickStats.total += playerElapsed;
+      normalTickStats.count++;
+    }
   }
 
-  perfLog('combatTick_total', tickStart);
+  // 打印托管玩家统计
+  if (managedTickStats.count > 0 && managedTickStats.total > 50) {
+    console.log(`[perf][managed] combatTick_player ${managedTickStats.total}ms count=${managedTickStats.count} avg=${Math.round(managedTickStats.total/managedTickStats.count)}ms`);
+  }
+  
+  const tickTotalElapsed = Date.now() - tickStart;
+  if (tickTotalElapsed > 100) {
+    console.log(`[perf][lag] combatTick_total ${tickTotalElapsed}ms [phase:${CURRENT_PHASE}] managed=${managedTickStats.count} normal=${normalTickStats.count}`);
+  }
+  CURRENT_PHASE = 'idle';
 }
 
 setInterval(combatTick, 1000);
 
 // 高频状态刷新tick，每3秒检查一次需要刷新的玩家状态
 async function stateFlushTick() {
+  const tickStart = Date.now();
   const online = listOnlinePlayers();
+  let sendCount = 0;
+  let skipManaged = 0;
+  let skipNoRefresh = 0;
+  
   for (const player of online) {
     // 跳过离线托管玩家
-    if (player.flags?.offlineManagedAuto || player.flags?.offlineManagedPending) continue;
+    if (player.flags?.offlineManagedAuto || player.flags?.offlineManagedPending) {
+      skipManaged++;
+      continue;
+    }
     // 只处理有socket连接且标记了强制刷新的玩家
     if (player.socket && player.forceStateRefresh) {
       await sendState(player).catch(() => {});
+      sendCount++;
+    } else {
+      skipNoRefresh++;
     }
+  }
+  
+  const elapsed = Date.now() - tickStart;
+  if (elapsed > 50) {
+    console.log(`[perf] stateFlushTick ${elapsed}ms send=${sendCount} skipManaged=${skipManaged} skipNoRefresh=${skipNoRefresh}`);
   }
 }
 
