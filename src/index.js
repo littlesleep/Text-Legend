@@ -13990,6 +13990,7 @@ async function buildState(player, options = {}) {
 
   // ==== 第4段：活动/排行/额外配置 ====
   const t4Start = Date.now();
+  const t4Marks = {};
 
   const party = getPartyByMember(player.name, realmId);
   const partyMembers = party
@@ -14001,14 +14002,23 @@ async function buildState(player, options = {}) {
     : null;
   const guildBonus = Boolean(player.guild);
   const onlineCount = listOnlinePlayers(realmId).length;
+  t4Marks.party = Date.now() - t4Start;
+
+  const t4ActivityStart = Date.now();
   // dynamicAux：按需构建每日幸运和浮图塔排行
   const dailyLuckyInfo = (includeDynamicAux || forceSend)
     ? await getDailyLuckyInfoCached(realmId)
     : null;
+  t4Marks.activity = Date.now() - t4ActivityStart;
+
+  const t4ZhuxianStart = Date.now();
   const zhuxianTowerProgress = normalizeZhuxianTowerProgress(player);
   const zhuxianTowerRankTop10 = (includeDynamicAux || forceSend)
     ? await getZhuxianTowerRankTop10Cached(realmId)
     : null;
+  t4Marks.zhuxian = Date.now() - t4ZhuxianStart;
+
+  const t4TreasureStart = Date.now();
   // 法宝状态缓存
   const treasureCacheKey = `treasure_${(player.flags?.treasure?.equipped || []).join('_')}`;
   let treasureState, treasureEquipped, treasureRandomAttrTotal;
@@ -14044,7 +14054,9 @@ async function buildState(player, options = {}) {
     player._stateCache[treasureCacheKey] = { state: treasureState, equipped: treasureEquipped, randomAttrTotal: treasureRandomAttrTotal };
   }
   const treasureExpMaterial = Math.floor((player.inventory || []).find((slot) => slot.id === TREASURE_EXP_ITEM_ID)?.qty || 0);
-  
+  t4Marks.treasure = Date.now() - t4TreasureStart;
+
+  const t4VipStart = Date.now();
   // VIP自领状态缓存
   let vipSelfClaimEnabled;
   if (Date.now() - vipSelfClaimLastUpdate > VIP_SELF_CLAIM_CACHE_TTL) {
@@ -14054,7 +14066,9 @@ async function buildState(player, options = {}) {
   } else {
     vipSelfClaimEnabled = vipSelfClaimCachedValue;
   }
+  t4Marks.vip = Date.now() - t4VipStart;
 
+  const t4SettingsStart = Date.now();
   const { enabled: stateThrottleEnabled, intervalSec: stateThrottleIntervalSec, overrideServerAllowed } =
     await getStateThrottleSettingsCached();
 
@@ -14072,6 +14086,9 @@ async function buildState(player, options = {}) {
   const effectResetTripleRate = getEffectResetTripleRate();
   const effectResetQuadrupleRate = getEffectResetQuadrupleRate();
   const effectResetQuintupleRate = getEffectResetQuintupleRate();
+  t4Marks.settings = Date.now() - t4SettingsStart;
+
+  const t4GuildStart = Date.now();
   const guildBuilding = player.guild
     ? buildGuildBuildingPayload({
         id: player.guild.id,
@@ -14086,7 +14103,12 @@ async function buildState(player, options = {}) {
     : null;
   const guildDonateDaily = player.guild ? getGuildDonateDailyInfo(player) : null;
   const guildSystemConfig = getGuildSystemConfigSnapshot();
+  t4Marks.guild = Date.now() - t4GuildStart;
+
+  const t4BonusStart = Date.now();
   const bonusBreakdown = buildRewardBonusBreakdown(player, party);
+  t4Marks.bonus = Date.now() - t4BonusStart;
+
   tMarks.p4_extra = Date.now() - t4Start;
 
   const elapsed = Date.now() - t0;
@@ -14097,6 +14119,14 @@ async function buildState(player, options = {}) {
       `p2_room=${tMarks.p2_room}ms ` +
       `p3_bag=${tMarks.p3_bag}ms ` +
       `p4_extra=${tMarks.p4_extra}ms ` +
+      `| extra_party=${t4Marks.party}ms ` +
+      `extra_activity=${t4Marks.activity}ms ` +
+      `extra_zhuxian=${t4Marks.zhuxian}ms ` +
+      `extra_treasure=${t4Marks.treasure}ms ` +
+      `extra_vip=${t4Marks.vip}ms ` +
+      `extra_settings=${t4Marks.settings}ms ` +
+      `extra_guild=${t4Marks.guild}ms ` +
+      `extra_bonus=${t4Marks.bonus}ms ` +
       `${player?.name || 'unknown'}`
     );
   }
