@@ -4800,6 +4800,8 @@ async function refreshDailyLucky() {
       await clearDailyLuckyForRealm(realm.id);
       await assignDailyLuckyForRealm(realm.id, realm.name);
       await setSetting(`daily_lucky_date_${realm.id}`, todayKey);
+      // 清除该realm的缓存，确保下次查询时获取最新数据
+      dailyLuckyCache.delete(realm.id);
     } catch (err) {
       console.error(`[DailyLucky] 更新失败: realm=${realm.id}`, err);
     }
@@ -10674,7 +10676,7 @@ const STATE_DYNAMIC_AUX_TTL = 5000;
 const STATE_STATIC_AUX_TTL = 30000;
 const VIP_SELF_CLAIM_CACHE_TTL = 10000; // VIP自领缓存10秒
 const STATE_THROTTLE_CACHE_TTL = 10000; // 状态节流缓存10秒
-const DAILY_LUCKY_CACHE_TTL = 30000; // 每日幸运玩家缓存30秒
+const DAILY_LUCKY_CACHE_TTL = 24 * 60 * 60 * 1000; // 每日幸运玩家缓存24小时（每天0点刷新）
 const SETTINGS_SNAPSHOT_TTL = 10000; // 全局配置快照缓存10秒
 
 // ===== 全局配置快照（extra_settings 优化）=====
