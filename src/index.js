@@ -20293,7 +20293,7 @@ async function combatTick() {
 
 setInterval(combatTick, 1000);
 
-// 高频状态刷新tick，每1秒检查一次需要刷新的玩家状态
+// 高频状态刷新tick，每3秒检查一次需要刷新的玩家状态
 async function stateFlushTick() {
   const online = listOnlinePlayers();
   for (const player of online) {
@@ -20306,7 +20306,7 @@ async function stateFlushTick() {
   }
 }
 
-setInterval(stateFlushTick, 1000);
+setInterval(stateFlushTick, 3000);
 
 async function sabakTick(realmId) {
   const sabakState = getSabakState(realmId);
