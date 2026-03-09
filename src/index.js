@@ -10650,6 +10650,79 @@ const STATE_STATIC_AUX_TTL = 30000;
 const VIP_SELF_CLAIM_CACHE_TTL = 10000; // VIP自领缓存10秒
 const STATE_THROTTLE_CACHE_TTL = 10000; // 状态节流缓存10秒
 const DAILY_LUCKY_CACHE_TTL = 30000; // 每日幸运玩家缓存30秒
+
+// ===== 动态排行短TTL缓存（同一秒内复用）=====
+const DYNAMIC_RANK_CACHE_TTL = 1000; // 1秒内复用同一份排行数据
+
+// crossRank 缓存（全局一份）
+let crossRankCache = null;
+let crossRankCacheAt = 0;
+
+function getCrossRankCached(limit = 10) {
+  const now = Date.now();
+  if (crossRankCache && now - crossRankCacheAt < DYNAMIC_RANK_CACHE_TTL) {
+    return crossRankCache;
+  }
+  crossRankCache = getCrossRankSnapshot(limit);
+  crossRankCacheAt = now;
+  return crossRankCache;
+}
+
+// worldBoss 排行缓存（按 realmId + zone + room）
+const worldBossRankCache = new Map(); // key: `${realmId}:${zoneId}:${roomId}`
+
+function getWorldBossRankCached(realmId, zoneId, roomId) {
+  const key = `${realmId}:${zoneId}:${roomId}`;
+  const now = Date.now();
+  const cached = worldBossRankCache.get(key);
+  if (cached && now - cached.at < DYNAMIC_RANK_CACHE_TTL) {
+    return cached.data;
+  }
+  const roomState = getRoomCommonState(zoneId, roomId, realmId);
+  const data = {
+    bossRank: roomState.bossRank || [],
+    bossClassRank: roomState.bossClassRank || null,
+    bossNextRespawn: roomState.bossNextRespawn || null
+  };
+  worldBossRankCache.set(key, { data, at: now });
+  return data;
+}
+
+// ===== 静态配置预构建缓存（修法2）=====
+let STATIC_STATE_AUX_CACHE = null;
+let STATIC_STATE_AUX_LAST_UPDATE = 0;
+const STATIC_STATE_AUX_TTL_MS = 5000; // 5秒刷新一次静态配置
+
+function buildStaticStateAux() {
+  const refineMaterialCount = getRefineMaterialCount();
+  return Object.freeze({
+    treasure_sets: TREASURE_SETS,
+    auto_full_boss_list: AUTO_FULL_BOSS_LIST,
+    refine_config: Object.freeze({
+      base_success_rate: getRefineBaseSuccessRate(),
+      decay_rate: getRefineDecayRate(),
+      material_count: refineMaterialCount,
+      bonus_per_level: getRefineBonusPerLevel()
+    }),
+    high_tier_recycle_config: getHighTierRecycleStatePayload(),
+    effect_reset_config: Object.freeze({
+      success_rate: getEffectResetSuccessRate(),
+      double_rate: getEffectResetDoubleRate(),
+      triple_rate: getEffectResetTripleRate(),
+      quadruple_rate: getEffectResetQuadrupleRate(),
+      quintuple_rate: getEffectResetQuintupleRate()
+    })
+  });
+}
+
+function getStaticStateAux() {
+  const now = Date.now();
+  if (!STATIC_STATE_AUX_CACHE || now - STATIC_STATE_AUX_LAST_UPDATE > STATIC_STATE_AUX_TTL_MS) {
+    STATIC_STATE_AUX_CACHE = buildStaticStateAux();
+    STATIC_STATE_AUX_LAST_UPDATE = now;
+  }
+  return STATIC_STATE_AUX_CACHE;
+}
 const ZHUXIAN_TOWER_RANK_CACHE_TTL = 300000; // 浮图塔排行榜缓存5分钟，减少数据库压力
 let vipSelfClaimCachedValue = null;
 let vipSelfClaimLastUpdate = 0;
@@ -13728,7 +13801,14 @@ function normalizeGuildContribution(player) {
   return value;
 }
 
-async function buildState(player) {
+// ===== 按需构建 buildState（修法1）=====
+async function buildState(player, options = {}) {
+  const {
+    includeDynamicAux = false,
+    includeStaticAux = false,
+    forceSend = false
+  } = options;
+
   const t0 = Date.now();
   const tMarks = {};
 
@@ -13768,14 +13848,17 @@ async function buildState(player) {
   let bossNextRespawn = null;
   let crossRank = null;
   if (isBoss) {
+    // BOSS房间使用1秒缓存的排行数据
     const cached = getRoomCommonState(player.position.zone, player.position.room, roomRealmId);
     mobs = cached.mobs;
     exits = buildRoomExits(player.position.zone, player.position.room, player);
     nextRespawn = cached.nextRespawn;
     roomPlayers = cached.roomPlayers;
-    bossRank = cached.bossRank;
-    bossClassRank = cached.bossClassRank || null;
-    bossNextRespawn = cached.bossNextRespawn;
+    // 使用短缓存的worldBoss排行（同一秒内复用）
+    const cachedRank = getWorldBossRankCached(roomRealmId, player.position.zone, player.position.room);
+    bossRank = cachedRank.bossRank;
+    bossClassRank = cachedRank.bossClassRank;
+    bossNextRespawn = cachedRank.bossNextRespawn;
   } else {
     if (zone && room) spawnMobs(player.position.zone, player.position.room, roomRealmId);
     // 根据房间内玩家数量调整世界BOSS属性
@@ -13798,7 +13881,10 @@ async function buildState(player) {
     exits = buildRoomExits(player.position.zone, player.position.room, player);
     roomPlayers = getCachedRoomPlayers(roomRealmId, player.position.zone, player.position.room);
   }
-  crossRank = getCrossRankSnapshot(10);
+  // dynamicAux：按需构建跨服排行（使用1秒缓存）
+  if (includeDynamicAux || forceSend) {
+    crossRank = getCrossRankCached(10);
+  }
   tMarks.p2_room = Date.now() - t2Start;
 
   // ==== 第3段：背包/仓库/装备/技能 ====
@@ -13897,9 +13983,14 @@ async function buildState(player) {
     : null;
   const guildBonus = Boolean(player.guild);
   const onlineCount = listOnlinePlayers(realmId).length;
-  const dailyLuckyInfo = await getDailyLuckyInfoCached(realmId);
+  // dynamicAux：按需构建每日幸运和浮图塔排行
+  const dailyLuckyInfo = (includeDynamicAux || forceSend)
+    ? await getDailyLuckyInfoCached(realmId)
+    : null;
   const zhuxianTowerProgress = normalizeZhuxianTowerProgress(player);
-  const zhuxianTowerRankTop10 = await getZhuxianTowerRankTop10Cached(realmId);
+  const zhuxianTowerRankTop10 = (includeDynamicAux || forceSend)
+    ? await getZhuxianTowerRankTop10Cached(realmId)
+    : null;
   // 法宝状态缓存
   const treasureCacheKey = `treasure_${(player.flags?.treasure?.equipped || []).join('_')}`;
   let treasureState, treasureEquipped, treasureRandomAttrTotal;
@@ -14075,14 +14166,14 @@ async function buildState(player) {
     party: party ? { size: party.members.length, leader: party.leader, members: partyMembers } : null,
     training: player.flags?.training || { hp: 0, mp: 0, atk: 0, def: 0, mag: 0, mdef: 0, spirit: 0, dex: 0 },
     online: { count: onlineCount },
-    daily_lucky: dailyLuckyInfo,
+    ...(dailyLuckyInfo ? { daily_lucky: dailyLuckyInfo } : {}),
     activities: getActivityStatePayload(player),
     zhuxian_tower: {
       highestClearedFloor: Math.max(0, Math.floor(Number(zhuxianTowerProgress.highestClearedFloor || 0))),
       currentChallengeFloor: Math.max(1, Math.floor(Number(zhuxianTowerProgress.highestClearedFloor || 0)) + 1),
       bestFloor: Math.max(0, Math.floor(Number(zhuxianTowerProgress.bestFloor || 0)))
     },
-    zhuxian_tower_rank_top10: zhuxianTowerRankTop10,
+    ...(zhuxianTowerRankTop10 ? { zhuxian_tower_rank_top10: zhuxianTowerRankTop10 } : {}),
     treasure: {
       slotCount: TREASURE_SLOT_COUNT,
       maxLevel: TREASURE_MAX_LEVEL,
@@ -14143,10 +14234,10 @@ async function buildState(player) {
         siegeEndsAt: sabakState.siegeEndsAt || null
       };
     })(),
-    worldBossRank: bossRank,
-    worldBossClassRank: bossClassRank,
-    worldBossNextRespawn: bossNextRespawn,
-    crossRank,
+    ...(bossRank?.length ? { worldBossRank: bossRank } : {}),
+    ...(bossClassRank ? { worldBossClassRank: bossClassRank } : {}),
+    ...(bossNextRespawn ? { worldBossNextRespawn: bossNextRespawn } : {}),
+    ...(crossRank ? { crossRank } : {}),
     players: roomPlayers,
     bossRespawn: nextRespawn,
     server_time: Date.now(),
@@ -14154,27 +14245,8 @@ async function buildState(player) {
     svip_settings: {
       prices: svipSettings.prices
     },
-    ultimate_growth_config: withUltimateGrowthMaterialNames(getUltimateGrowthConfigMem()),
-    treasure_sets: TREASURE_SETS,
-    auto_full_boss_list: AUTO_FULL_BOSS_LIST,
-    state_throttle_enabled: stateThrottleEnabled,
-    state_throttle_interval_sec: stateThrottleIntervalSec,
-    state_throttle_override_server_allowed: overrideServerAllowed,
-    refine_material_count: refineMaterialCount,
-    refine_config: {
-      base_success_rate: getRefineBaseSuccessRate(),
-      decay_rate: getRefineDecayRate(),
-      material_count: refineMaterialCount,
-      bonus_per_level: getRefineBonusPerLevel()
-    },
-    high_tier_recycle_config: getHighTierRecycleStatePayload(),
-    effect_reset_config: {
-      success_rate: effectResetSuccessRate,
-      double_rate: effectResetDoubleRate,
-      triple_rate: effectResetTripleRate,
-      quadruple_rate: effectResetQuadrupleRate,
-      quintuple_rate: effectResetQuintupleRate
-    }
+    // staticAux：使用预构建的静态配置
+    ...(includeStaticAux || forceSend ? getStaticStateAux() : {})
   };
 }
 
@@ -14237,7 +14309,7 @@ async function sendState(player) {
     }
     stateThrottleLastSent.set(key, now);
   }
-  const state = await buildState(player);
+  // 计算是否包含 auxiliary 数据
   const now = Date.now();
   if (!player._stateAuxSentAt) player._stateAuxSentAt = {};
   const auxSentAt = player._stateAuxSentAt;
@@ -14253,30 +14325,20 @@ async function sendState(player) {
     }
     return false;
   };
-  if (!shouldSendAux('dynamic_aux', STATE_DYNAMIC_AUX_TTL)) {
-    delete state.crossRank;
-    delete state.daily_lucky;
-    delete state.zhuxian_tower_rank_top10;
-    delete state.worldBossRank;
-    delete state.worldBossClassRank;
-    delete state.worldBossNextRespawn;
-  }
-  if (!shouldSendAux('static_aux', STATE_STATIC_AUX_TTL)) {
-    delete state.treasure_sets;
-    delete state.auto_full_boss_list;
-    delete state.svip_settings;
-    delete state.refine_config;
-    delete state.ultimate_growth_config;
-    delete state.high_tier_recycle_config;
-    delete state.effect_reset_config;
-  }
+  const includeDynamicAux = shouldSendAux('dynamic_aux', STATE_DYNAMIC_AUX_TTL);
+  const includeStaticAux = shouldSendAux('static_aux', STATE_STATIC_AUX_TTL);
+
+  // 按需构建 state
+  const state = await buildState(player, {
+    includeDynamicAux,
+    includeStaticAux,
+    forceSend
+  });
   if (!forceSend) {
     // 房间动态数据优先走 room_state，避免与 state 重复下发
     delete state.players;
     delete state.bossRespawn;
-    delete state.worldBossRank;
-    delete state.worldBossClassRank;
-    delete state.worldBossNextRespawn;
+    // worldBossRank/ClassRank/NextRespawn 已通过 includeDynamicAux 控制
   }
   if (!player._stateServerTimeAt) player._stateServerTimeAt = 0;
   if (!forceSend) {
