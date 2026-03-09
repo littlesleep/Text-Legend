@@ -1715,7 +1715,7 @@ function partyStatus(party) {
   return `队伍成员: ${party.members.join(', ')}`;
 }
 
-export async function handleCommand({ player, players, allCharacters, playersByName, input, source, send, partyApi, guildApi, tradeApi, rechargeApi, svipApi, mailApi, activityApi, consignApi, characterApi, onMove, logLoot, realmId, emitAnnouncement }) {
+export async function handleCommand({ player, players, allCharacters, playersByName, input, source, send, partyApi, guildApi, tradeApi, rechargeApi, svipApi, mailApi, activityApi, consignApi, characterApi, onMove, logLoot, realmId, emitAnnouncement, savePlayer }) {
   const resolveAllCharacters = async () => {
     if (typeof allCharacters === 'function') {
       const rows = await allCharacters();
@@ -2157,6 +2157,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       delete player.flags.savedSummons;
       delete player.flags.savedSummon;
       computeDerived(player);
+      await savePlayer(player, { immediate: true });
       send(`转职成功：已变更为${className}，技能已重置为初始技能。`);
       return;
     }
@@ -2286,6 +2287,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         }
         player.warehouse = addItemToList(player.warehouse, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null, resolved.slot.growth_level ?? null, resolved.slot.growth_fail_stack ?? null);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         send(`已存入仓库：${resolved.item.name} x${finalQty}`);
         return;
       }
@@ -2308,6 +2310,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         player.warehouse = removed.list;
         addItem(player, resolved.slot.id, finalQty, resolved.slot.effects || null, resolved.slot.durability ?? null, resolved.slot.max_durability ?? null, resolved.slot.refine_level ?? null, resolved.slot.base_roll_pct ?? null, resolved.slot.growth_level ?? null, resolved.slot.growth_fail_stack ?? null);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         send(`已取出仓库：${resolved.item.name} x${finalQty}`);
         return;
       }
@@ -2415,6 +2418,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!state.levels[resolved.slot.id]) state.levels[resolved.slot.id] = 1;
         computeDerived(player);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         const def = getTreasureDef(resolved.slot.id);
         send(`已装备法宝：${def?.name || resolved.slot.id}。`);
         return;
@@ -2438,6 +2442,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         addItem(player, equipped.id, 1);
         computeDerived(player);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         const def = getTreasureDef(equipped.id);
         send(`已卸下法宝：${def?.name || equipped.id}。`);
         return;
@@ -2479,6 +2484,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         ) + 1;
         computeDerived(player);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         const activityMsgs = recordTreasurePetFestivalActivity(player, { treasureUpgrades: 1 });
         const def = getTreasureDef(equipped.id);
         send(`法宝升级成功：${def?.name || equipped.id} Lv${level} -> Lv${level + 1}（消耗法宝经验丹 x${need}，随机属性 ${treasureRandomAttrLabel(attrKey)}+1）。`);
@@ -2555,6 +2561,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         const newStage = getTreasureStageByAdvanceCount(newAdvance);
         computeDerived(player);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         const activityMsgs = recordTreasurePetFestivalActivity(player, { treasureAdvances: finalTimes });
         const def = getTreasureDef(equipped.id);
         const stageUpText = newStage > oldStage ? `，阶位提升：${oldStage}阶 -> ${newStage}阶` : '';
@@ -2616,6 +2623,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         const rewardQty = yieldInfo.amount * qty;
         addItem(player, rewardId, rewardQty);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         return send(`分解成功：${resolved.item.name} x${qty} -> ${ITEM_TEMPLATES[rewardId]?.name || rewardId} x${rewardQty}。`);
       }
       if (sub === 'decompose_all' || sub === 'salvage_all' || sub === '一键分解' || sub === '一键回收') {
@@ -2656,6 +2664,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (totalCount <= 0 || totalReward <= 0) return send('一键回收失败。');
         addItem(player, rewardId, totalReward);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         return send(`一键回收完成：共回收 ${totalCount} 件，获得 ${ITEM_TEMPLATES[rewardId]?.name || rewardId} x${totalReward}。`);
       }
       if (sub === 'exchange' || sub === 'redeem' || sub === '兑换') {
@@ -2684,6 +2693,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
           addActivityPointShopRedeemCount(player, exchange, qty);
         }
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         return send(`兑换成功：${describeHighTierRecycleRewards(exchange.rewards)} x${qty}，消耗 ${ITEM_TEMPLATES[materialId]?.name || materialId} x${totalCost}。`);
       }
       summary();
@@ -2704,7 +2714,10 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         resolved.slot.growth_level ?? null,
         resolved.slot.growth_fail_stack ?? null
       );
-      if (res.ok) player.forceStateRefresh = true;
+      if (res.ok) {
+        player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
+      }
       send(res.msg);
       return;
     }
@@ -2783,7 +2796,10 @@ export async function handleCommand({ player, players, allCharacters, playersByN
     case 'unequip': {
       if (!args) return send('要卸下哪个部位？');
       const res = unequipItem(player, args);
-      if (res.ok) player.forceStateRefresh = true;
+      if (res.ok) {
+        player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
+      }
       send(res.msg);
       return;
     }
@@ -2803,6 +2819,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         if (!removeItem(player, item.id, 1, resolved.slot.effects)) return send('背包里没有该物品。');
         player.skills.push(skill.id);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         send(`学会技能: ${skill.name}。`);
         return;
       }
@@ -3437,18 +3454,21 @@ export async function handleCommand({ player, players, allCharacters, playersByN
             // 空参数视为"不打BOSS"
             player.flags.autoFullBossFilter = [];
             player.forceStateRefresh = true;
+            await savePlayer(player, { immediate: true });
             send('智能挂机BOSS：不打BOSS');
             return;
           }
           if (rest === 'all') {
             player.flags.autoFullBossFilter = null;
             player.forceStateRefresh = true;
+            await savePlayer(player, { immediate: true });
             send('智能挂机BOSS：全部');
             return;
           }
           if (['off', 'none', 'disable', 'cancel', '关闭', '取消', '不打'].includes(rest)) {
             player.flags.autoFullBossFilter = [];
             player.forceStateRefresh = true;
+            await savePlayer(player, { immediate: true });
             send('智能挂机BOSS：不打BOSS');
             return;
           }
@@ -3458,6 +3478,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
             .filter(Boolean);
           player.flags.autoFullBossFilter = list;
           player.forceStateRefresh = true;
+          await savePlayer(player, { immediate: true });
           send(list.length ? `智能挂机BOSS：${list.join('、')}` : '智能挂机BOSS：不打BOSS');
           return;
         }
@@ -4915,6 +4936,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
         const totalBonus = newLevel * perLevel;
         computeDerived(player);
         player.forceStateRefresh = true;
+        await savePlayer(player, { immediate: true });
         send(`修炼成功: ${TRAINING_OPTIONS[key].label} 升至 Lv${newLevel} (属性+${totalBonus.toFixed(2)})。`);
         send(needFruit > 0 ? `消耗 ${cost} 金币、修炼果 x${needFruit}。` : `消耗 ${cost} 金币。`);
         return;
@@ -4965,6 +4987,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       const totalBonus = newLevel * perLevel;
       computeDerived(player);
       player.forceStateRefresh = true;
+      await savePlayer(player, { immediate: true });
 
       send(`批量修炼成功: ${TRAINING_OPTIONS[key].label} 从 Lv${currentLevel} 升至 Lv${newLevel} (属性+${totalBonus.toFixed(2)})。`);
       send(needFruit > 0
@@ -5014,6 +5037,7 @@ export async function handleCommand({ player, players, allCharacters, playersByN
       const nextInfo = getCultivationInfo(player.flags.cultivationLevel);
       computeDerived(player);
       player.forceStateRefresh = true;
+      await savePlayer(player, { immediate: true });
       const stoneText = requiresRebirthStone ? '、修真转生石 x1' : '';
       send(`修真提升至 ${nextInfo.name} (+${nextInfo.bonus})，消耗等级 ${costLevels}${stoneText}，当前等级 ${player.level}。`);
       return;

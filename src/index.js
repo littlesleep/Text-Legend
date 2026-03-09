@@ -15935,7 +15935,8 @@ io.on('connection', (socket) => {
         sendMail,
         listMail,
         markMailRead
-      }
+      },
+      savePlayer
     });
     tryRecoverZhuxianTowerEmptyRoom(player);
     markAutoFullManualMove(
