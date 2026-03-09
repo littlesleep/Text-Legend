@@ -142,6 +142,11 @@ export async function getStateThrottleEnabled() {
   return enabled === 'true' || enabled === '1';
 }
 
+// 默认实时更新（节流关闭）
+export function getStateThrottleEnabledDefault() {
+  return false;
+}
+
 /**
  * 设置状态刷新节流开关
  */

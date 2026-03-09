@@ -10649,7 +10649,7 @@ let vipSelfClaimCachedValue = null;
 let vipSelfClaimLastUpdate = 0;
 let svipSettingsCache = { prices: { month: 100, quarter: 260, year: 900, permanent: 3000 }, at: 0 };
 const SVIP_SETTINGS_CACHE_TTL = 10 * 1000;
-let stateThrottleCachedValue = null;
+let stateThrottleCachedValue = false; // 默认实时更新（节流关闭）
 let stateThrottleLastUpdate = 0;
 let stateThrottleIntervalCachedValue = null;
 let stateThrottleIntervalLastUpdate = 0;
@@ -10703,8 +10703,10 @@ async function getStateThrottleSettingsCached() {
     stateThrottleOverrideAllowedCachedValue = await getStateThrottleOverrideServerAllowed();
     stateThrottleOverrideAllowedLastUpdate = now;
   }
+  // 默认实时更新（节流关闭），除非显式开启
+  const enabled = stateThrottleCachedValue === null ? false : Boolean(stateThrottleCachedValue);
   return {
-    enabled: Boolean(stateThrottleCachedValue),
+    enabled,
     intervalSec: Math.max(1, Number(stateThrottleIntervalCachedValue) || 10),
     overrideServerAllowed: Boolean(stateThrottleOverrideAllowedCachedValue)
   };
