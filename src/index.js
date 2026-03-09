@@ -2741,8 +2741,14 @@ app.post('/admin/vip/self-claim-toggle', async (req, res) => {
   const admin = await requireAdmin(req);
   if (!admin) return res.status(401).json({ error: '无管理员权限。' });
   const { enabled } = req.body || {};
-  await setVipSelfClaimEnabled(enabled === true);
-  res.json({ ok: true, enabled: enabled === true });
+  const newEnabled = enabled === true;
+  await setVipSelfClaimEnabled(newEnabled);
+  // 同步更新全局配置快照
+  if (settingsSnapshot) {
+    settingsSnapshot.vipSelfClaimEnabled = newEnabled;
+    settingsSnapshot.updatedAt = Date.now();
+  }
+  res.json({ ok: true, enabled: newEnabled });
 });
 
 app.get('/admin/vip/claim-limit-status', async (req, res) => {
@@ -10674,7 +10680,7 @@ const ROOM_STATE_RANK_TTL = 1000;
 const ROOM_STATE_SERVER_TIME_TTL = 1000;
 const STATE_DYNAMIC_AUX_TTL = 5000;
 const STATE_STATIC_AUX_TTL = 30000;
-const VIP_SELF_CLAIM_CACHE_TTL = 10000; // VIP自领缓存10秒
+const VIP_SELF_CLAIM_CACHE_TTL = 24 * 60 * 60 * 1000; // VIP自领缓存24小时（基本不变）
 const STATE_THROTTLE_CACHE_TTL = 10000; // 状态节流缓存10秒
 const DAILY_LUCKY_CACHE_TTL = 24 * 60 * 60 * 1000; // 每日幸运玩家缓存24小时（每天0点刷新）
 const SETTINGS_SNAPSHOT_TTL = 10000; // 全局配置快照缓存10秒
@@ -10684,6 +10690,7 @@ let settingsSnapshot = {
   stateThrottle: { enabled: false, intervalSec: 10, overrideServerAllowed: false },
   refineMaterialCount: 1,
   svipSettings: { prices: null },
+  vipSelfClaimEnabled: true, // 默认启用
   effectReset: {
     successRate: 50,
     doubleRate: 30,
@@ -10767,8 +10774,7 @@ function getStaticStateAux() {
   return STATIC_STATE_AUX_CACHE;
 }
 const ZHUXIAN_TOWER_RANK_CACHE_TTL = 300000; // 浮图塔排行榜缓存5分钟，减少数据库压力
-let vipSelfClaimCachedValue = null;
-let vipSelfClaimLastUpdate = 0;
+
 let svipSettingsCache = { prices: { month: 100, quarter: 260, year: 900, permanent: 3000 }, at: 0 };
 const SVIP_SETTINGS_CACHE_TTL = 10 * 1000;
 let stateThrottleCachedValue = false; // 默认实时更新（节流关闭）
@@ -10858,7 +10864,8 @@ async function refreshSettingsSnapshot() {
     doubleRate,
     tripleRate,
     quadrupleRate,
-    quintupleRate
+    quintupleRate,
+    vipSelfClaimEnabled
   ] = await Promise.all([
     getStateThrottleSettingsCached(),
     Promise.resolve(getRefineMaterialCount()),
@@ -10867,7 +10874,8 @@ async function refreshSettingsSnapshot() {
     Promise.resolve(getEffectResetDoubleRate()),
     Promise.resolve(getEffectResetTripleRate()),
     Promise.resolve(getEffectResetQuadrupleRate()),
-    Promise.resolve(getEffectResetQuintupleRate())
+    Promise.resolve(getEffectResetQuintupleRate()),
+    getVipSelfClaimEnabled()
   ]);
 
   settingsSnapshot = {
@@ -10875,6 +10883,7 @@ async function refreshSettingsSnapshot() {
     refineMaterialCount,
     svipSettings,
     effectReset: { successRate, doubleRate, tripleRate, quadrupleRate, quintupleRate },
+    vipSelfClaimEnabled,
     updatedAt: now
   };
 
@@ -14106,23 +14115,12 @@ async function buildState(player, options = {}) {
   const treasureExpMaterial = Math.floor((player.inventory || []).find((slot) => slot.id === TREASURE_EXP_ITEM_ID)?.qty || 0);
   t4Marks.treasure = Date.now() - t4TreasureStart;
 
-  const t4VipStart = Date.now();
-  // VIP自领状态缓存
-  let vipSelfClaimEnabled;
-  if (Date.now() - vipSelfClaimLastUpdate > VIP_SELF_CLAIM_CACHE_TTL) {
-    vipSelfClaimEnabled = await getVipSelfClaimEnabled();
-    vipSelfClaimCachedValue = vipSelfClaimEnabled;
-    vipSelfClaimLastUpdate = Date.now();
-  } else {
-    vipSelfClaimEnabled = vipSelfClaimCachedValue;
-  }
-  t4Marks.vip = Date.now() - t4VipStart;
-
   const t4SettingsStart = Date.now();
   // 使用全局配置快照（零开销，直接从内存读取）
   const snap = getSettingsSnapshot();
   const { enabled: stateThrottleEnabled, intervalSec: stateThrottleIntervalSec, overrideServerAllowed } =
     snap.stateThrottle;
+  const vipSelfClaimEnabled = snap.vipSelfClaimEnabled;
   const refineMaterialCount = snap.refineMaterialCount;
   const svipSettings = snap.svipSettings;
   const effectResetSuccessRate = snap.effectReset.successRate;
@@ -20919,7 +20917,10 @@ async function start() {
     refreshSettingsSnapshot().catch(() => {});
   }, SETTINGS_SNAPSHOT_TTL);
   // 立即刷新一次
-  refreshSettingsSnapshot().catch(() => {});
+  await refreshSettingsSnapshot().catch(() => {});
+  
+  // 预热 VIP 自助领取缓存（现在通过 settings snapshot）
+  console.log(`[Startup] VIP自领将通过全局配置快照缓存`);
   
   server.listen(config.port, () => {
     console.log(`Server on http://localhost:${config.port}`);
