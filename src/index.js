@@ -4804,10 +4804,14 @@ async function refreshDailyLucky() {
         continue;
       }
       await clearDailyLuckyForRealm(realm.id);
-      await assignDailyLuckyForRealm(realm.id, realm.name);
+      const result = await assignDailyLuckyForRealm(realm.id, realm.name);
       await setSetting(`daily_lucky_date_${realm.id}`, todayKey);
-      // 清除该realm的缓存，确保下次查询时获取最新数据
-      dailyLuckyCache.delete(realm.id);
+
+      // 刷新成功后直接写入缓存，避免第一次玩家请求时的DB查询
+      dailyLuckyCache.set(realm.id, {
+        at: Date.now(),
+        value: result?.name ? { name: result.name, attr: result.attr || null } : null
+      });
     } catch (err) {
       console.error(`[DailyLucky] 更新失败: realm=${realm.id}`, err);
     }
@@ -4836,6 +4840,13 @@ function setupDailyLucky() {
   refreshDailyLucky().catch(err => {
     console.error('[DailyLucky] 服务器启动时抽取失败:', err);
   });
+}
+
+// 启动时预热每日幸运缓存，避免第一次请求时的空值
+async function warmupDailyLuckyCache() {
+  const realms = await listRealms();
+  const realmList = realms.length ? realms : [{ id: 1, name: '默认' }];
+  await Promise.all(realmList.map((realm) => refreshDailyLuckyInfoForRealm(realm.id)));
 }
 
 app.get('/admin/backup', async (req, res) => {
@@ -5938,7 +5949,7 @@ function cleanupRuntimeCaches(options = {}) {
   result.removed.roomStateTick = cleanupMapByAge(roomStateCache, now, roomTickMaxAge, (ts) => ts);
   result.removed.autoFullRoom = cleanupMapByAge(autoFullRoomCache, now, autoFullMaxAge, (entry) => entry?.at);
   result.removed.allCharacters = cleanupMapByAge(allCharactersCache, now, allCharsMaxAge, (entry) => entry?.at);
-  result.removed.dailyLucky = cleanupMapByAge(dailyLuckyCache, now, dailyLuckyMaxAge, (entry) => entry?.at);
+  result.removed.dailyLucky = cleanupMapByAge(dailyLuckyCache, now, 24 * 60 * 60 * 1000, (entry) => entry?.at); // 日级数据直接设置24小时maxAge
   result.removed.towerRank = cleanupMapByAge(zhuxianTowerRankCache, now, towerRankMaxAge, (entry) => entry?.at);
   result.removed.playerLastPersistAt = cleanupMapByAge(playerLastPersistAt, now, persistAtMaxAge, (ts) => ts);
 
@@ -10926,6 +10937,40 @@ async function getDailyLuckyInfoCached(realmId) {
   return value;
 }
 
+// 热路径只读快照 - 零开销，直接从内存读取
+function getDailyLuckyInfoSnapshot(realmId) {
+  return dailyLuckyCache.get(realmId)?.value || null;
+}
+
+// 后台异步加载/修复 - 包含DB查询和重新分配逻辑
+async function refreshDailyLuckyInfoForRealm(realmId) {
+  const [nameRaw, attrRaw, dateKey] = await Promise.all([
+    getSetting(`daily_lucky_player_${realmId}`, ''),
+    getSetting(`daily_lucky_attr_${realmId}`, ''),
+    getSetting(`daily_lucky_date_${realmId}`, '')
+  ]);
+
+  const todayKey = getLocalDateKey();
+  const name = String(nameRaw || '').trim();
+  const attr = String(attrRaw || '').trim();
+
+  if (dateKey === todayKey && name) {
+    const value = { name, attr: attr || null };
+    dailyLuckyCache.set(realmId, { at: Date.now(), value });
+    return value;
+  }
+
+  if (dateKey === todayKey && !name && !attr) {
+    const result = await assignDailyLuckyForRealm(realmId);
+    const value = result?.name ? { name: result.name, attr: result.attr || null } : null;
+    dailyLuckyCache.set(realmId, { at: Date.now(), value });
+    return value;
+  }
+
+  dailyLuckyCache.set(realmId, { at: Date.now(), value: null });
+  return null;
+}
+
 async function getZhuxianTowerRankTop10Cached(realmId) {
   const now = Date.now();
   const cached = zhuxianTowerRankCache.get(realmId);
@@ -14074,7 +14119,7 @@ async function buildState(player, options = {}) {
   const t4ActivityStart = Date.now();
   // dynamicAux：按需构建每日幸运和浮图塔排行
   const dailyLuckyInfo = (includeDynamicAux || forceSend)
-    ? await getDailyLuckyInfoCached(realmId)
+    ? getDailyLuckyInfoSnapshot(realmId)
     : null;
   t4Marks.activity = Date.now() - t4ActivityStart;
 
@@ -20446,6 +20491,11 @@ async function start() {
 
   // 启动每日幸运玩家定时任务
   setupDailyLucky();
+
+  // 预热每日幸运缓存，避免第一次请求时的空值
+  warmupDailyLuckyCache().catch(err => {
+    console.error('[DailyLucky] 缓存预热失败:', err);
+  });
 
   // 活动排行榜结算（每日/每周）自动发奖（邮件）
   setInterval(async () => {
