@@ -1806,7 +1806,7 @@ app.post('/admin/users/force-offline', async (req, res) => {
     delete onlinePlayer.flags.offlineManagedStartAt;
     onlinePlayer.deviceKey = null;
     onlinePlayer.send = () => {};
-    await savePlayer(onlinePlayer);
+    await savePlayer(onlinePlayer, { immediate: true });
     getRealmState(onlinePlayer.realmId || 1).lastSaveTime.delete(onlinePlayer.name);
     onlinePlayerRankTitles.delete(onlinePlayer.name);
     players.delete(socketId);
@@ -1847,7 +1847,7 @@ app.post('/admin/characters/migrate', async (req, res) => {
     if (onlinePlayer) {
       onlinePlayer.userId = Number(targetUser.id || 0);
       onlinePlayer.forceStateRefresh = true;
-      await savePlayer(onlinePlayer).catch(() => {});
+      await savePlayer(onlinePlayer, { immediate: true }).catch(() => {});
       if (typeof onlinePlayer.send === 'function') {
         onlinePlayer.send(`管理员已将角色迁移至账号【${targetUsername}】，即将强制下线，请使用目标账号登录。`);
       }
@@ -2477,7 +2477,7 @@ app.post('/admin/first-recharge-settings/reissue-divine-beast', async (req, res)
   if (typeof saveOffline === 'function') {
     await saveOffline();
   } else {
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
     if (player?.socket) {
       player.forceStateRefresh = true;
       await sendState(player);
@@ -3190,7 +3190,7 @@ app.post('/admin/class-level-bonus/update', async (req, res) => {
     targets.map(async (p) => {
       computeDerived(p);
       await sendState(p);
-      await savePlayer(p);
+      await savePlayer(p, { immediate: true });
     })
   );
   // 离线角色也更新
@@ -4734,7 +4734,7 @@ async function clearDailyLuckyForRealm(realmId) {
       delete online.flags.dailyLuckyTitle;
       computeDerived(online);
       await sendState(online);
-      await savePlayer(online);
+      await savePlayer(online, { immediate: true });
       online.send('每日幸运加成已清除。');
     } else {
       const flags = { ...(character.flags || {}) };
@@ -4762,7 +4762,7 @@ async function assignDailyLuckyForRealm(realmId, realmName = '') {
     online.flags.dailyLuckyTitle = '欧皇';
     computeDerived(online);
     await sendState(online);
-    await savePlayer(online);
+    await savePlayer(online, { immediate: true });
     online.send(`你被选为今日幸运玩家，${attr.label}提升100%，称号：欧皇！`);
   } else {
     const flags = { ...(target.flags || {}), dailyLucky: payload, dailyLuckyTitle: '欧皇' };
@@ -7680,7 +7680,7 @@ async function updatePartyFlags(name, partyId, members, realmId) {
     onlinePlayer.flags.partyId = partyId || null;
     onlinePlayer.flags.partyMembers = memberList;
     onlinePlayer.flags.partyLeader = memberList.length ? (onlinePlayer.flags.partyLeader || null) : null;
-    await savePlayer(onlinePlayer);
+    await savePlayer(onlinePlayer, { immediate: true });
     return;
   }
   const row = await findCharacterByNameInRealm(name, realmId);
@@ -8508,7 +8508,7 @@ const consignApi = {
       }
       const currencyLabel = currency === 'yuanbao' ? '元宝' : '金币';
       seller.send(`寄售成交: ${ITEM_TEMPLATES[row.item_id]?.name || row.item_id} x${qtyResult.value}，获得 ${sellerGain} ${currencyLabel}（手续费 ${fee}）。`);
-      savePlayer(seller);
+      await savePlayer(seller, { immediate: true });
       await consignApi.listMine(seller);
       await consignApi.listMarket(seller);
     } else {
@@ -8702,7 +8702,7 @@ async function cleanupExpiredConsignments(realmId = 1) {
         seller.send(`寄售到期自动下架：${ITEM_TEMPLATES[row.item_id]?.name || row.item_id} x${qty} 已返还背包。`);
         seller.forceStateRefresh = true;
         refreshedSellers.add(seller);
-        savePlayer(seller);
+        await savePlayer(seller, { immediate: true });
       } else {
         const sellerRow = await findCharacterByNameInRealm(row.seller_name, realmId);
         if (sellerRow) {
@@ -15594,7 +15594,7 @@ io.on('connection', (socket) => {
       delete onlinePlayer.flags.offlineManagedStartAt;
       onlinePlayer.deviceKey = null;
       onlinePlayer.send = () => {};
-      await savePlayer(onlinePlayer);
+      await savePlayer(onlinePlayer, { immediate: true });
       getRealmState(onlinePlayer.realmId || 1).lastSaveTime.delete(onlinePlayer.name);
       onlinePlayerRankTitles.delete(onlinePlayer.name);
       players.delete(onlineSocketId);
@@ -15631,19 +15631,19 @@ io.on('connection', (socket) => {
             exp: summon.exp || 0,
             level: summon.level || summon.summonLevel || 1,
             hp: summon.hp || 0,
-            max_hp: summon.max_hp || 0
-          }));
-          await savePlayer(existingPlayer);
-          players.delete(existingSocketId);
+          max_hp: summon.max_hp || 0
+        }));
+        await savePlayer(existingPlayer, { immediate: true });
+        players.delete(existingSocketId);
           replacedExistingSession = true;
           replacedManagedSession = true;
         } else {
           // 通知旧连接被踢下线
-          existingPlayer.send('您的账号在别处登录，您已被强制下线。');
-          // 保存并移除之前的会话
-          await savePlayer(existingPlayer);
-          // 断开旧连接
-          existingPlayer.socket?.disconnect?.();
+      existingPlayer.send('您的账号在别处登录，您已被强制下线。');
+      // 保存并移除之前的会话
+      await savePlayer(existingPlayer, { immediate: true });
+      // 断开旧连接
+      existingPlayer.socket?.disconnect?.();
           // 移除旧的玩家数据
           players.delete(existingSocketId);
           replacedExistingSession = true;
@@ -15781,7 +15781,7 @@ io.on('connection', (socket) => {
       const relogRoomMobs = getAliveMobs(loaded.position.zone, loaded.position.room, loaded.realmId || 1);
       const relogAutoResult = tryAutoFullAction(loaded, relogRoomMobs);
       if (relogAutoResult === 'moved') {
-        await savePlayer(loaded).catch(() => {});
+        await savePlayer(loaded, { immediate: true }).catch(() => {});
       }
     }
     tryRecoverZhuxianTowerEmptyRoom(loaded);
@@ -15953,7 +15953,7 @@ io.on('connection', (socket) => {
       await handleSabakEntry(player);
     }
     await sendState(player);
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
   });
 
   socket.on('state_request', async () => {
@@ -16166,7 +16166,7 @@ io.on('connection', (socket) => {
       if (onlineTarget) {
         onlineTarget.forceStateRefresh = true;
         await sendState(onlineTarget);
-        await savePlayer(onlineTarget);
+        await savePlayer(onlineTarget, { immediate: true });
       } else {
         await saveCharacter(targetRow.user_id, targetPlayer, targetRow.realm_id || 1);
       }
@@ -16535,7 +16535,7 @@ io.on('connection', (socket) => {
       if (!dirty) return;
       normalizePetState(player);
       await sendState(player);
-      await savePlayer(player);
+      await savePlayer(player, { immediate: true });
     } catch (err) {
       console.error('[pet_action] failed:', err);
       emitResult(false, String(err?.message || '宠物操作失败。'));
@@ -16589,7 +16589,7 @@ io.on('connection', (socket) => {
         await applyOnlineCharacterRename(player, finalName);
         player.forceStateRefresh = true;
         await sendState(player);
-        await savePlayer(player);
+        await savePlayer(player, { immediate: true });
         socket.emit('character_action_result', {
           ok: true,
           action: 'rename',
@@ -16774,7 +16774,7 @@ io.on('connection', (socket) => {
     }
     socket.emit('mail_send_result', { ok: true, msg: '邮件已发送。' });
     await sendState(player);
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
   });
 
   socket.on('mail_claim', async (payload) => {
@@ -17007,7 +17007,7 @@ io.on('connection', (socket) => {
     });
     if (player.forceStateRefresh) {
       await sendState(player);
-      await savePlayer(player);
+      await savePlayer(player, { immediate: true });
     }
   });
 
@@ -17148,7 +17148,7 @@ io.on('connection', (socket) => {
     if (building) syncGuildMetaToOnlineMembers(player.guild.id, building);
     player.forceStateRefresh = true;
     await sendState(player);
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
     const resultBuilding = building
       ? {
           ...building,
@@ -17181,7 +17181,7 @@ io.on('connection', (socket) => {
     if (result.building) syncGuildMetaToOnlineMembers(player.guild.id, result.building);
     player.forceStateRefresh = true;
     await sendState(player);
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
     const activeBranch = (result.building?.branches || []).find((entry) => entry.id === result.building?.activeUpgradeBranch);
     socket.emit('guild_build_upgrade_result', {
       ok: Boolean(result.ok),
@@ -17219,7 +17219,7 @@ io.on('connection', (socket) => {
     player.flags.guildContribution = currentContribution - item.cost;
     player.forceStateRefresh = true;
     await sendState(player);
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
     socket.emit('guild_shop_result', {
       ok: true,
       msg: `兑换成功：${item.name} x${item.qty}，消耗 ${item.cost} 行会贡献。`,
@@ -17235,7 +17235,7 @@ io.on('connection', (socket) => {
     const result = claimCommissionTask(player, taskId);
     player.forceStateRefresh = true;
     await sendState(player);
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
     socket.emit('commission_result', {
       ok: Boolean(result.ok),
       msg: result.ok
@@ -17264,7 +17264,7 @@ io.on('connection', (socket) => {
     computeDerived(player);
     player.forceStateRefresh = true;
     await sendState(player);
-    await savePlayer(player);
+    await savePlayer(player, { immediate: true });
     socket.emit('specialization_result', { ok: true, msg: `已切换到 ${picked.name}。`, trackId });
   });
 
@@ -17387,14 +17387,14 @@ io.on('connection', (socket) => {
       sendRegisterResult(true, '报名成功，已支付100万金币。');
       player.forceStateRefresh = true;
       await sendState(player);
-      await savePlayer(player);
+      await savePlayer(player, { immediate: true });
     } catch {
       player.send('该行会已经报名。');
       sendRegisterResult(false, '该行会已经报名。');
       player.gold += 1000000;
       player.forceStateRefresh = true;
       await sendState(player);
-      await savePlayer(player);
+      await savePlayer(player, { immediate: true });
     }
   });
 
