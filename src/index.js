@@ -14534,8 +14534,8 @@ async function buildState(player, options = {}) {
 async function sendState(player) {
   const t0 = Date.now();
   if (!player) return;
-  // 跳过离线托管玩家
-  if (player.flags?.offlineManagedAuto || player.flags?.offlineManagedPending) {
+  // 托管玩家没有真实socket，跳过完整 state 构建和发送
+  if (isManagedHostedPlayer(player)) {
     player.forceStateRefresh = false;
     return;
   }
@@ -19123,11 +19123,8 @@ function scheduleCombatStateFlush() {
 
 function enqueueCombatStateFlush(player) {
   if (!player) return;
-  // 只跳过离线托管玩家，有socket连接的玩家都允许状态刷新
-  if (!player.socket && (player.flags?.offlineManagedAuto || player.flags?.offlineManagedPending)) return;
-  if (!player.socket?.connected && !player.flags?.offlineManagedAuto && !player.flags?.offlineManagedPending) {
-    // 有连接记录但暂时断开的在线玩家，仍然允许刷新（socket可能处于重建中）
-  }
+  // 托管玩家没有真实socket，不做UI state生成
+  if (isManagedHostedPlayer(player)) return;
   combatStateDirtyQueue.add(player);
   scheduleCombatStateFlush();
 }
@@ -19227,7 +19224,7 @@ async function combatTick() {
   
   for (const player of online) {
     const now = Date.now();
-    const isManagedPlayer = Boolean(!player?.socket && (player?.flags?.offlineManagedAuto || player?.flags?.offlineManagedPending));
+    const isManagedPlayer = isManagedHostedPlayer(player);
     if (isManagedPlayer && !shouldProcessManagedPlayerThisTick(player, managedShardIndex, managedShardCount)) {
       continue;
     }
@@ -20531,8 +20528,8 @@ async function stateFlushTick() {
   let skipNoRefresh = 0;
   
   for (const player of online) {
-    // 跳过离线托管玩家
-    if (player.flags?.offlineManagedAuto || player.flags?.offlineManagedPending) {
+    // 托管玩家没有真实socket，不做UI state生成
+    if (isManagedHostedPlayer(player)) {
       skipManaged++;
       continue;
     }
